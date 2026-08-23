@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Generated experiments and large model/feature payloads are never source.
+/run_artifacts/
+*.pt
+*.pth
+*.safetensors
+/outputs/
+/data/
+/examples/features/
+/examples/*.jsonl
+*.metrics.jsonl
+
+# The clean integration branch tracks only its curated configuration files.
+/configs/*
+!/configs/best_current.json
+
+# The clean integration branch tracks only explicitly added runtime scripts.
+/scripts/*
+
+# Local source material is not part of the repository.
+/*.pdf

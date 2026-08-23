@@ -19,14 +19,25 @@ labels, and token advantage targets follow the names used by the model.
 from __future__ import annotations
 
 import json
+from numbers import Integral, Real
 from pathlib import Path
 import random
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import numpy as np
 import torch
 from torch import Tensor
-from torch.utils.data import BatchSampler, Dataset
+from torch.utils.data import BatchSampler, Dataset, Sampler
 
 
 TEXT_ID_FIELDS = {
@@ -64,7 +75,9 @@ def read_jsonl(path: str | Path) -> List[Dict[str, Any]]:
             try:
                 rows.append(json.loads(line))
             except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON on line {line_no} of {path}: {exc}") from exc
+                raise ValueError(
+                    f"Invalid JSON on line {line_no} of {path}: {exc}"
+                ) from exc
     return rows
 
 
@@ -79,9 +92,13 @@ def write_jsonl(path: str | Path, rows: Iterable[Dict[str, Any]]) -> None:
 class CLIRTrajectoryDataset(Dataset):
     """JSONL dataset for pre-extracted hidden-state trajectories."""
 
-    def __init__(self, jsonl_path: str | Path, feature_root: Optional[str | Path] = None) -> None:
+    def __init__(
+        self, jsonl_path: str | Path, feature_root: Optional[str | Path] = None
+    ) -> None:
         self.jsonl_path = Path(jsonl_path)
-        self.feature_root = Path(feature_root) if feature_root is not None else self.jsonl_path.parent
+        self.feature_root = (
+            Path(feature_root) if feature_root is not None else self.jsonl_path.parent
+        )
         self.rows = read_jsonl(self.jsonl_path)
         if not self.rows:
             raise ValueError(f"No rows found in {self.jsonl_path}")
@@ -91,22 +108,69 @@ class CLIRTrajectoryDataset(Dataset):
 
     def __getitem__(self, index: int) -> Dict[str, Any]:
         row = dict(self.rows[index])
-        hidden_states = load_tensor_field(row, "hidden_states", "hidden_states_path", self.feature_root)
+        hidden_states = load_tensor_field(
+            row, "hidden_states", "hidden_states_path", self.feature_root
+        )
         if hidden_states.ndim != 2:
-            raise ValueError("Each hidden state item must have shape [time, hidden_dim]")
+            raise ValueError(
+                "Each hidden state item must have shape [time, hidden_dim]"
+            )
+        if hidden_states.shape[0] == 0:
+            raise ValueError("Each trajectory must contain at least one token")
+        if (
+            "output_token_ids" in row
+            and len(row["output_token_ids"]) != hidden_states.shape[0]
+        ):
+            raise ValueError(
+                "output_token_ids length must exactly match trajectory hidden states"
+            )
+        feature_contract = resolve_feature_metadata(row)
+        feature_dim = feature_contract["feature_dim"]
+        layer_count = feature_contract["num_feature_layers"]
+        per_layer_dim = feature_contract["per_layer_dim"]
+        if feature_dim is not None and feature_dim != hidden_states.shape[1]:
+            raise ValueError("feature_dim metadata does not match hidden states")
+        if layer_count is not None and per_layer_dim is not None:
+            expected_width = layer_count * per_layer_dim
+            if expected_width != hidden_states.shape[1]:
+                raise ValueError("layer feature metadata does not match hidden states")
 
+        if not hidden_states.is_floating_point():
+            hidden_states = hidden_states.float()
         item: Dict[str, Any] = {
             "row_index": index,
             "id": row.get("id", str(index)),
-            "query_id": row.get("query_id", row.get("candidate_group_id", row.get("prompt_id", str(index)))),
-            "hidden_states": hidden_states.float(),
+            "query_id": row.get(
+                "query_id",
+                row.get("candidate_group_id", row.get("prompt_id", str(index))),
+            ),
+            "hidden_states": hidden_states,
         }
 
-        condition_states = maybe_load_tensor_field(row, "condition_states", "condition_states_path", self.feature_root)
+        condition_states = maybe_load_tensor_field(
+            row, "condition_states", "condition_states_path", self.feature_root
+        )
         if condition_states is not None:
             if condition_states.ndim != 2:
-                raise ValueError("condition_states must have shape [condition_time, hidden_dim]")
-            item["condition_states"] = condition_states.float()
+                raise ValueError(
+                    "condition_states must have shape [condition_time, hidden_dim]"
+                )
+            if condition_states.shape[0] == 0:
+                raise ValueError("condition_states must contain at least one token")
+            if (
+                "prompt_token_ids" in row
+                and len(row["prompt_token_ids"]) != condition_states.shape[0]
+            ):
+                raise ValueError(
+                    "prompt_token_ids length must exactly match condition hidden states"
+                )
+            if condition_states.shape[-1] != hidden_states.shape[-1]:
+                raise ValueError("condition_states width must match hidden_states")
+            item["condition_states"] = (
+                condition_states
+                if condition_states.is_floating_point()
+                else condition_states.float()
+            )
 
         condition_embedding = maybe_load_tensor_field(
             row,
@@ -117,7 +181,13 @@ class CLIRTrajectoryDataset(Dataset):
         if condition_embedding is not None:
             if condition_embedding.ndim != 1:
                 raise ValueError("condition_embedding must have shape [hidden_dim]")
-            item["condition_embedding"] = condition_embedding.float()
+            if condition_embedding.shape[0] != hidden_states.shape[-1]:
+                raise ValueError("condition_embedding width must match hidden_states")
+            item["condition_embedding"] = (
+                condition_embedding
+                if condition_embedding.is_floating_point()
+                else condition_embedding.float()
+            )
 
         item.update(extract_metadata(row, hidden_states.shape[0]))
         return item
@@ -169,14 +239,43 @@ def extract_metadata(row: Dict[str, Any], time: int) -> Dict[str, Any]:
 
     scalar_fields = {
         "correctness": ("correctness", "label", "final_correct"),
-        "semantic_id": ("semantic_id", "semantic_ids", "augmentation_group", "augmentation_group_id", "group_id"),
-        "style_id": ("style_id", "style_ids", "augmentation_style", "rewrite_style", "domain_id", "domain", "style"),
+        "semantic_id": (
+            "semantic_id",
+            "semantic_ids",
+            "augmentation_group",
+            "augmentation_group_id",
+            "group_id",
+        ),
+        "style_id": (
+            "style_id",
+            "style_ids",
+            "augmentation_style",
+            "rewrite_style",
+            "domain_id",
+            "domain",
+            "style",
+        ),
         "hallucination_onset": ("hallucination_onset", "hallucination_start", "onset"),
         "path_hallucinated": ("path_hallucinated", "hallucinated", "hallucination"),
     }
     for output_key, aliases in scalar_fields.items():
         value = first_present(row, aliases)
         if value is not None:
+            if output_key in {"correctness", "path_hallucinated"}:
+                if not isinstance(value, Real):
+                    raise ValueError(f"{output_key} must be numeric binary 0/1")
+                numeric = float(value)
+                if numeric not in {0.0, 1.0}:
+                    raise ValueError(f"{output_key} must be binary, got {value!r}")
+                value = numeric
+            if output_key == "hallucination_onset":
+                if not isinstance(value, Integral) or isinstance(value, bool):
+                    raise ValueError("hallucination_onset must be an integer")
+                value = int(value)
+                if value < -1 or value >= time:
+                    raise ValueError(
+                        f"hallucination_onset must be -1 or in [0, {time}), got {value}"
+                    )
             item[output_key] = value
 
     sequence_aliases = {
@@ -188,28 +287,85 @@ def extract_metadata(row: Dict[str, Any], time: int) -> Dict[str, Any]:
     for output_key, aliases in sequence_aliases.items():
         value = first_present(row, aliases)
         if value is not None:
-            item[output_key] = pad_or_trim_1d(value, time)
+            tensor = exact_length_1d(value, time, output_key)
+            if not torch.isfinite(tensor).all():
+                raise ValueError(f"Token label `{output_key}` contains NaN or Inf")
+            if output_key in {"key_prior_target", "complete_prior_target"}:
+                if not ((tensor == 0.0) | (tensor == 1.0)).all():
+                    raise ValueError(f"Token label `{output_key}` must be binary")
+            item[output_key] = tensor
 
-    reconstruction_value = first_present(row, ("complete_reconstruction_target", "csr_target"))
+    reconstruction_value = first_present(
+        row, ("complete_reconstruction_target", "csr_target")
+    )
     if reconstruction_value is not None:
-        item["complete_reconstruction_target"] = torch.as_tensor(reconstruction_value, dtype=torch.float32).flatten()
+        reconstruction = torch.as_tensor(
+            reconstruction_value, dtype=torch.float32
+        ).flatten()
+        if not torch.isfinite(reconstruction).all():
+            raise ValueError("complete_reconstruction_target contains NaN or Inf")
+        item["complete_reconstruction_target"] = reconstruction
 
     return item
 
 
-def first_present(row: Dict[str, Any], aliases: Sequence[str]) -> Any:
+def first_present(row: Mapping[str, Any], aliases: Sequence[str]) -> Any:
     for key in aliases:
-        if key in row:
+        if key in row and row[key] is not None:
             return row[key]
     return None
 
 
-def pad_or_trim_1d(values: Any, length: int) -> Tensor:
+def resolve_feature_metadata(row: Mapping[str, Any]) -> Dict[str, Optional[int]]:
+    """Resolve the clean and historical all-layer feature metadata schemas.
+
+    New manifests may put the three dimensions at the row top level. Existing
+    panzhixin manifests put them in ``feature_metadata``. When both are present
+    they are treated as an integrity assertion and must agree.
+    """
+
+    nested = row.get("feature_metadata")
+    if nested is None:
+        nested = {}
+    if not isinstance(nested, Mapping):
+        raise ValueError("feature_metadata must be an object when present")
+
+    aliases = {
+        "feature_dim": ("feature_dim", "hidden_dim"),
+        "num_feature_layers": ("num_feature_layers", "layer_count"),
+        "per_layer_dim": ("per_layer_dim", "per_layer_hidden_size"),
+    }
+    resolved: Dict[str, Optional[int]] = {}
+    for output_key, field_aliases in aliases.items():
+        top_value = first_present(row, field_aliases)
+        nested_value = first_present(nested, field_aliases)
+        for value in (top_value, nested_value):
+            if value is not None and (
+                not isinstance(value, Integral) or isinstance(value, bool)
+            ):
+                raise ValueError(f"{output_key} must be an integer")
+        if (
+            top_value is not None
+            and nested_value is not None
+            and top_value != nested_value
+        ):
+            raise ValueError(
+                f"Conflicting top-level and feature_metadata values for {output_key}"
+            )
+        value = top_value if top_value is not None else nested_value
+        if value is not None and value <= 0:
+            raise ValueError(f"{output_key} must be positive")
+        resolved[output_key] = int(value) if value is not None else None
+    return resolved
+
+
+def exact_length_1d(values: Any, length: int, field: str) -> Tensor:
     tensor = torch.as_tensor(values, dtype=torch.float32).flatten()
-    output = torch.zeros(length, dtype=torch.float32)
-    if tensor.numel() > 0:
-        output[: min(length, tensor.numel())] = tensor[:length]
-    return output
+    if tensor.numel() != length:
+        raise ValueError(
+            f"Token label `{field}` length mismatch: expected {length}, got {tensor.numel()}"
+        )
+    return tensor
 
 
 def clir_collate(batch: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
@@ -218,17 +374,24 @@ def clir_collate(batch: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
 
     max_time = max(item["hidden_states"].shape[0] for item in batch)
     hidden_dim = batch[0]["hidden_states"].shape[1]
-    hidden_states = torch.zeros(len(batch), max_time, hidden_dim, dtype=torch.float32)
+    hidden_dtype = batch[0]["hidden_states"].dtype
+    hidden_states = torch.zeros(len(batch), max_time, hidden_dim, dtype=hidden_dtype)
     mask = torch.zeros(len(batch), max_time, dtype=torch.float32)
 
     for row, item in enumerate(batch):
         states = item["hidden_states"]
+        if states.shape[1] != hidden_dim:
+            raise ValueError("All hidden_states in a batch must have the same width")
+        if states.dtype != hidden_dtype:
+            raise ValueError("All hidden_states in a batch must have the same dtype")
         length = states.shape[0]
         hidden_states[row, :length] = states
         mask[row, :length] = 1.0
 
     output: Dict[str, Any] = {
-        "row_index": torch.tensor([item["row_index"] for item in batch], dtype=torch.long),
+        "row_index": torch.tensor(
+            [item["row_index"] for item in batch], dtype=torch.long
+        ),
         "ids": [item["id"] for item in batch],
         "query_ids_raw": [item["query_id"] for item in batch],
         "hidden_states": hidden_states,
@@ -236,9 +399,16 @@ def clir_collate(batch: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
     if any("condition_states" in item for item in batch):
-        max_condition_time = max(item.get("condition_states", torch.empty(0, hidden_dim)).shape[0] for item in batch)
-        condition_states = torch.zeros(len(batch), max_condition_time, hidden_dim, dtype=torch.float32)
-        condition_mask = torch.zeros(len(batch), max_condition_time, dtype=torch.float32)
+        max_condition_time = max(
+            item.get("condition_states", torch.empty(0, hidden_dim)).shape[0]
+            for item in batch
+        )
+        condition_states = torch.zeros(
+            len(batch), max_condition_time, hidden_dim, dtype=hidden_dtype
+        )
+        condition_mask = torch.zeros(
+            len(batch), max_condition_time, dtype=torch.float32
+        )
         for row, item in enumerate(batch):
             states = item.get("condition_states")
             if states is None:
@@ -250,7 +420,7 @@ def clir_collate(batch: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         output["condition_mask"] = condition_mask
 
     if any("condition_embedding" in item for item in batch):
-        condition_embedding = torch.zeros(len(batch), hidden_dim, dtype=torch.float32)
+        condition_embedding = torch.zeros(len(batch), hidden_dim, dtype=hidden_dtype)
         condition_embedding_mask = torch.zeros(len(batch), dtype=torch.float32)
         for row, item in enumerate(batch):
             if "condition_embedding" in item:
@@ -259,21 +429,35 @@ def clir_collate(batch: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         output["condition_embedding"] = condition_embedding
         output["condition_embedding_mask"] = condition_embedding_mask
 
-    add_optional_float(output, batch, "correctness")
-    add_encoded_ids(output, batch, "semantic_id", "semantic_ids", "consistency_mask_semantic")
+    add_optional_float(output, batch, "correctness", mask_key="correctness_mask")
+    add_encoded_ids(
+        output, batch, "semantic_id", "semantic_ids", "consistency_mask_semantic"
+    )
     add_encoded_ids(output, batch, "style_id", "style_ids", "consistency_mask_style")
     if "semantic_ids" in output and "style_ids" in output:
-        output["consistency_mask"] = output.pop("consistency_mask_semantic") & output.pop("consistency_mask_style")
+        output["consistency_mask"] = output.pop(
+            "consistency_mask_semantic"
+        ) & output.pop("consistency_mask_style")
 
     add_optional_onset(output, batch)
     add_optional_float(output, batch, "path_hallucinated", mask_key="path_label_mask")
-    add_optional_sequence(output, batch, "token_advantage", max_time, mask_key="token_advantage_mask")
-    add_optional_sequence(output, batch, "progress_targets", max_time, mask_key="progress_mask")
-    add_optional_sequence(output, batch, "key_prior_target", max_time, mask_key="key_prior_mask")
-    add_optional_sequence(output, batch, "complete_prior_target", max_time, mask_key="complete_prior_mask")
-    add_optional_vector(output, batch, "complete_reconstruction_target", hidden_dim)
+    add_optional_sequence(
+        output, batch, "token_advantage", max_time, mask_key="token_advantage_mask"
+    )
+    add_optional_sequence(
+        output, batch, "progress_targets", max_time, mask_key="progress_mask"
+    )
+    add_optional_sequence(
+        output, batch, "key_prior_target", max_time, mask_key="key_prior_mask"
+    )
+    add_optional_sequence(
+        output, batch, "complete_prior_target", max_time, mask_key="complete_prior_mask"
+    )
+    add_optional_vector(output, batch, "complete_reconstruction_target")
 
-    output["query_ids"] = torch.tensor(encode_raw_ids(output["query_ids_raw"])[0], dtype=torch.long)
+    output["query_ids"] = torch.tensor(
+        encode_raw_ids(output["query_ids_raw"])[0], dtype=torch.long
+    )
     return output
 
 
@@ -355,12 +539,14 @@ def add_optional_sequence(
     mask = torch.zeros(len(batch), max_time, dtype=torch.bool)
     has_any = False
     for row, item in enumerate(batch):
-        if key not in item:
+        if key not in item or item[key] is None:
             continue
         tensor = item[key].float().flatten()
-        length = min(tensor.numel(), int(output["mask"][row].sum().item()), max_time)
+        length = int(output["mask"][row].sum().item())
+        if tensor.numel() != length:
+            raise ValueError(f"{key} must have length {length}, got {tensor.numel()}")
         if length > 0:
-            values[row, :length] = tensor[:length]
+            values[row, :length] = tensor
             mask[row, :length] = True
             has_any = True
     if has_any:
@@ -372,17 +558,22 @@ def add_optional_vector(
     output: Dict[str, Any],
     batch: Sequence[Dict[str, Any]],
     key: str,
-    hidden_dim: int,
 ) -> None:
-    values = torch.zeros(len(batch), hidden_dim, dtype=torch.float32)
+    widths = {int(item[key].numel()) for item in batch if key in item}
+    if not widths:
+        return
+    if len(widths) != 1:
+        raise ValueError(f"All {key} vectors in a batch must have the same width")
+    width = widths.pop()
+    values = torch.zeros(len(batch), width, dtype=torch.float32)
     mask = []
     for row, item in enumerate(batch):
         if key not in item:
             mask.append(False)
             continue
         tensor = item[key].float().flatten()
-        if tensor.numel() != hidden_dim:
-            raise ValueError(f"{key} must have length {hidden_dim}, got {tensor.numel()}")
+        if tensor.numel() != width:
+            raise ValueError(f"{key} must have length {width}, got {tensor.numel()}")
         values[row] = tensor
         mask.append(True)
     if any(mask):
@@ -415,16 +606,29 @@ class SemanticGroupBatchSampler(BatchSampler):
         self.drop_last = drop_last
         self.seed = seed
         self.epoch = 0
-        self.indices = list(indices) if indices is not None else list(range(len(dataset.rows)))
+        self.indices = (
+            list(indices) if indices is not None else list(range(len(dataset.rows)))
+        )
         self.groups: Dict[str, List[int]] = {}
         for row_index in self.indices:
             row = dataset.rows[row_index]
             semantic_id = first_present(
                 row,
-                ("semantic_id", "semantic_ids", "augmentation_group", "augmentation_group_id", "group_id"),
+                (
+                    "semantic_id",
+                    "semantic_ids",
+                    "augmentation_group",
+                    "augmentation_group_id",
+                    "group_id",
+                ),
             )
             key = repr(semantic_id) if semantic_id is not None else f"__row_{row_index}"
             self.groups.setdefault(key, []).append(row_index)
+
+    def set_epoch(self, epoch: int) -> None:
+        """Select the deterministic order for an epoch, including after resume."""
+
+        self.epoch = int(epoch)
 
     def __iter__(self) -> Iterator[List[int]]:
         rng = random.Random(self.seed + self.epoch)
@@ -492,7 +696,29 @@ class SemanticGroupBatchSampler(BatchSampler):
         return batches
 
 
-def move_batch_to_device(batch: Dict[str, Any], device: torch.device | str) -> Dict[str, Any]:
+class EpochRandomSampler(Sampler[int]):
+    """Epoch-indexed random order that is reproducible across checkpoint resume."""
+
+    def __init__(self, indices: Sequence[int], seed: int = 0) -> None:
+        self.indices = list(indices)
+        self.seed = int(seed)
+        self.epoch = 0
+
+    def set_epoch(self, epoch: int) -> None:
+        self.epoch = int(epoch)
+
+    def __iter__(self) -> Iterator[int]:
+        generator = torch.Generator().manual_seed(self.seed + self.epoch)
+        order = torch.randperm(len(self.indices), generator=generator).tolist()
+        return iter([self.indices[position] for position in order])
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+
+def move_batch_to_device(
+    batch: Dict[str, Any], device: torch.device | str
+) -> Dict[str, Any]:
     moved: Dict[str, Any] = {}
     for key, value in batch.items():
         moved[key] = value.to(device) if torch.is_tensor(value) else value
@@ -501,9 +727,11 @@ def move_batch_to_device(batch: Dict[str, Any], device: torch.device | str) -> D
 
 __all__ = [
     "CLIRTrajectoryDataset",
+    "EpochRandomSampler",
     "SemanticGroupBatchSampler",
     "clir_collate",
     "move_batch_to_device",
     "read_jsonl",
+    "resolve_feature_metadata",
     "write_jsonl",
 ]

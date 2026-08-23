@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
 
 import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.clir_data import write_jsonl
 
@@ -48,7 +51,9 @@ def main() -> None:
             complete_prior = [1.0 if i < min(length, 4) else 0.0 for i in range(length)]
             token_advantage = [0.2 * (i + 1) for i in range(length)]
             if path_hallucinated:
-                token_advantage[hallucination_onset:] = [-0.5] * (length - hallucination_onset)
+                token_advantage[hallucination_onset:] = [-0.5] * (
+                    length - hallucination_onset
+                )
 
             rows.append(
                 {

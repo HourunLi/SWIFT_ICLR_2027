@@ -1,255 +1,286 @@
-# Consistency-Localized Intrinsic Rewards for Robust Best-of-N Reasoning
+# CLIR 方法说明：Consistency-Localized Intrinsic Rewards
 
-## Motivation
+## 研究目标
 
-This is an ICLR 2027 project direction. The SWIFT baseline learns a lightweight reward model directly from LLM hidden states. For a generated trajectory, it computes token-level rewards and gates, then aggregates them into a scalar reward for Best-of-N selection. CLIR uses this as an architectural reference, but the code in this repository is self-contained rather than a wrapper around the SWIFT repository.
+CLIR 研究如何从 frozen LLM 的 token hidden states 学习一个轻量 reward model，用于 query-level Best-of-N trajectory 选择。它以 SWIFT-style token reward / gate aggregation 为骨架，并加入三类监督：
 
-The SWIFT-style reward is efficient, but it can still learn shortcuts: prompt style, domain wording, response length, reasoning format, or superficial context overlap.
+1. 同语义、不同 style/domain 表达之间的 reward consistency；
+2. 从 hallucination onset 起降低 continuation token value；
+3. 用 key support 与 complete support 两张 prior map 约束证据定位。
 
-Two observations motivate CLIR:
+当前仓库实现的是一个可运行的研究假设，不是已经证明优于 baseline 的最终方法。`configs/best_current.json` 是唯一默认整合配置；“best”表示当前工程和方法取舍最清晰，不表示已取得稳定的 Best-of-N 增益。
 
-1. Different questions and domains may induce different hidden-state styles even when the underlying reasoning quality is the same. We can use LLM-guided rewrites to expose these spurious style factors and train the reward representation to ignore them.
-2. In grounded generation, a trajectory may be useful until the first unsupported claim. After that point, downstream reasoning is contaminated. The reward should become negative from the hallucination onset onward, not merely penalize the final answer.
+## 输入与 exact-token 假设
 
-CLIR combines these into a hidden-state reward model with three auxiliary training signals: style/domain consistency, hallucination localization, and dual-prior evidence localization.
-
-## Paper Anchors
-
-- **SWIFT**: token-level linear reward and gating over hidden states for efficient Best-of-N sampling.
-- **PRISM**: LLM-guided discovery of spurious correlations plus a contrastive-style projection objective that keeps same-label/different-spurious views close and pushes different-label/same-spurious views apart.
-- **MLLM4WTAL / DPCL**: weak temporal localization with key priors, complete priors, and interactive distillation to address incomplete and over-complete localization.
-
-CLIR adapts the second and third ideas from vision/video into LLM reasoning trajectories.
-
-## Problem Setup
-
-For a query `x`, optional context `c`, and generated trajectory `y = (y_1, ..., y_T)`, the frozen generator emits token hidden states:
+对 query `x`、可选 context `c` 和生成 trajectory `y=(y_1,...,y_T)`，上游生成过程必须保存原始：
 
 ```text
-H = (h_1, ..., h_T), h_t in R^D
+prompt_token_ids
+output_token_ids
 ```
 
-where `D` may be a concatenation of selected layer hidden states, logits, or another accessible internal representation.
-
-The reward model outputs:
+特征抽取对两者拼接后做一次无 padding、teacher-forced causal forward，读取 embedding 和全部 transformer blocks 的 hidden states。第 `t` 个生成 token 的原始特征为：
 
 ```text
-g_t = sigmoid(w_g h_t + b_g)       token gate
-r_t = w_r h_t + b_r                token reward
-R(H) = sum_t g_t r_t / max(sum_t g_t, eps)
+h_t^raw = concat(h_t^0, h_t^1, ..., h_t^(L-1)) ∈ R^(L·d)
 ```
 
-This recovers the SWIFT-style scalar reward. CLIR adds:
+当前位置只由保存的 token IDs 决定，不允许从 response 文本重新 tokenize 后再映射标签。对默认 Phi 配置，`L=33`、`d=3072`，因此 raw width 为 `101376`。
+
+## Layer-axis 特征编码
+
+直接在 `101376` 维上使用 condition attention 或多层 reward heads 会造成不必要的参数和显存开销。默认 encoder 先把每个 token reshape 为 `[L,d]`：
 
 ```text
-z(H)       trajectory representation used for consistency
-p_t        hallucination probability at token t
-a_t        local progress / advantage estimate at token t
-A_key,t    key support prior
-A_comp,t   complete support prior
+E_t = reshape(h_t^raw) ∈ R^(L×d)
 ```
 
-## LLM-Guided Augmentation
+然后依次执行：
 
-For each original sample, generate `K` semantics-preserving views:
+1. 每层共享的 `d→256` 投影；
+2. learned layer position；
+3. 2-block、8-head layer-axis Transformer；
+4. 4 个 learned pooling queries；
+5. pooling 输出拼接并投影到 `model_dim=768`。
+
+得到 compact token feature `e_t∈R^768`。同一个 encoder 同时处理 trajectory 和 condition states。Identity encoder 仅用于 toy 或已经压缩的输入。
+
+## 条件化 token feature
+
+对 prompt/context compact states `C=(c_1,...,c_M)`，每个 trajectory token 通过 256 维瓶颈计算 cross-attention：
 
 ```text
-A(x, c, y) = { (x^k, c^k, y^k, s^k) }_{k=1..K}
+q_t = normalize(W_q e_t)
+k_j = normalize(W_k c_j)
+α_tj = softmax(q_t · k_j / temperature)
+u_t = Σ_j α_tj W_v c_j
 ```
 
-where `s^k` is the style/domain attribute used for the rewrite.
-
-Useful rewrite axes:
-
-- Prompt style: direct, verbose, exam-style, conversational.
-- Reasoning style: short derivation, detailed chain, equation-first, explanation-first.
-- Context style: reorder paragraphs, paraphrase evidence, add irrelevant but non-conflicting distractors.
-- Domain shell: rename entities or change surface setting while preserving the same formal structure.
-- Length: compress or expand the trajectory without changing the answer.
-
-The generator should preserve the answer and the support relation. Rewrites that alter the answer or evidence are filtered by a verifier.
-
-## Consistency Objective
-
-Inspired by PRISM, treat rewrite style/domain as a spurious attribute. Let `z_i` be the normalized projected representation of trajectory `i`, `u_i` its semantic group id, and `s_i` its style id.
-
-Same semantics across different styles should be close:
+再把 token projection、context、逐维乘积、差值和 relevance 拼接，经小型 fusion network 产生 residual delta：
 
 ```text
-L_pos = mean_{u_i = u_j, s_i != s_j} (1 - cos(z_i, z_j))
+f_t = LayerNorm(e_t + Δ(e_t, u_t))
 ```
 
-Different semantics under the same style should be separated:
+若 row 没有 condition，`f_t=e_t`。这个瓶颈保留逐 token 条件相关性，同时避免在 raw all-layer width 上构造平方级参数层。
+
+## SWIFT-style reward backbone
+
+模型从 `f_t` 预测 gate logit 和 token reward：
 
 ```text
-L_neg = mean_{u_i != u_j, s_i = s_j} relu(cos(z_i, z_j) - m)
+g_t = sigmoid(w_g^T f_t + b_g)
+r_t = w_r^T f_t + b_r
+p_t = w_h^T f_t + b_h              hallucination logit
+a_t = w_a^T f_t + b_a              progress
 ```
 
-The scalar rewards should also be stable across style rewrites:
+token value 定义为：
 
 ```text
-L_score = mean_{u_i = u_j, s_i != s_j} (R_i - R_j)^2
+v_t = r_t + η a_t
 ```
 
-The consistency loss is:
+当前唯一默认配置令 `η=0`，所以 `v_t=r_t`；progress head 虽然仍输出，但不会在无独立证据时偷偷改变 scalar score。
+
+trajectory score 为：
 
 ```text
-L_cons = L_pos + L_neg + beta * L_score
+R(y|x,c) = Σ_t g_t v_t / max(Σ_t g_t, ε) + w_res^T mean_masked(f_t)
 ```
 
-This should reduce cases where the reward model prefers a trajectory because it is longer, more formal, or closer to a domain seen during training.
-
-## Hallucination Localization and Negative Tail Rewards
-
-For query+context tasks, define a token-level hallucination onset:
+训练默认对有 `correctness` 标签的 row 使用 pointwise BCE：
 
 ```text
-tau = first token index where the trajectory makes an unsupported or contradicted claim
+L_final = BCEWithLogits(R, correctness)
 ```
 
-If no hallucination occurs, `tau = None`.
+缺失 correctness 的 row 通过 `correctness_mask` 跳过，不会当成 incorrect。
 
-The target hallucination indicator is:
+## 模块一：semantic/style consistency
+
+令 `z_i` 是 pooled trajectory feature 经 projector 后的归一化表示，`u_i` 是 `semantic_id`，`s_i` 是 `style_id`。
+
+同语义、不同 style 的表示应接近：
 
 ```text
-h_t = 1[t >= tau] if tau exists, else 0
+L_pos = mean_[u_i=u_j, s_i≠s_j] (1 - cos(z_i,z_j))
 ```
 
-The hallucination head is trained with token-level BCE when onset labels are available:
+不同语义、相同 style 的表示应低于 margin `m`：
 
 ```text
-L_hall_tok = BCEWithLogits(p_t, h_t)
+L_neg = mean_[u_i≠u_j, s_i=s_j] relu(cos(z_i,z_j) - m)
 ```
 
-The token reward is shaped as:
+同语义 rewrite 的 scalar score 也应稳定：
 
 ```text
-r_t target = a_t^*          for t < tau
-r_t target = -gamma         for t >= tau
+L_score = mean_[u_i=u_j, s_i≠s_j] (R_i-R_j)^2
 ```
 
-where `a_t^*` is a progress/advantage target. It can be produced from answer progress, evidence entailment, or a verifier score comparing `(query, context, prefix)` before and after token `t`.
-
-A simple tail-margin loss is:
+当前配置使用：
 
 ```text
-L_tail = mean_{t >= tau} relu(r_t + gamma)^2
+L_cons = L_pos + 1.0·L_neg + 0.1·L_score
+m = 0.2
 ```
 
-This enforces `r_t <= -gamma` after hallucination onset.
+`SemanticGroupBatchSampler` 保证同 semantic 的样本能进入同一 mini-batch。接口不限定 augmentation 的来源：可以是经过验证的 rewrite，也可以是同一模型生成、经独立裁决确认 reasoning-equivalent 的 on-policy trajectories。但当前已有证据只来自 27 对小规模 on-policy relations，不能外推到广义 style/domain invariance。
 
-## Weak Localization When Onset Labels Are Missing
+## 模块二：hallucination onset 与 negative tail
 
-If only a path-level hallucination label `H_path` is available, use a multiple-instance objective:
+当前实现恢复 `main` 的方法定义。对具有可靠 onset 标签的 trajectory：
 
 ```text
-P_path = 1 - product_t (1 - sigmoid(p_t))
-L_hall_mil = BCE(P_path, H_path)
+τ = 首个 unsupported 或 contradicted material claim 对应的生成 token 索引
 ```
 
-Then estimate a pseudo-onset:
+已知 clean trajectory 使用 `τ=-1`；字段缺失表示未标注，而不是 clean。
+
+H head 的 token target 为：
 
 ```text
-tau_hat = min { t : sigmoid(p_t) > delta }
+q_t* = 1[t≥τ]    若 τ≥0
+q_t* = 0         若 τ=-1
 ```
 
-and apply the negative-tail reward on the pseudo tail with a lower weight.
-
-This mirrors weak temporal localization: the path label says whether a bad event happened, while the model must infer where it began.
-
-## Dual-Prior Localization View
-
-A useful extension is to train two attention maps:
-
-- **Key support prior**: tokens/windows most directly matched to query and retrieved context.
-- **Complete support prior**: broader tokens/windows needed to reconstruct the full supported answer.
-
-The key prior may be too narrow, while the complete prior may include irrelevant context. Following the dual-prior idea, alternate training can align them:
+并使用：
 
 ```text
-L_key = L_relevance + lambda_1 * MSE(A_key, stopgrad(A_complete))
-L_complete = L_reconstruction + lambda_2 * MSE(A_complete, stopgrad(A_key))
+L_hall = BCEWithLogits(p_t, q_t*)
 ```
 
-The SWIFT-style gate `g_t` can then be regularized toward the fused prior. This encourages the reward model to focus on tokens that are both locally evidential and globally necessary.
-
-The current repository implements a guarded proxy of this idea in `src/consistency_localized_reward.py`:
-
-- key/complete prior heads are always predicted for inspection;
-- key/complete supervised losses are used only when external prior targets are present;
-- mutual stop-gradient distillation and gate-prior regularization are evaluated only on tokens where both prior branches have label coverage, while preserving their probability mass from the full trajectory attention distribution;
-- complete-prior reconstruction is enabled only when an external `complete_reconstruction_target` is present;
-- `train_clir.py` supports `joint`, `key`, `complete`, and epoch-level `alternate` prior optimization.
-
-This avoids the degenerate self-reconstruction solution where a uniform complete prior can trivially reconstruct the average trajectory feature. A full paper implementation should replace the current target embedding with a stronger CSR-style target generated from masked supported-answer descriptions or verifier-derived evidence summaries.
-
-One open modeling choice is how much the progress head should contribute to the final token value. The current code uses `token_values = token_rewards + progress_score_weight * progress`, then applies hallucination-tail shaping to `token_values`. This keeps final scoring aligned with the localized penalty, but real annotations should test whether reward and progress need stronger separation.
-
-## Full Objective
-
-The training objective is:
+同一个真实 onset 还约束 score 使用的 token value。若存在外部 `token_advantage`，它提供已知位置的 value target；无论是否存在 advantage，tail target 都被覆盖为 `-γ`：
 
 ```text
-L = L_final
-  + lambda_cons * L_cons
-  + lambda_hall * (L_hall_tok or L_hall_mil)
-  + lambda_tail * L_tail
-  + lambda_adv * L_adv
-  + lambda_prior * L_dual_prior
+v_t* = -γ,  t≥τ
+L_value = MSE(v_t, v_t*) on known positions and tail
+L_tail = mean_[t≥τ] relu(v_t + γ)^2
 ```
 
-where `L_final` is the original SWIFT correctness BCE or a pairwise preference loss.
+默认 `γ=0.5`，`L_hall/L_value/L_tail` 的外层权重分别为 `1.0/0.5/0.5`。因为 `v_t` 直接进入 gate-weighted score，negative-tail 监督能通过 value path 影响 scalar reward；H probability 本身不会直接乘到 score 上。
 
-## Training Pipeline
+这是当前待检验的核心假设：首错后的 continuation value 应整体降低。历史实验显示旧 absolute-margin 实现可能通过全局 value shift 满足约束，relative 和 clean-matched 修复也没有过门。因此当前实现恢复了方法身份，但尚无新证据证明这种 shaping 改善 ranking 或 locality。
 
-1. Generate `N` trajectories per query with the task LLM and collect hidden states.
-2. Label final correctness using answer checkers or verifier models.
-3. Generate `K` LLM-guided rewrites for each trajectory and collect hidden states under teacher forcing or regeneration.
-4. Filter rewrites that change the final answer or evidence relation.
-5. Annotate hallucination labels:
-   - strong: onset token/span labels from a verifier or human annotation;
-   - weak: path-level hallucination indicator.
-6. Train CLIR with final correctness, consistency, and localization losses.
-7. Select Best-of-N trajectories by `R(H)`.
+### 默认关闭的弱监督
 
-## Current Code Framework
+若只有 path label，可以定义稳定 log-space noisy-or MIL：
 
-The initial implementation in this repository is self-contained:
+```text
+P(path clean) = Π_t (1-sigmoid(p_t))
+L_MIL = BCE(1-P(path clean), path_hallucinated)
+```
 
-- `src/consistency_localized_reward.py`: SWIFT-style reward/gate backbone, token-level query/context attention fusion, PRISM consistency, hallucination localization, MIL, pseudo-onset tail loss, and guarded dual-prior localization.
-- `src/clir_data.py`: JSONL dataset, collate utilities, and semantic-group batch sampler for pre-extracted hidden states.
-- `train_clir.py`: single-trajectory BCE plus CLIR auxiliary losses, semantic-group batching, and dual-prior phase scheduling.
-- `score_clir.py`: reward scoring, hallucination probability, pseudo-onset inference, prior diagnostics, and Best-of-N selection.
-- `examples/create_toy_clir_data.py`: synthetic hidden-state data for smoke testing.
-- `tests/test_clir_smoke.py`: forward/loss and dataset smoke tests.
+也可以取首个超过阈值的 token 为 pseudo onset，再施加低权重 tail loss。当前 `mil_weight=0`、`pseudo_tail_weight=0`：boundary head 尚未在独立数据上通过前，不允许用自身预测循环生成 reward target。
 
-## Evaluation Plan
+## 模块三：key/complete dual prior
 
-Primary metrics:
+模型预测两张完整 trajectory 上的 masked-softmax attention map：
 
-- Best-of-N task accuracy.
-- Hallucination rate among selected trajectories.
-- Worst-augmentation accuracy across style/domain rewrites.
-- Score variance across rewrites of the same trajectory.
-- Token onset localization F1 / mAP when labels exist.
+```text
+A_key  = softmax_masked(l_key)
+A_comp = softmax_masked(l_complete)
+```
 
-Key ablations:
+- `A_key`：最关键的 evidence、decisive step 或 decisive flaw。
+- `A_comp`：形成完整支持链所需的更广 token span。
 
-- SWIFT only.
-- SWIFT + style consistency.
-- SWIFT + score consistency only.
-- SWIFT + hallucination-tail loss.
-- Weak-only localization vs explicit onset labels.
-- Hidden states vs logits-only inputs.
-- Number and type of LLM rewrites.
-- Negative reward from onset vs only final-answer penalty.
+有外部 binary token targets 时，两个 head 分别使用 masked BCE：
 
-## Expected Contribution
+```text
+L_key_direct
+L_complete_direct
+```
 
-CLIR reframes intrinsic hidden-state reward modeling as a robust representation learning problem. The main novelty is not a larger reward model, but better supervision:
+当前还保留双向 stop-gradient mutual distillation。每条 trajectory 内先对 token squared error 求和，再在 trajectory 间取均值，避免目标强度随序列长度被 `1/T` 稀释：
 
-1. reward invariance across LLM-guided style/domain shifts;
-2. token-level localization of where grounded reasoning becomes invalid;
-3. negative-tail reward shaping so late hallucinations cannot be hidden by earlier correct reasoning.
+```text
+L_mutual = MSE(A_key, stopgrad(A_comp))
+         + MSE(A_comp, stopgrad(A_key))
+```
 
-This makes the method a natural ICLR submission direction: efficient test-time scaling with explicit robustness and faithfulness constraints.
+比较只在 key/complete 共同具有 label coverage 的 token 上进行，但两张 attention map 仍是在完整有效 trajectory 上归一化，不会对子集重新 softmax。默认 direct 权重均为 `1.0`，mutual 权重为 `.25`，训练 phase 为 `joint`。
+
+融合 prior 为：
+
+```text
+A_fused = normalize(0.5·A_key + 0.5·A_comp)
+```
+
+代码保留 reward gate 向 detached fused prior 对齐的 MSE，也保留 external reconstruction target 接口；二者当前权重都为 0。原因是 direct/mutual 已显示 learnability，而 shared-gradient gate objective 尚未建立 held-out ranking 增益，reconstruction 也没有可靠外部 target。禁止用同一 candidate 的 pooled feature 构造平凡自重构 target。
+
+## 当前默认总目标
+
+在一批数据具备对应监督时，`best_current` 的 active objective 是：
+
+```text
+L = 1.0·L_final
+  + 1.0·L_cons
+  + 1.0·L_hall
+  + 0.5·L_value
+  + 0.5·L_tail
+  + 1.0·(L_key_direct + L_complete_direct + 0.25·L_mutual)
+```
+
+这是一种 sparse multi-task objective：不同 row 可以只具有其中一部分标签。每种监督有独立 mask；没有 target 就不计算相应分量。
+
+默认不进入 total objective 的分量为：
+
+```text
+path MIL
+pseudo-onset tail
+progress regression
+progress contribution to score
+gate-prior alignment
+complete reconstruction
+```
+
+## 证据与假设边界
+
+| 命题 | 当前状态 |
+|---|---|
+| Exact-ID 抽取可保持 token/feature 对齐 | 有代码与回归测试支持的工程事实 |
+| Layer-axis encoder 可在真实 raw width 下构建小于一千万参数的模型 | 有配置和测试支持的工程事实 |
+| Consistency loss 能在小规模训练关系上改变 geometry | 有 27 对训练内诊断；无 held-out 泛化证据 |
+| Sparse-span H head 在 16-row dev 上超过位置基线 | 只有点估计；bootstrap 跨 0，后续 blind/position control 失败；且不是当前默认实现 |
+| Main onset-tail shaping 会改善 reward ranking | 未验证假设；历史 absolute/relative/clean-matched 实现均暴露问题 |
+| Direct key/complete targets 可学习 | 48/16、3 seeds 的 standalone gate 通过 |
+| Mutual distillation 降低 branch discrepancy 且不明显损伤 localization | standalone 3/3 seeds 保护门通过 |
+| Shared gate-prior alignment 改善 Best-of-N | 未建立；历史三 seed mean delta 为负且区间跨 0，当前关闭 |
+| 三模块联合优于 correctness-only | 未建立；历史 JALL BoN@16 `.912`，J0 `.920`，扩展门失败 |
+
+这些证据主要来自 Phi/GSM8K 小规模实验，不能支持跨模型、跨领域或正式机制结论。工程 pipeline 运行、auxiliary target 可学习和 Best-of-N 改善必须分开报告。
+
+## 评价设计
+
+所有效果比较应使用 query-disjoint 数据、冻结 candidate order 和至少 3 个训练 seeds。核心指标包括：
+
+- Best-of-N accuracy@`k` 及 query bootstrap 区间；
+- query 内 correct-vs-wrong pairwise accuracy；
+- consistency held-out relation cosine/score gap；
+- hallucination onset/boundary、token localization 和 selected-trajectory hallucination rate；
+- key/complete prior AP，以及与简单 token position baseline 的比较。
+
+推荐 matched ablation：
+
+```text
+correctness only
++ consistency
++ main hallucination onset/tail
++ direct dual prior
++ mutual distillation
+full active integration
+```
+
+任何默认关闭分量都应在独立 protocol 下只改变一个因素后重开，不能在同一小 dev 上连续扫描 weight、margin、threshold 或 routing。
+
+## 预期贡献与当前表述
+
+若后续证据成立，CLIR 的贡献将不是扩大 reward model，而是把更结构化的监督接入轻量 hidden-state scoring：
+
+1. 对可验证的语义等价变化保持 reward 稳定；
+2. 显式定位 reasoning 从何处失效；
+3. 用关键证据与完整支持链共同约束 token-level credit assignment。
+
+当前可以声称的是：仓库已经实现了一个 exact-token、全层特征、可恢复训练、三模块接口完整的研究平台，并把历史通过和失败部分整理成一个单一配置。当前不能声称的是：三模块联合已经带来稳定 Best-of-N 增益，或 main hallucination tail 已被证明优于 sparse diagnostic head。

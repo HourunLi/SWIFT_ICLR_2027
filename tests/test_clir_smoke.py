@@ -1,12 +1,19 @@
 from pathlib import Path
-from unittest.mock import patch
-
 import torch
 from torch.utils.data import DataLoader
 
-from src.clir_data import CLIRTrajectoryDataset, SemanticGroupBatchSampler, clir_collate, write_jsonl
-from src.consistency_localized_reward import ConsistencyLocalizedReward, RewardConfig, dual_prior_losses
-from train_clir import make_config, parse_args
+from src.clir_data import (
+    CLIRTrajectoryDataset,
+    SemanticGroupBatchSampler,
+    clir_collate,
+    write_jsonl,
+)
+from src.consistency_localized_reward import (
+    ConsistencyLocalizedReward,
+    RewardConfig,
+    dual_prior_losses,
+)
+from train_clir import DEFAULT_CONFIG, load_config, parse_args
 
 
 def test_clir_forward_and_loss():
@@ -103,7 +110,7 @@ def test_dual_prior_partial_mask_preserves_full_attention_mass():
         phase="key",
     )
 
-    expected = torch.tensor(((0.7 - 0.2) ** 2 + (0.1 - 0.2) ** 2) / 2)
+    expected = torch.tensor((0.7 - 0.2) ** 2 + (0.1 - 0.2) ** 2)
     assert torch.isclose(losses["distill"], expected)
     assert torch.isclose(losses["gate"], expected)
 
@@ -116,7 +123,9 @@ def test_condition_module_params_scale_linearly_with_hidden_dim():
     # regression there would balloon this "lightweight" reward model to ~1.8e11
     # parameters (bigger than GPT-3) instead of a few hundred million.
     def count_params(hidden_dim: int) -> int:
-        config = RewardConfig(hidden_dim=hidden_dim, projection_dim=64, condition_attention_dim=64)
+        config = RewardConfig(
+            hidden_dim=hidden_dim, projection_dim=64, condition_attention_dim=64
+        )
         return sum(p.numel() for p in ConsistencyLocalizedReward(config).parameters())
 
     small, large = 512, 4096
@@ -166,7 +175,7 @@ def test_jsonl_dataset_collate(tmp_path: Path):
                 "semantic_id": "q0",
                 "style_id": f"style{idx}",
                 "path_hallucinated": idx == 1,
-                "key_prior_target": [1, 0, 0, 0],
+                "key_prior_target": [1] + [0] * (2 + idx),
             }
         )
 
@@ -241,7 +250,9 @@ def test_semantic_group_batch_sampler_packs_groups(tmp_path: Path):
     assert batches[1] == [2]
 
 
-def test_semantic_group_batch_sampler_len_matches_iter_for_uneven_groups(tmp_path: Path):
+def test_semantic_group_batch_sampler_len_matches_iter_for_uneven_groups(
+    tmp_path: Path,
+):
     rows = []
     feature_dir = tmp_path / "features"
     feature_dir.mkdir()
@@ -270,23 +281,22 @@ def test_semantic_group_batch_sampler_len_matches_iter_for_uneven_groups(tmp_pat
     assert len(sampler) == len(batches)
 
 
-def test_train_cli_exposes_new_reward_config_fields():
-    argv = [
-        "train_clir.py",
-        "--train_jsonl",
-        "train.jsonl",
-        "--output_model",
-        "model.pt",
-        "--hidden_dim",
-        "8",
-        "--condition_attention_temperature",
-        "0.7",
-        "--progress_score_weight",
-        "0.25",
-    ]
-    with patch("sys.argv", argv):
-        args = parse_args()
-    config = make_config(args)
+def test_train_cli_uses_single_config_and_identity_development_override():
+    args = parse_args(
+        [
+            "--train_jsonl",
+            "train.jsonl",
+            "--output_model",
+            "model.pt",
+            "--hidden_dim",
+            "8",
+        ]
+    )
+    config, training = load_config(args.config, args.hidden_dim)
 
-    assert config.condition_attention_temperature == 0.7
-    assert config.progress_score_weight == 0.25
+    assert Path(args.config) == DEFAULT_CONFIG
+    assert config.hidden_dim == 8
+    assert config.encoder_type == "identity"
+    assert config.progress_score_weight == 0.0
+    assert config.gate_prior_weight == 0.0
+    assert training["prior_phase_mode"] == "joint"

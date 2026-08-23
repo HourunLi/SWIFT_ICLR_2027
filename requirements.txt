@@ -1,41 +1,10 @@
-# CLIR is implemented with SWIFT (https://github.com/aster2024/SWIFT) as an
-# architectural reference, so the core numerical stack is pinned to match
-# SWIFT's requirements.txt. This avoids subtle behavior/serialization drift
-# between whatever future SWIFT-aligned hidden-state extraction pipeline
-# produces and the model code in this repo.
-#
-# Tier 1 is everything the current code in this repo actually imports
-# (src/, train_clir.py, score_clir.py, tests/). Install this to run the
-# smoke tests and the toy end-to-end pipeline.
+# Core training, scoring, evaluation, and tests.
 torch==2.3.1
 numpy==2.2.6
 pytest==8.3.3
 
-# Tier 2 is not imported by anything in this repo yet. It matches what
-# docs/handoff.md lists as the P0 task: a script that loads a real LLM and
-# extracts per-token hidden states the way SWIFT's train/extract_train.py
-# and eval/get_rewards.py do (both import AutoTokenizer/AutoModelForCausalLM
-# from transformers). Uncomment when that script exists.
-#
-# NOTE: SWIFT's own requirements.txt pins accelerate==0.32.1 together with
-# numpy==2.2.6, but accelerate==0.32.1 requires numpy<2.0.0 -- those two
-# pins conflict and `pip install -r requirements.txt` on SWIFT's own file
-# fails dependency resolution as written. accelerate started supporting
-# numpy>=2.0 well before 1.x, so this file pins a newer accelerate instead
-# of copying SWIFT's exact 0.32.1.
-# transformers==4.51.2
-# accelerate>=1.0.0
-# huggingface_hub==0.30.2
-# tqdm==4.67.0
-
-# Tier 3, from SWIFT's requirements.txt, is NOT needed by this repo and is
-# listed here only for reference -- don't install by default:
-#   - vllm==0.5.3.post1: only used by SWIFT's generate/*.py rollout scripts.
-#     CLIR doesn't generate rollouts itself; if a future generation script
-#     is added here, pull this in then (and note it needs a matching CUDA
-#     toolchain -- it will not install/run on a CPU-only box).
-#   - flash_attn==2.7.0.post2, ring_flash_attn==0.1.5, cuml==0.6.1.post1,
-#     cupy==13.4.1, tuned_lens==0.2.0, loralib==0.1.2, peft==0.15.0,
-#     wandb==0.19.11: only used by SWIFT's eval/fine_tune_baseline.py to
-#     fine-tune/evaluate the large text-based baseline reward models SWIFT
-#     compares against (EurusRM-7B etc). Irrelevant to CLIR's own model.
+# Required only by extract_hidden_states.py. Kept explicit because exact-token,
+# all-layer extraction is part of the real-data path, but it is not imported by
+# the lightweight model/tests.
+transformers==4.51.2
+huggingface_hub==0.30.2

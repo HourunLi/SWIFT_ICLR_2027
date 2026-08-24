@@ -814,8 +814,12 @@ def main() -> None:
     if args.resume_from:
         # Full-state checkpoints contain Python/NumPy RNG tuples in addition to
         # tensors. Only resume checkpoints produced by this project.
+        # Keep RNG tensors on CPU while loading.  Mapping the whole checkpoint to
+        # CUDA also moves torch.get_rng_state() there, but torch.set_rng_state()
+        # only accepts a CPU ByteTensor.  Model and optimizer state are moved to
+        # their parameter devices by load_state_dict below.
         checkpoint = torch.load(
-            args.resume_from, map_location=device, weights_only=False
+            args.resume_from, map_location="cpu", weights_only=False
         )
         validate_resume(checkpoint, model_config, training, data_state)
         model.load_state_dict(checkpoint["state_dict"])

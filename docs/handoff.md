@@ -4,6 +4,34 @@
 
 当前唯一运行配置是 `configs/best_current.json`。这里的 “best current” 指当前最清晰、最可维护的**整合方案**；历史上最高的单次联合矩阵 BoN@16 是 correctness-only J0 `.920`，不是三模块联合成功。
 
+## 2026-08-23 复核状态
+
+在 commit `8b116c4` 的 clean integration 上完成了完整测试、toy resume、旧真实 manifest 接入、全宽梯度 smoke、1-epoch 真实训练和 500×16 排名评估。审计中发现 CUDA 续训会失败：`torch.load(..., map_location=cuda)` 把 CPU RNG state 搬到 GPU，随后 `torch.set_rng_state` 拒绝该 tensor。当前工作树已改为 checkpoint 先在 CPU 加载，再由 `load_state_dict` 恢复 model/optimizer；针对性测试与完整测试均通过，最终为 `37 passed`。
+
+真实数据门与试跑：
+
+- train 为 3968 rows / 496 queries × 8，validation 为 8000 rows / 500 queries × 16，query overlap 为 0；代表性 BF16 feature shape 为 trajectory `[221,101376]`、condition `[105,101376]`。
+- train 中有 3968 correctness rows、27 个 consistency positive pairs、702 个 negative pairs、48 个 onset rows，以及 48 行/14,307 token 的 paired key/complete supervision，覆盖当前所有 active objective。
+- 默认模型实测 `5,347,593` trainable parameters；全宽两个模块 batch 的 loss/gradient finite，峰值显存不超过约 `2.94 GiB`。
+- seed 42、1 epoch 的 train/mechanism-dev total 为 `.5374/3.6609`。checkpoint SHA-256 是 `e1dba08f91d6529213db1acadfc274a422a76c7c8d096a74da2576290c7c891f`。
+- checker v4 的 ranking validation 上，BoN@16/random/oracle 为 `.906/.8925/.976`，within-query pairwise 为 `.6241`；selected-minus-random paired delta `+.0135`，10,000-query-bootstrap interval `[-.0045,+.03175]`。
+
+证据等级是 `small-scale real pipeline pilot`。它证明 clean 代码可以消费旧全层 BF16 artifact、联合 loss 可以真实更新并产出完整 checkpoint/score；1 epoch/1 seed、区间跨 0、没有 matched correctness-only clean baseline，所以不能证明任何单模块或 full integration 增益。
+
+## 与 `origin/main` / 历史 artifact 的兼容性
+
+| 维度 | 结论 | 边界 |
+|---|---|---|
+| 最新 `origin/main` model API | 兼容 | identity 模式严格加载最新 main state dict；21 个共同 forward 输出在运行时对照中 bit-exact，clean 只额外输出 `layer_attention` |
+| 旧 main checkpoint | 部分兼容 | condition bottleneck 修复之后的 identity checkpoint 可加载；修复前、缺少 `condition_hidden_proj/condition_delta_out` 的旧 checkpoint shape 不兼容 |
+| clean real checkpoint | 不与 main raw-width 权重互换 | clean 新增 layer-axis encoder，真实参数 shape 与 main 直接吃 raw width 的模型不同 |
+| 打分 checkpoint schema | 向后读取 | `score_clir.py` 接受 clean 的 `model_config` 或 main 的 `config`；是否能 strict-load 仍取决于具体架构版本 |
+| 训练续训 schema | 不兼容 main | clean 需要 optimizer/epoch/RNG/data_state 的 full-state checkpoint；main 的 weights-only checkpoint 只能打分，不能精确 resume |
+| CLI/config | 有意 breaking | main 的 loss-heavy CLI 改为一个 JSON 方法配置加少量运行覆盖项，旧命令不能原样复用 |
+| `panzhixin` manifest | 已验证兼容 | nested `feature_metadata`、`feature_sha256`/`condition_sha256` 和全层 BF16 路径已在 3968/8000 manifests 上通过 |
+| `panzhixin` 研究协议 | 不自动兼容 | sparse H、strict/encoded variants、versioned runner、标注与多 seed summarizer 没有迁入；不能把可读 manifest 等同于可复现旧协议 |
+| evaluator | 工程兼容、formal 能力不足 | frozen prefix、stable tie、common population、random/oracle/pairwise aggregate 已有；缺少旧分支 parity-checked multi-seed paired summary 与独立 per-query report |
+
 ## 迁移裁决
 
 | 内容 | 当前处理 | 来源与理由 |
@@ -170,14 +198,17 @@ hallucination_onset = k
 - gate-prior、progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
+- checkpoint 尚未写 code commit / dirty-worktree 状态；目前 artifact provenance 对正式论文级运行仍少这一层。
+- trainer 的 feature reference 会绑定 path、size、mtime 与 manifest 内 checksum 声明，但不会在每次训练前重 hash 数百 GiB payload；必须先确认 durable exhaustive mirror-verification report。
+- clean evaluator 尚不能单独完成跨 variants/seeds 的 parity 检查和 paired contrast；单个 BoN 数字不能替代 matched matrix。
 
 ## 下一步
 
 1. 先保证 `pytest -q` 全过，并锁定 clean 分支的最小 toy generate→train→resume→score→evaluate 闭环。
 2. 旧 3968-row manifest 的 schema/首条 BF16 reader smoke 已通过；下一步在新目录做小型真实 extraction smoke，核对 33 层、3072 宽、exact token 长度、revision/checksum 和模型参数量，不立即复制完整历史 artifact。
-3. 用同一 query-disjoint 数据、同一初始化和至少 3 seeds，先重建 correctness-only、逐模块、full integration 的 matched 矩阵；不要只跑一个 JALL 数字。
+3. 先补 checkpoint 的 commit/dirty provenance，并发布 versioned matched configs；用同一 query-disjoint 数据、初始化策略和至少 3 seeds，重建 correctness-only、`+C`、`+H onset-tail`、`+P direct`、`+P mutual`、full integration 矩阵。若要归因 encoder，还要最小重建 strict/encoded baseline；不要只扩跑一个 JALL 数字。
 4. 扩大并独立划分 consistency relations、H onset labels 和 prior targets，避免继续在历史 16-row mechanism dev 上选方法。
 5. 只有在定位指标先通过后，才重开 MIL、pseudo-tail 或新 tail objective；每条支线必须有单独 control 和 ranking 保护门。
-6. 加入 pairwise/listwise reward objective，并与 correctness BCE、encoded backbone 和完整 CLIR 做等预算比较。
+6. 补齐 parity-checked multi-seed paired summarizer/per-query report，再考虑加入 pairwise/listwise reward objective，并与 correctness BCE、encoded backbone 和完整 CLIR 做等预算比较。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

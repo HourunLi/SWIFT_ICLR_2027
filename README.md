@@ -6,6 +6,29 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 
 需要先明确证据边界：[`configs/best_current.json`](configs/best_current.json) 是当前唯一的**整合配置**，不是已经证明优于 correctness-only baseline 的“最优效果配置”。三模块联合训练的历史结果没有通过扩展门，详见 [`docs/handoff.md`](docs/handoff.md)。
 
+## 2026-08-23 clean integration 审计与训练试跑
+
+本轮在 `clir-clean-integration` 的 `8b116c4` 上完成了代码、旧 artifact 兼容和真实训练审计，并修复了一个 CUDA 续训回归：full-state checkpoint 现在先加载到 CPU，再恢复 model/optimizer/RNG；若把整个 checkpoint 映射到 CUDA，CPU RNG state 会被搬到 GPU，`torch.set_rng_state` 会直接失败。修复后固定 SWIFT Python 环境的完整测试为 `37 passed`，CUDA 上的 interrupted→resume 回归也通过。
+
+工程与数据门结果：
+
+- toy generate→epoch 1→resume 到 epoch 2→score→evaluate 闭环完成；toy total loss 从 `4.5132` 降到 `4.2594`。这是随机数据的代码路径证据。
+- clean reader 成功接入旧 3968-row train manifest（496 queries × 8 candidates）与 8000-row validation manifest（500 × 16），train/validation `query_id` 无交集；全部引用路径存在，代表性 trajectory/condition 为 BF16 `[221,101376]` / `[105,101376]`。
+- 默认配置的真实模型有 `5,347,593` 个训练参数；全宽 consistency batch 和 hallucination/prior batch 的前向、反向与梯度均 finite，实测峰值显存约 `2.94 GiB`。
+- seed 42、默认整合配置、3968-row train、query-disjoint 16-row mechanism dev 的 1 epoch 真实试跑完成：train total `.5374`，mechanism-dev total `3.6609`。checkpoint 位于 `run_artifacts/clean_integration_audit_20260823/real_full_seed42_epoch1.pt`，SHA-256 为 `e1dba08f91d6529213db1acadfc274a422a76c7c8d096a74da2576290c7c891f`。
+
+同一 checkpoint 在 checker `clir_gsm8k_numeric_v4` 的 500×16 validation pool 上得到：
+
+| K | reward BoN | random expected | oracle |
+|---:|---:|---:|---:|
+| 1 | `.884` | `.884` | `.884` |
+| 2 | `.898` | `.892` | `.936` |
+| 4 | `.910` | `.888` | `.956` |
+| 8 | `.910` | `.89075` | `.970` |
+| 16 | `.906` | `.8925` | `.976` |
+
+query 内 correct-vs-wrong pairwise accuracy 为 `.6241`（5076 comparisons）。BoN@16 相对 random expected 的 paired query delta 为 `+.0135`，10,000 次 query bootstrap 95% 区间 `[-.0045,+.03175]`，跨 0。正确结论是：clean integration 已建立 `small-scale real pipeline pilot` 和弱排序信号；它只有 1 epoch/1 seed，且没有 matched clean correctness-only baseline，不能把结果归因给 consistency、hallucination 或 dual prior，也不能声称三模块联合有效。
+
 ## 目录
 
 ```text
@@ -281,5 +304,7 @@ pytest -q
 - 当前 objective 是 pointwise correctness BCE 加可用 auxiliary supervision，尚无 pairwise/listwise reward objective。
 - 当前 clean integration 尚未在扩大数据和多 seed 上重跑，不能从代码整合推出三模块联合增益。
 - 历史 consistency、hallucination 和 prior 标签规模都很小，不能支持跨域或正式机制结论。
+- clean checkpoint 当前记录配置、数据/split hash、feature reference、optimizer/RNG 和 metrics，但还没有记录 code commit 与 dirty-worktree 状态；正式实验前必须补齐。
+- clean evaluator 有 frozen-prefix、bootstrap 与 pairwise aggregate，但没有旧分支的多 seed parity/paired-contrast 汇总器和独立 per-query report artifact；正式比较前需要补回等价能力。
 
 研究假设、已有证据与未验证部分见 [`docs/proposal.md`](docs/proposal.md)；迁移依据和历史负结果见 [`docs/handoff.md`](docs/handoff.md)。

@@ -81,3 +81,21 @@ Mechanism metrics remain descriptive because the consistency relation holdout
 is absent and hallucination dev has only 6 positive-onset and 10 clean rows.
 This extension can select a candidate for a larger-data replication; it cannot
 establish final efficacy on the current data.
+
+### CH0 completion status
+
+The extension completed three epochs at seeds 42/43/44 from clean commit
+`582da9af65da622608d796f68b035f523b13009d`; all checkpoint provenance,
+candidate-parity, input-hash, and finite-run checks passed. BoN@16 was
+`.920/.912/.914` (`.9153 +/- .0042`), versus C0 `.9173`, C1 `.9220`, and H0
+`.9267` in three-seed means. The paired mean changes from C0/C1/H0 were
+`-.0020/-.00667/-.01133`. The two-factor interaction
+`CH0 - C1 - H0 + C0` was `-.0160`, negative in every seed; its fixed-seed
+query-bootstrap interval was `[-.03067,-.0020]`, while the exploratory
+seed+query interval `[-.0340,+.00133]` crossed zero.
+
+This is a negative-interaction screening signal, not a final incompatibility
+claim. Do not add epochs on the same sparse supervision. Replicate the complete
+`C0/C1/H0/CH0` matrix after expanding independent C/H mechanism data and ranking
+queries. Full results and interpretation are in
+[`docs/clean_ablation_v1_results.md`](../../docs/clean_ablation_v1_results.md).

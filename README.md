@@ -51,6 +51,21 @@ token value 推到约 `-.62`。direct priors 在 16-row dev 上可学，但 mutu
 [`docs/clean_ablation_v1_results.md`](docs/clean_ablation_v1_results.md)。这组结果仍是
 `small-scale real screening`；不能声称三模块联合有效。
 
+### CH0：consistency 与 onset BCE 的二因子交互补测
+
+为避免把 H tail 和 dual prior 混入交互判断，本轮在查看新指标前冻结并运行了
+`CH0 = correctness + consistency + onset BCE`，仍用同一 train/dev/ranking population、
+3 epochs 和 seeds 42/43/44。CH0 的 BoN@16 为 `.9153 ± .0042`，逐 seed 为
+`.920/.912/.914`；相对 C0、C1、H0 分别为 `-.20/-.67/-1.13` points。H0→CH0 三个
+seed 都下降，fixed-seed query bootstrap 为 `[-2.20,-.13]` points；但只有三个训练 seed，
+seed+query hierarchical interval 仍为 `[-2.73,+.47]` points，不能升级为正式稳定负效应。
+
+二因子交互 `CH0 - C1 - H0 + C0` 为 `-1.60` points，三个 seed 都为负；当前数据支持的
+筛选结论是 consistency 和 onset BCE **没有叠加，且有负交互信号**。这不等于二者天然
+不兼容：consistency 只有 27 个正 pair、H 只有 17 个正 onset + 31 个 clean，机制 dev
+只有 6+10 条，ranking 只有 500 queries。下一轮应扩数据后按同一 `C0/C1/H0/CH0` 2×2
+矩阵复测，而不是直接把本轮写成最终论文结论；`best_current` 也不因这次筛选而更换。
+
 ## 目录
 
 ```text
@@ -68,7 +83,7 @@ examples/create_toy_clir_data.py      仅供管线 smoke test 的合成数据
 tests/                                模型、数据、续训与评估测试
 docs/proposal.md                      与当前实现一致的方法说明
 docs/handoff.md                       迁移裁决、历史证据和下一步
-docs/clean_ablation_v1_results.md     7-cell × 3-seed 筛选结果与裁决
+docs/clean_ablation_v1_results.md     7-cell 主矩阵与 CH0 交互补测结果
 ```
 
 ## 环境

@@ -47,6 +47,40 @@ consistency 没有 held-out relation set。多个 auxiliary cell 的 mechanism-d
 通过，部分 auxiliary target 在小 dev 上可学，任何模块的 held-out ranking efficacy 和
 full integration 增益都尚未建立。
 
+### CH0 交互补测
+
+用户提出的缺失组合已按查看结果前冻结的协议完成：`CH0 = correctness + consistency +
+onset BCE`，不含 gold negative tail、direct/mutual prior 或其他辅助 loss。它在 commit
+`582da9af65da622608d796f68b035f523b13009d`、`dirty=false` 上使用与原矩阵完全相同的
+train、16-row mechanism dev、500×16 ranking population、3 epochs 和 seeds 42/43/44。
+三个 checkpoint、scored input、candidate identity/order/labels 和配置/数据 hash 均通过。
+
+| Cell | BoN@16 mean ± SD | seed 42/43/44 | pairwise mean ± SD |
+|---|---:|---:|---:|
+| C0 correctness | `.9173 ± .0061` | `.916/.912/.924` | `.6860 ± .0200` |
+| C1 consistency | `.9220 ± .0040` | `.918/.922/.926` | `.6937 ± .0088` |
+| H0 onset BCE | `.9267 ± .0110` | `.932/.914/.934` | `.6753 ± .0174` |
+| CH0 C1 + H0 | `.9153 ± .0042` | `.920/.912/.914` | `.6942 ± .0181` |
+
+CH0 相对 C0/C1/H0 的 BoN@16 均值分别为 `-.20/-.67/-1.13` points；其中 H0→CH0
+逐 seed 为 `-1.2/-.2/-2.0` points，fixed-seed query bootstrap 95% interval 为
+`[-2.20,-.13]` points，seed+query hierarchical interval 为 `[-2.73,+.47]` points。
+二因子交互 `CH0 - C1 - H0 + C0` 为 `-1.60` points，逐 seed
+`-1.4/-1.2/-2.2`，fixed-seed query interval `[-3.07,-.20]`，hierarchical interval
+`[-3.40,+.13]` points。准确裁决是“小数据筛选中没有加和，并出现一致的负交互信号”；
+三个 seed 和稀疏辅助监督不足以声称两个模块天然不兼容。
+
+CH0 的 pairwise `.6942` 与 C1 基本相当且高于 H0，但 BoN@16 低于三者，说明它并非让
+所有排序全面变坏，更像是改变了最顶部候选的极值排序。机制 dev 上 CH0 的 H token
+AP/AUROC 为 `.450/.749`、path AUROC `.872`，优于 H0 的小样本点估计；但阈值 `.5`
+完全不报正 onset，onset ±5 仍为 `0/6`。因此辅助 H 排序诊断变好不能替代最终选择效果，
+也不能证明 onset boundary 已学好。
+
+这里的命名关系必须保持清楚：`H0 = correctness + onset BCE`；`H1 = H0 + gold tail`；
+`CH0 = C1 + H0`；旧 `full = C1 + H1 + P1`。所以旧 full 既不是 H0 也不是单独 H1，
+它同时包含 consistency、onset BCE、gold-tail、direct priors 和 mutual priors。CH0 才是
+检验 C 与 H0 是否能组合的干净二因子 cell。
+
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
 | 维度 | 结论 | 边界 |
@@ -222,7 +256,7 @@ hallucination_onset = k
 - extraction 虽原子发布单个 tensor 和最终 manifest，`--overwrite` 中途失败仍可在旧 manifest 下留下部分新 feature；正式运行应使用新目录而不是就地覆盖。
 - 只支持预抽取 feature 训练，全层 payload 存储昂贵；online extraction 尚未进入 clean trainer。
 - 当前模型用 pointwise correctness BCE，没有 pairwise/listwise ranking objective。
-- clean 已在历史 3968-row 数据上完成 7-cell、三 seed matched matrix；它没有扩大独立机制样本，也没有使 `best_current` 成为 efficacy winner。
+- clean 已在历史 3968-row 数据上完成 7-cell 主矩阵和 CH0 二因子补测、三 seed matched evaluation；它没有扩大独立机制样本，也没有使 `best_current` 成为 efficacy winner。
 - consistency 证据只有 27 对且没有 held-out relations。
 - H 证据来自很少的 Silver trajectory，首错边界一致性弱；clean onset ±5 仍为 0，恢复的 main gold-tail 再次未通过 locality/ranking 门。
 - dual prior 只有很少的 adjudicated Gold trajectory；clean direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
@@ -236,10 +270,10 @@ hallucination_onset = k
 ## 下一步
 
 1. 保持完整测试、toy resume 和真实 feature contract gate；如重新抽取，在新目录做 extraction smoke 并绑定 model revision/checksum，不就地覆盖历史 payload。
-2. 扩大并 query-disjoint 划分 consistency relations、可靠 H onset labels 和 prior trajectories；不要继续在当前 16-row mechanism dev 上选 threshold、weight 或 epoch。
-3. 统一 train/ranking checker 版本，并把 ranking validation 扩到足以分辨约 1 point 差异的独立 query population；锁结论后再开 protected test。
-4. H 先单独通过 token/path calibration 与 onset boundary，再设计新的 localized reward coupling；当前 gold-tail、MIL 和 pseudo-tail 都不进入下一轮 full。
-5. prior 先复核 direct target 的跨样本/跨域 learnability；没有增量门前不继续 mutual/gate coupling。consistency 必须补 held-out relation evaluator。
-6. 若要归因 encoder，最小重建 strict/encoded SWIFT 等预算 baseline；之后再考虑 pointwise 与 pairwise/listwise objective 比较，而不是继续盲目增加 full epochs。
+2. 先扩大并 query-disjoint 划分 consistency relations 与可靠 H onset labels：C train 至少 300–500 个语义组、held-out 100–200 组；H train 至少 200 个正 onset + 200 个显式 clean，H dev 至少 100+100。不要继续在当前 16-row mechanism dev 上选 threshold、weight 或 epoch。
+3. 用新数据预注册并完整重跑 `C0/C1/H0/CH0` 2×2；主检验仍是各单模块增量和 `CH0-C1-H0+C0` 交互。当前负交互只用于决定复测设计，不能直接写成普遍结论。
+4. 统一 train/ranking checker 为 v5，并把 ranking validation 扩到约 1500–2000 个独立 query ×16；若预算允许，outcome train 扩到约 1500–2000 queries ×8。锁验证结论后再开 protected test。
+5. H 先单独通过 token/path calibration 与 onset boundary，再设计新的 localized reward coupling；当前 gold-tail、MIL 和 pseudo-tail 都不进入下一轮 full。
+6. prior 先复核 direct target 的跨样本/跨域 learnability；没有增量门前不继续 mutual/gate coupling。若要归因 encoder，最小重建 strict/encoded SWIFT 等预算 baseline。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

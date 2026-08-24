@@ -86,3 +86,23 @@ Interpretation is frozen as follows:
 
 No result from this screen changes `configs/best_current.json` or the Full cell
 without a separate, larger-data replication decision.
+
+## Completion status
+
+The full P0/PG0 matrix completed for seeds 42/43/44 at three epochs from clean
+commit `649747f3605e820430d4c93d788e368676ff37ea`. All data/provenance/finite and
+candidate-parity gates passed; rerun P0 state dicts were bit-exact to the
+earlier clean matrix.
+
+PG0 did not pass its mechanism or ranking gate. Mean full-trajectory
+gate-to-fused-prior squared L2 worsened from `.01195` to `.01335` and improved
+in only one of three seeds. Key/complete AP protection passed, but BoN@16 moved
+from `.9180` to `.9167` (`-.13` points); fixed-seed query and seed+query
+intervals both crossed zero. The gate changed the selected candidate for 53–76%
+of queries, yet most changes preserved correctness and the three-seed net was
+two fewer correct selections over 1500 seed-query units.
+
+The decision is to keep gate alignment disabled, avoid a post-result scale or
+epoch sweep on the same 16-row dev, and expand independent prior supervision
+before testing a newly pre-registered coupling. Full results are in
+[`docs/clean_gate_ablation_v1_results.md`](../../docs/clean_gate_ablation_v1_results.md).

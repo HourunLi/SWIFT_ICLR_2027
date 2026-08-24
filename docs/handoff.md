@@ -81,6 +81,28 @@ AP/AUROC 为 `.450/.749`、path AUROC `.872`，优于 H0 的小样本点估计�
 它同时包含 consistency、onset BCE、gold-tail、direct priors 和 mutual priors。CH0 才是
 检验 C 与 H0 是否能组合的干净二因子 cell。
 
+### Prior→reward gate 补测
+
+`configs/clean_gate_ablation_v1` 已在查看新指标前冻结并完成：P0 是 correctness + direct
+key/complete prior，PG0 只增加 `gate_prior_weight=.0625`。该值匹配 `origin/main` 的总
+有效强度 `.25×.25`；mutual、C、H、tail、progress 和 reconstruction 全部关闭。两 cell
+使用同一 3968-row train、16-row mechanism dev、500×16 ranking pool、3 epochs 与
+seeds 42/43/44，checkpoint 绑定 commit
+`649747f3605e820430d4c93d788e368676ff37ea`、`dirty=false`。重新训练的 P0 state dict
+与旧 clean P0 逐 tensor bit-exact。
+
+PG0 的 held-out gate→fused-prior squared-L2 从 P0 `.01195` 变为 `.01335`，只有 seed42
+改善，seeds43/44 恶化；key AP `.2969→.2926`、complete AP `.9210→.9251`，prior
+protection 与 gate-collapse guard 通过。BoN@16 从 `.9180→.9167`，逐 seed delta
+`+.2/-.8/+.2` points，fixed-seed query interval `[-.87,+.60]`、seed+query interval
+`[-1.20,+1.00]` points。pairwise 点估计约 `+.35` points，但没有转化为主指标增益。
+
+gate 确实影响了 score：各 seed 有 `53.2%/75.6%/57.6%` query 更换最终候选；其中绝大
+多数 correctness 不变，错→对与对→错合计为 `18 vs 20`，净少 2/1500。准确裁决是：
+工程 direct coupling 闭环，但 main-scale objective 没建立 alignment learnability 或
+ranking efficacy。保持默认 0，不并入 Full，不在同一 tiny dev 上 sweep weight/epoch。
+完整证据见 [`clean_gate_ablation_v1_results.md`](clean_gate_ablation_v1_results.md)。
+
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
 | 维度 | 结论 | 边界 |
@@ -116,7 +138,7 @@ AP/AUROC 为 `.450/.749`、path AUROC `.872`，优于 H0 的小样本点估计�
 | query-level Best-of-N evaluator | 精简后移植 | 固定 candidate prefix、tie 和 bootstrap 语义 |
 | Dual-prior direct key/complete supervision | 默认启用 | standalone 与 clean 小 dev 均显示 target learnability；clean ranking 增益未建立 |
 | 双向 stop-gradient mutual distillation | 默认启用，权重 `.25` | 历史保护门通过，但 clean P0→P1 没有机制或 ranking 增量，不应再写成 efficacy 证据 |
-| shared-gradient gate-prior alignment | 公式保留，默认权重 0 | 目标可学，但未建立 ranking 增益，早期还损伤 key AP |
+| shared-gradient gate-prior alignment | 公式保留，默认权重 0 | 历史强尺度未建立 ranking 增益；clean main-scale P0→PG0 又未改善 held-out alignment，BoN@16 `-.13` points，故不启用 |
 | sparse-span hallucination | 不迁移到当前核心 | 点估计小门通过，但 onset、blind transfer 和联合门失败；且用户指定回 main |
 | online batch-local extraction | 暂不迁移 | 只有小样本等价性，没有大规模吞吐结论；会显著扩大 trainer |
 | Strict / Encoded baseline model variants | 不迁移 | 保持 clean 主干单一模型；后续 matched ablation 在独立分支或最小 baseline 中重建，不把多 variant 类塞回核心 |
@@ -201,7 +223,7 @@ hallucination_onset = k
 | path-level MIL | 保留稳定 log-space noisy-or | `0` | 更大、定义稳定的 path labels；单独 matched ablation |
 | pseudo-onset tail | 保留 | `0` | H boundary 在独立数据通过后再启用，避免循环自训练 |
 | progress | head 与 loss 保留 | loss `0`，score weight `0` | 有独立于 token advantage 的 target，并明确 reward/progress 分工 |
-| gate-prior alignment | 原 shared-gradient 公式保留 | `0` | prior 监督扩量后做 matched multi-seed ranking 验证 |
+| gate-prior alignment | 原 shared-gradient 公式保留 | `0` | 当前 main-scale 机制/ranking 门已失败；先扩 prior 监督并重验 direct，再预注册新 coupling，而非同 dev 调权重 |
 | complete reconstruction | 仅外部 target 接口保留 | `0` | 获得独立 evidence/answer embedding；禁止同 trajectory 自重构 |
 | sparse-span H | 未迁移 | 不适用 | 若重开需新实现、独立标签和与 onset-tail 的明确语义比较 |
 | relative tail | 未迁移 | 不适用 | 新方法、新 validation，不继续消费旧 16-row dev |
@@ -274,6 +296,6 @@ hallucination_onset = k
 3. 用新数据预注册并完整重跑 `C0/C1/H0/CH0` 2×2；主检验仍是各单模块增量和 `CH0-C1-H0+C0` 交互。当前负交互只用于决定复测设计，不能直接写成普遍结论。
 4. 统一 train/ranking checker 为 v5，并把 ranking validation 扩到约 1500–2000 个独立 query ×16；若预算允许，outcome train 扩到约 1500–2000 queries ×8。锁验证结论后再开 protected test。
 5. H 先单独通过 token/path calibration 与 onset boundary，再设计新的 localized reward coupling；当前 gold-tail、MIL 和 pseudo-tail 都不进入下一轮 full。
-6. prior 先复核 direct target 的跨样本/跨域 learnability；没有增量门前不继续 mutual/gate coupling。若要归因 encoder，最小重建 strict/encoded SWIFT 等预算 baseline。
+6. prior 先扩到约 300–500 条独立 train trajectory 与 100–200 条 query-disjoint dev，复核 direct target 的跨样本/跨域 learnability；当前 `.0625` shared-gradient gate 不继续在同 dev 调权重。若提出 KL/gradient-balanced/head-only/runtime-fusion 等新 coupling，必须作为新假设预注册。若要归因 encoder，最小重建 strict/encoded SWIFT 等预算 baseline。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

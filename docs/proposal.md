@@ -247,7 +247,7 @@ complete reconstruction
 | Main onset-tail shaping 会改善 reward ranking | 未验证假设；历史 absolute/relative/clean-matched 实现均暴露问题 |
 | Direct key/complete targets 可学习 | 48/16、3 seeds 的 standalone gate 通过 |
 | Mutual distillation 降低 branch discrepancy 且不明显损伤 localization | standalone 3/3 seeds 保护门通过 |
-| Shared gate-prior alignment 改善 Best-of-N | 未建立；历史三 seed mean delta 为负且区间跨 0，当前关闭 |
+| Shared gate-prior alignment 改善 Best-of-N | 未建立；clean main-scale P0→PG0 的 alignment L2 `.01195→.01335`、BoN@16 `.9180→.9167`，区间跨 0；历史强尺度也无增益，当前关闭 |
 | 三模块联合优于 correctness-only | 未建立；历史 JALL BoN@16 `.912`，J0 `.920`，扩展门失败 |
 
 这些证据主要来自 Phi/GSM8K 小规模实验，不能支持跨模型、跨领域或正式机制结论。工程 pipeline 运行、auxiliary target 可学习和 Best-of-N 改善必须分开报告。

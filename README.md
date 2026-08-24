@@ -67,7 +67,9 @@ seed+query hierarchical interval 仍为 `[-2.73,+.47]` points，不能升级为�
 矩阵复测，而不是直接把本轮写成最终论文结论；`best_current` 也不因这次筛选而更换。
 
 三个模块的实现路径、最终分数耦合、历史数据生产流程、单模块效果和组合现象已整理为
-[`docs/three_module_stage_report_20260824.md`](docs/three_module_stage_report_20260824.md)。
+[`docs/three_module_stage_report_20260824.md`](docs/three_module_stage_report_20260824.md)，另有
+便于阅读和分享的
+[`PDF 版`](docs/clir_three_module_stage_report_20260824.pdf)。
 
 ## 目录
 
@@ -88,6 +90,7 @@ docs/proposal.md                      与当前实现一致的方法说明
 docs/handoff.md                       迁移裁决、历史证据和下一步
 docs/clean_ablation_v1_results.md     7-cell 主矩阵与 CH0 交互补测结果
 docs/three_module_stage_report_20260824.md  三模块实现、数据与效果阶段报告
+docs/clir_three_module_stage_report_20260824.pdf  阶段报告 PDF 版
 ```
 
 ## 环境

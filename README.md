@@ -70,6 +70,12 @@ seed+query hierarchical interval 仍为 `[-2.73,+.47]` points，不能升级为�
 [`docs/three_module_stage_report_20260824.md`](docs/three_module_stage_report_20260824.md)，另有
 便于阅读和分享的
 [`PDF 版（含 gate v2 当前状态补充页）`](docs/clir_three_module_stage_report_20260824.pdf)。
+针对不熟悉 Gold、onset、tail、Key/Complete 和 gate 等术语的读者，新增了
+[`docs/clir_plain_language_stage_report_20260824.md`](docs/clir_plain_language_stage_report_20260824.md)
+与推荐优先阅读的
+[`18 页大白话图解 PDF`](docs/clir_plain_language_stage_report_20260824.pdf)：它使用真实训练 row
+举例，单独区分 Gold/Silver/Pseudo、clean/未标/pseudo onset，并用接线图说明三模块
+如何影响最终选择以及 gate `.25` 的证据边界。
 
 ### Prior→reward gate 独立消融
 
@@ -124,6 +130,8 @@ docs/clean_gate_ablation_v1_results.md  prior→reward gate 三 seed 结果
 docs/clean_gate_tuning_v2_results.md    gate 权重选择、机制门与证据边界
 docs/three_module_stage_report_20260824.md  三模块实现、数据与效果阶段报告
 docs/clir_three_module_stage_report_20260824.pdf  阶段报告 PDF 版
+docs/clir_plain_language_stage_report_20260824.md  大白话图解报告源文本
+docs/clir_plain_language_stage_report_20260824.pdf  18 页大白话图解 PDF
 ```
 
 ## 环境

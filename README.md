@@ -66,6 +66,9 @@ seed+query hierarchical interval 仍为 `[-2.73,+.47]` points，不能升级为�
 只有 6+10 条，ranking 只有 500 queries。下一轮应扩数据后按同一 `C0/C1/H0/CH0` 2×2
 矩阵复测，而不是直接把本轮写成最终论文结论；`best_current` 也不因这次筛选而更换。
 
+三个模块的实现路径、最终分数耦合、历史数据生产流程、单模块效果和组合现象已整理为
+[`docs/three_module_stage_report_20260824.md`](docs/three_module_stage_report_20260824.md)。
+
 ## 目录
 
 ```text
@@ -84,6 +87,7 @@ tests/                                模型、数据、续训与评估测试
 docs/proposal.md                      与当前实现一致的方法说明
 docs/handoff.md                       迁移裁决、历史证据和下一步
 docs/clean_ablation_v1_results.md     7-cell 主矩阵与 CH0 交互补测结果
+docs/three_module_stage_report_20260824.md  三模块实现、数据与效果阶段报告
 ```
 
 ## 环境

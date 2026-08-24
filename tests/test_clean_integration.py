@@ -37,6 +37,9 @@ ABLATION_CONFIG_DIR = (
 GATE_ABLATION_CONFIG_DIR = (
     Path(__file__).resolve().parents[1] / "configs" / "clean_gate_ablation_v1"
 )
+GATE_TUNING_CONFIG_DIR = (
+    Path(__file__).resolve().parents[1] / "configs" / "clean_gate_tuning_v2"
+)
 
 
 def test_best_current_is_compact_and_uses_retained_defaults():
@@ -135,6 +138,27 @@ def test_clean_gate_ablation_changes_only_main_scale_gate_alignment():
     assert pg0_model["prior_weight"] == 1.0
     assert pg0_model["prior_distill_weight"] == 0.0
     assert 1.0 * 0.0625 == 0.25 * 0.25
+
+
+def test_clean_gate_tuning_v2_changes_only_gate_alignment_strength():
+    names_and_weights = {
+        "g025_main_inner": 0.25,
+        "g100_balanced": 1.0,
+        "g400_intermediate": 4.0,
+        "g1000_historical_strong": 10.0,
+    }
+    baseline = json.loads(
+        (GATE_ABLATION_CONFIG_DIR / "p0_direct_prior.json").read_text()
+    )
+    baseline_model = dict(baseline["model"])
+    assert baseline_model.pop("gate_prior_weight") == 0.0
+
+    for name, weight in names_and_weights.items():
+        payload = json.loads((GATE_TUNING_CONFIG_DIR / f"{name}.json").read_text())
+        assert payload["training"] == baseline["training"]
+        model = dict(payload["model"])
+        assert model.pop("gate_prior_weight") == weight
+        assert model == baseline_model
 
 
 def test_layer_axis_encoder_forward_and_gradient():

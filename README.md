@@ -281,7 +281,7 @@ python score_clir.py \
 - `clir_path_hallucination_prob`、`clir_path_no_hallucination_log_prob` 和 `clir_pseudo_onset`；
 - 逐 token `clir_hallucination_prob`、`clir_token_reward` 和 `clir_token_value`；
 - `clir_mean_gate`、逐 token `clir_gate_attention` 和 `clir_condition_relevance`；
-- 归一化的 `clir_key_prior` / `clir_complete_prior`，独立 sigmoid membership `clir_key_prior_membership` / `clir_complete_prior_membership`，以及 `clir_prior_gate_alignment`；
+- 归一化的 `clir_key_prior` / `clir_complete_prior`，独立 sigmoid membership `clir_key_prior_membership` / `clir_complete_prior_membership`，以及 overlap 诊断 `clir_prior_gate_alignment` 和与训练目标同定义的 `clir_prior_gate_squared_l2`；
 - `clir_selected_best_of_n`，每个 `query_id` 恰有一个最高分候选被标记。
 
 `clir_pseudo_onset` 始终作为诊断输出；默认配置中的 pseudo-tail 训练仍为关闭状态。输出 JSONL 原子写入，且不得覆盖输入 manifest 或 checkpoint；已存在的其他输出需显式 `--overwrite`。

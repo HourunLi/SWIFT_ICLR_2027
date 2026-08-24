@@ -139,6 +139,13 @@ def evaluate_mechanisms(
     all_values: list[float] = []
     mutual_squared_l2: list[float] = []
     mutual_l1: list[float] = []
+    prior_gate_squared_l2: list[float] = []
+    prior_gate_dot_product: list[float] = []
+    raw_gate_means: list[float] = []
+    gate_entropies: list[float] = []
+    gate_normalized_entropies: list[float] = []
+    gate_effective_tokens: list[float] = []
+    gate_effective_fractions: list[float] = []
     checkpoint_hashes: set[str] = set()
 
     token_fields = (
@@ -150,6 +157,7 @@ def evaluate_mechanisms(
         "clir_token_value",
         "clir_key_prior_membership",
         "clir_complete_prior_membership",
+        "clir_gate_attention",
         "clir_key_prior",
         "clir_complete_prior",
     )
@@ -227,6 +235,43 @@ def evaluate_mechanisms(
         mutual_squared_l2.append(float(np.square(difference).sum()))
         mutual_l1.append(float(np.abs(difference).sum()))
 
+        gate_attention = np.asarray(row["clir_gate_attention"], dtype=np.float64)
+        if not np.isfinite(gate_attention).all() or np.any(gate_attention < 0.0):
+            raise ValueError(f"Row {row_number} has invalid clir_gate_attention")
+        if not np.isclose(gate_attention.sum(), 1.0, rtol=1e-5, atol=1e-6):
+            raise ValueError(
+                f"Row {row_number} clir_gate_attention does not sum to one"
+            )
+        if "clir_prior_gate_squared_l2" in row:
+            squared_l2 = float(row["clir_prior_gate_squared_l2"])
+        else:
+            # Backward compatibility for scored files produced before the exact
+            # loss-shaped diagnostic was emitted. Historical clean configs use
+            # the fixed 0.5/0.5 prior fusion below.
+            fused_prior = 0.5 * (
+                np.asarray(row["clir_key_prior"], dtype=np.float64)
+                + np.asarray(row["clir_complete_prior"], dtype=np.float64)
+            )
+            squared_l2 = float(np.square(gate_attention - fused_prior).sum())
+        dot_product = float(row["clir_prior_gate_alignment"])
+        raw_gate_mean = float(row["clir_mean_gate"])
+        if not np.isfinite([squared_l2, dot_product, raw_gate_mean]).all():
+            raise ValueError(f"Row {row_number} has non-finite gate diagnostics")
+        if squared_l2 < 0.0 or not 0.0 <= raw_gate_mean <= 1.0:
+            raise ValueError(f"Row {row_number} has invalid gate diagnostics")
+        positive_attention = gate_attention[gate_attention > 0.0]
+        entropy = float(-np.sum(positive_attention * np.log(positive_attention)))
+        effective_tokens = float(1.0 / np.square(gate_attention).sum())
+        prior_gate_squared_l2.append(squared_l2)
+        prior_gate_dot_product.append(dot_product)
+        raw_gate_means.append(raw_gate_mean)
+        gate_entropies.append(entropy)
+        gate_normalized_entropies.append(
+            entropy / np.log(length) if length > 1 else 1.0
+        )
+        gate_effective_tokens.append(effective_tokens)
+        gate_effective_fractions.append(effective_tokens / length)
+
     if not rows:
         raise ValueError("No rows to evaluate")
     if len(checkpoint_hashes) != 1:
@@ -262,7 +307,7 @@ def evaluate_mechanisms(
     tail_mean = float(np.mean(tail_values)) if tail_values else None
 
     return {
-        "schema_version": "clir-mechanism-diagnostics-v1",
+        "schema_version": "clir-mechanism-diagnostics-v2",
         "rows": len(rows),
         "checkpoint_sha256": next(iter(checkpoint_hashes)),
         "hallucination": {
@@ -301,6 +346,23 @@ def evaluate_mechanisms(
             "mutual_map_discrepancy": {
                 "mean_squared_l2": float(np.mean(mutual_squared_l2)),
                 "mean_l1": float(np.mean(mutual_l1)),
+            },
+            "gate_alignment": {
+                "full_trajectory_squared_l2_mean": float(
+                    np.mean(prior_gate_squared_l2)
+                ),
+                "dot_product_mean": float(np.mean(prior_gate_dot_product)),
+                "raw_sigmoid_gate_mean": float(np.mean(raw_gate_means)),
+                "attention_entropy_mean": float(np.mean(gate_entropies)),
+                "attention_normalized_entropy_mean": float(
+                    np.mean(gate_normalized_entropies)
+                ),
+                "attention_effective_tokens_mean": float(
+                    np.mean(gate_effective_tokens)
+                ),
+                "attention_effective_fraction_mean": float(
+                    np.mean(gate_effective_fractions)
+                ),
             },
         },
     }

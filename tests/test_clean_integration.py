@@ -34,6 +34,9 @@ from train_clir import (
 ABLATION_CONFIG_DIR = (
     Path(__file__).resolve().parents[1] / "configs" / "clean_ablation_v1"
 )
+GATE_ABLATION_CONFIG_DIR = (
+    Path(__file__).resolve().parents[1] / "configs" / "clean_gate_ablation_v1"
+)
 
 
 def test_best_current_is_compact_and_uses_retained_defaults():
@@ -115,6 +118,23 @@ def test_clean_ablation_v1_changes_only_declared_loss_families():
 
     best = json.loads(DEFAULT_CONFIG.read_text())
     assert payloads["full_integration"]["model"] == best["model"]
+
+
+def test_clean_gate_ablation_changes_only_main_scale_gate_alignment():
+    p0 = json.loads((GATE_ABLATION_CONFIG_DIR / "p0_direct_prior.json").read_text())
+    pg0 = json.loads(
+        (GATE_ABLATION_CONFIG_DIR / "pg0_direct_prior_gate.json").read_text()
+    )
+
+    assert p0["training"] == pg0["training"]
+    p0_model = dict(p0["model"])
+    pg0_model = dict(pg0["model"])
+    assert p0_model.pop("gate_prior_weight") == 0.0
+    assert pg0_model.pop("gate_prior_weight") == 0.0625
+    assert p0_model == pg0_model
+    assert pg0_model["prior_weight"] == 1.0
+    assert pg0_model["prior_distill_weight"] == 0.0
+    assert 1.0 * 0.0625 == 0.25 * 0.25
 
 
 def test_layer_axis_encoder_forward_and_gradient():

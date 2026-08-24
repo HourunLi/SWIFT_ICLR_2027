@@ -220,6 +220,12 @@ def main() -> None:
                 gate_attention * outputs["fused_prior"][local_idx]
             )
             row["clir_prior_gate_alignment"] = float(prior_alignment.detach().cpu())
+            prior_gate_squared_l2 = torch.sum(
+                (gate_attention - outputs["fused_prior"][local_idx]).pow(2)
+            )
+            row["clir_prior_gate_squared_l2"] = float(
+                prior_gate_squared_l2.detach().cpu()
+            )
             row["clir_condition_relevance"] = [
                 float(x)
                 for x in outputs["condition_relevance"][local_idx, :valid_length]

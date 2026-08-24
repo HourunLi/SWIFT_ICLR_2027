@@ -122,8 +122,12 @@ def test_mechanism_diagnostics_separate_localization_and_value_shift():
         "complete_prior_target": [0, 1],
         "clir_key_prior_membership": [0.9, 0.1],
         "clir_complete_prior_membership": [0.1, 0.9],
+        "clir_gate_attention": [0.5, 0.5],
         "clir_key_prior": [0.8, 0.2],
         "clir_complete_prior": [0.2, 0.8],
+        "clir_prior_gate_squared_l2": 0.0,
+        "clir_prior_gate_alignment": 0.5,
+        "clir_mean_gate": 0.6,
     }
     rows = [
         {
@@ -160,3 +164,10 @@ def test_mechanism_diagnostics_separate_localization_and_value_shift():
     assert report["hallucination"]["token_value"]["post_minus_pre"] == -2.0
     assert report["dual_prior"]["key"]["auroc"] == 1.0
     assert report["dual_prior"]["complete"]["auroc"] == 1.0
+    gate = report["dual_prior"]["gate_alignment"]
+    assert gate["full_trajectory_squared_l2_mean"] == 0.0
+    assert gate["dot_product_mean"] == 0.5
+    assert gate["raw_sigmoid_gate_mean"] == 0.6
+    assert gate["attention_normalized_entropy_mean"] == pytest.approx(1.0)
+    assert gate["attention_effective_tokens_mean"] == 2.0
+    assert gate["attention_effective_fraction_mean"] == 1.0

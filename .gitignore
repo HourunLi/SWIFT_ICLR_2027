@@ -19,6 +19,8 @@ __pycache__/
 !/configs/best_current.json
 !/configs/clean_ablation_v1/
 !/configs/clean_ablation_v1/**
+!/configs/clean_gate_ablation_v1/
+!/configs/clean_gate_ablation_v1/**
 
 # The clean integration branch tracks only explicitly added runtime scripts.
 /scripts/*

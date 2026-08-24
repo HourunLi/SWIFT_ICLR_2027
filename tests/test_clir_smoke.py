@@ -115,6 +115,42 @@ def test_dual_prior_partial_mask_preserves_full_attention_mass():
     assert torch.isclose(losses["gate"], expected)
 
 
+def test_gate_alignment_trains_gate_and_detaches_fused_prior_target():
+    gates = torch.tensor([[0.8, 0.2]], requires_grad=True)
+    fused_prior = torch.tensor([[0.2, 0.8]], requires_grad=True)
+    outputs = {
+        "scores": torch.zeros(1),
+        "mask": torch.ones(1, 2),
+        "key_prior_logits": torch.zeros(1, 2),
+        "complete_prior_logits": torch.zeros(1, 2),
+        "key_prior": torch.tensor([[0.2, 0.8]]),
+        "complete_prior": torch.tensor([[0.2, 0.8]]),
+        "gates": gates,
+        "fused_prior": fused_prior,
+        "complete_reconstruction": torch.zeros(1, 2),
+    }
+    batch = {
+        "key_prior_target": torch.zeros(1, 2),
+        "complete_prior_target": torch.zeros(1, 2),
+    }
+
+    losses = dual_prior_losses(
+        outputs,
+        batch,
+        key_weight=0.0,
+        complete_weight=0.0,
+        distill_weight=0.0,
+        gate_weight=1.0,
+        reconstruction_weight=0.0,
+    )
+    losses["total"].backward()
+
+    assert gates.grad is not None
+    assert torch.isfinite(gates.grad).all()
+    assert gates.grad.abs().sum() > 0
+    assert fused_prior.grad is None
+
+
 def test_condition_module_params_scale_linearly_with_hidden_dim():
     # Regression test: the condition attention/fusion/reconstruction layers must
     # stay O(hidden_dim) via the condition_attention_dim bottleneck, not

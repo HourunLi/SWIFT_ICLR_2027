@@ -102,6 +102,11 @@ def test_resume_matches_uninterrupted_training(tmp_path: Path):
     full_state = torch.load(full, map_location="cpu", weights_only=False)
     resumed_state = torch.load(resumed, map_location="cpu", weights_only=False)
     assert full_state["completed_epoch"] == resumed_state["completed_epoch"] == 2
+    assert full_state["run_provenance"]["schema_version"] == "clir-run-provenance-v1"
+    assert full_state["run_provenance"]["code"]["commit"]
+    assert full_state["run_provenance"]["config"]["sha256"]
+    assert full_state["resume_provenance"] == []
+    assert len(resumed_state["resume_provenance"]) == 1
     assert full_state["metrics"] == resumed_state["metrics"]
     assert nested_equal(full_state["state_dict"], resumed_state["state_dict"])
     assert nested_equal(

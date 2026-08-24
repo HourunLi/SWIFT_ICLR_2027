@@ -10,8 +10,11 @@ import json
 import math
 from numbers import Integral, Real
 import os
+import platform
 from pathlib import Path
 import random
+import subprocess
+import sys
 import tempfile
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
@@ -626,6 +629,62 @@ def file_sha256(path: str | Path) -> str:
     return digest.hexdigest()
 
 
+def collect_run_provenance(
+    config_path: str | Path,
+    device: torch.device,
+    argv: Optional[Sequence[str]] = None,
+) -> Dict[str, Any]:
+    """Capture code, config, command, and environment identity for a run."""
+
+    project_root = Path(__file__).resolve().parent
+
+    def git_output(*arguments: str) -> Optional[str]:
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(project_root), *arguments],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            return None
+        return result.stdout.strip()
+
+    commit = git_output("rev-parse", "HEAD")
+    branch = git_output("branch", "--show-current")
+    status = git_output("status", "--porcelain", "--untracked-files=normal")
+    command = list(argv) if argv is not None else [sys.executable, *sys.argv]
+    device_name: Optional[str] = None
+    if device.type == "cuda" and torch.cuda.is_available():
+        device_index = (
+            device.index if device.index is not None else torch.cuda.current_device()
+        )
+        device_name = torch.cuda.get_device_name(device_index)
+    return {
+        "schema_version": "clir-run-provenance-v1",
+        "code": {
+            "commit": commit,
+            "branch": branch or None,
+            "dirty": None if status is None else bool(status),
+        },
+        "config": {
+            "path": str(Path(config_path).resolve()),
+            "sha256": file_sha256(config_path),
+        },
+        "command": command,
+        "working_directory": str(Path.cwd().resolve()),
+        "environment": {
+            "python": platform.python_version(),
+            "torch": str(torch.__version__),
+            "numpy": str(np.__version__),
+            "cuda_runtime": torch.version.cuda,
+            "cuda_available": bool(torch.cuda.is_available()),
+            "device": str(device),
+            "device_name": device_name,
+        },
+    }
+
+
 def atomic_torch_save(payload: Mapping[str, Any], path: str | Path) -> None:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -719,6 +778,7 @@ def main() -> None:
     training = apply_training_overrides(configured_training, args)
     set_seed(int(training["seed"]))
     device = resolve_device(args.device)
+    current_provenance = collect_run_provenance(args.config, device)
 
     train_dataset = CLIRTrajectoryDataset(
         args.train_jsonl, feature_root=args.feature_root
@@ -810,6 +870,8 @@ def main() -> None:
     )
     metrics: list[Dict[str, Any]] = []
     completed_epoch = 0
+    run_provenance = current_provenance
+    resume_provenance: list[Dict[str, Any]] = []
 
     if args.resume_from:
         # Full-state checkpoints contain Python/NumPy RNG tuples in addition to
@@ -826,6 +888,11 @@ def main() -> None:
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         completed_epoch = int(checkpoint["completed_epoch"])
         metrics = list(checkpoint.get("metrics", []))
+        run_provenance = dict(
+            checkpoint.get("run_provenance", current_provenance)
+        )
+        resume_provenance = list(checkpoint.get("resume_provenance", []))
+        resume_provenance.append(current_provenance)
         restore_rng_state(checkpoint["rng_state"])
 
     if completed_epoch >= int(training["epochs"]):
@@ -840,6 +907,7 @@ def main() -> None:
         f"device={device} train_rows={len(train_indices)} val_rows={len(val_indices or [])} "
         f"trainable_parameters={parameter_count}"
     )
+    print("run_provenance=" + json.dumps(current_provenance, sort_keys=True))
     print("supervision_per_epoch=" + json.dumps(train_supervision, sort_keys=True))
     for epoch in range(completed_epoch + 1, int(training["epochs"]) + 1):
         if epoch_sampler is not None:
@@ -880,6 +948,8 @@ def main() -> None:
             "training_contract": training_contract(training),
             "data_state": data_state,
             "metrics": metrics,
+            "run_provenance": run_provenance,
+            "resume_provenance": resume_provenance,
         }
         # The checkpoint is authoritative. Publish it before its readable sidecar.
         atomic_torch_save(checkpoint, output)

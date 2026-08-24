@@ -29,6 +29,8 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 
 query 内 correct-vs-wrong pairwise accuracy 为 `.6241`（5076 comparisons）。BoN@16 相对 random expected 的 paired query delta 为 `+.0135`，10,000 次 query bootstrap 95% 区间 `[-.0045,+.03175]`，跨 0。正确结论是：clean integration 已建立 `small-scale real pipeline pilot` 和弱排序信号；它只有 1 epoch/1 seed，且没有 matched clean correctness-only baseline，不能把结果归因给 consistency、hallucination 或 dual prior，也不能声称三模块联合有效。
 
+后续 matched 消融已经冻结在 [`configs/clean_ablation_v1`](configs/clean_ablation_v1)：correctness-only、`+C`、H BCE only、H BCE+tail、direct prior、mutual prior 和 full 共 7 个 cell。第一阶段统一 seed 42 / 3 epochs，健康门通过后所有 cell 一起扩到 seeds 43/44，不根据单 seed 结果挑选扩跑对象。当前 correctness 有 3590 正/378 负候选，足够做小规模排序筛选；但机制监督只有 27 个 consistency 正 pair、17 个正 onset + 31 个 clean onset、48 条 prior trajectory，mechanism dev 也只有 6 个正 onset + 10 个 clean，因此增加 epoch 不能把这组实验升级为正式机制证据。
+
 ## 目录
 
 ```text

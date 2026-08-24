@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -30,6 +31,11 @@ from train_clir import (
 )
 
 
+ABLATION_CONFIG_DIR = (
+    Path(__file__).resolve().parents[1] / "configs" / "clean_ablation_v1"
+)
+
+
 def test_best_current_is_compact_and_uses_retained_defaults():
     config, training = load_config(DEFAULT_CONFIG)
     model = ConsistencyLocalizedReward(config)
@@ -46,6 +52,69 @@ def test_best_current_is_compact_and_uses_retained_defaults():
     assert config.prior_distill_weight == 0.25
     assert config.gate_prior_weight == 0.0
     assert training["prior_phase_mode"] == "joint"
+
+
+def test_clean_ablation_v1_changes_only_declared_loss_families():
+    config_names = (
+        "c0_correctness_only",
+        "c1_consistency",
+        "h0_onset_bce",
+        "h1_onset_tail",
+        "p0_direct_prior",
+        "p1_mutual_prior",
+        "full_integration",
+    )
+    payloads = {
+        name: json.loads((ABLATION_CONFIG_DIR / f"{name}.json").read_text())
+        for name in config_names
+    }
+    training = payloads["c0_correctness_only"]["training"]
+    assert training["epochs"] == 3
+    assert all(payload["training"] == training for payload in payloads.values())
+
+    factor_keys = {
+        "consistency_weight",
+        "hallucination_weight",
+        "token_reward_weight",
+        "tail_weight",
+        "prior_weight",
+        "prior_distill_weight",
+    }
+    invariant = {
+        key: value
+        for key, value in payloads["c0_correctness_only"]["model"].items()
+        if key not in factor_keys
+    }
+    for payload in payloads.values():
+        assert {
+            key: value
+            for key, value in payload["model"].items()
+            if key not in factor_keys
+        } == invariant
+
+    factor_order = (
+        "consistency_weight",
+        "hallucination_weight",
+        "token_reward_weight",
+        "tail_weight",
+        "prior_weight",
+        "prior_distill_weight",
+    )
+    expected = {
+        "c0_correctness_only": (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+        "c1_consistency": (1.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+        "h0_onset_bce": (0.0, 1.0, 0.0, 0.0, 0.0, 0.0),
+        "h1_onset_tail": (0.0, 1.0, 0.5, 0.5, 0.0, 0.0),
+        "p0_direct_prior": (0.0, 0.0, 0.0, 0.0, 1.0, 0.0),
+        "p1_mutual_prior": (0.0, 0.0, 0.0, 0.0, 1.0, 0.25),
+        "full_integration": (1.0, 1.0, 0.5, 0.5, 1.0, 0.25),
+    }
+    for name, values in expected.items():
+        model = payloads[name]["model"]
+        assert tuple(model[key] for key in factor_order) == values
+
+    best = json.loads(DEFAULT_CONFIG.read_text())
+    assert payloads["full_integration"]["model"] == best["model"]
 
 
 def test_layer_axis_encoder_forward_and_gradient():

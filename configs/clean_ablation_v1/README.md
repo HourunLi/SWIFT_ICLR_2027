@@ -62,3 +62,22 @@ not pass because several auxiliary mechanism-dev curves deteriorated while
 training loss decreased. Do not resume a result-selected subset. Ranking,
 mechanism, uncertainty, and component decisions are frozen in
 [`docs/clean_ablation_v1_results.md`](../../docs/clean_ablation_v1_results.md).
+
+## Pre-registered CH0 interaction extension
+
+Before inspecting any new metrics, the user-requested interaction cell is frozen
+as `ch0_consistency_onset_bce`: correctness plus consistency plus explicit-onset
+H-head BCE, with direct/gold-tail reward shaping and every prior loss disabled.
+It uses the same train, mechanism-dev, ranking population, architecture,
+initialization policy, optimizer, batch size, sampler, three epochs, and seeds
+42/43/44 as the completed matrix. It is not eligible for a result-selected
+five-epoch extension on the current 16-row mechanism dev.
+
+The primary comparison is paired BoN@16 `c0_correctness_only ->
+ch0_consistency_onset_bce`. Incremental comparisons against `c1_consistency`
+and `h0_onset_bce`, plus the two-factor interaction
+`CH0 - C1 - H0 + C0`, diagnose whether the two auxiliary objectives combine.
+Mechanism metrics remain descriptive because the consistency relation holdout
+is absent and hallucination dev has only 6 positive-onset and 10 clean rows.
+This extension can select a candidate for a larger-data replication; it cannot
+establish final efficacy on the current data.

@@ -56,7 +56,7 @@ def test_best_current_is_compact_and_uses_retained_defaults():
     assert config.pseudo_tail_weight == 0.0
     assert config.prior_weight == 1.0
     assert config.prior_distill_weight == 0.25
-    assert config.gate_prior_weight == 0.0
+    assert config.gate_prior_weight == 0.25
     assert training["prior_phase_mode"] == "joint"
 
 
@@ -119,8 +119,11 @@ def test_clean_ablation_v1_changes_only_declared_loss_families():
         model = payloads[name]["model"]
         assert tuple(model[key] for key in factor_order) == values
 
-    best = json.loads(DEFAULT_CONFIG.read_text())
-    assert payloads["full_integration"]["model"] == best["model"]
+    best_model = dict(json.loads(DEFAULT_CONFIG.read_text())["model"])
+    historical_full_model = dict(payloads["full_integration"]["model"])
+    assert historical_full_model.pop("gate_prior_weight") == 0.0
+    assert best_model.pop("gate_prior_weight") == 0.25
+    assert historical_full_model == best_model
 
 
 def test_clean_gate_ablation_changes_only_main_scale_gate_alignment():
@@ -159,6 +162,14 @@ def test_clean_gate_tuning_v2_changes_only_gate_alignment_strength():
         model = dict(payload["model"])
         assert model.pop("gate_prior_weight") == weight
         assert model == baseline_model
+
+    selection = json.loads((GATE_TUNING_CONFIG_DIR / "selection.json").read_text())
+    best = json.loads(DEFAULT_CONFIG.read_text())
+    assert selection["evidence_tier"] == "dev-tuned engineering default"
+    assert selection["selected"]["cell"] == "g025_main_inner"
+    assert selection["selected"]["gate_prior_weight"] == 0.25
+    assert selection["selected"]["absolute_gap"] == 0.002
+    assert best["model"]["gate_prior_weight"] == 0.25
 
 
 def test_layer_axis_encoder_forward_and_gradient():

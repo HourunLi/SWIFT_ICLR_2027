@@ -32,7 +32,7 @@
     "key_prior_weight": 1.0,
     "complete_prior_weight": 1.0,
     "prior_distill_weight": 0.25,
-    "gate_prior_weight": 0.0,
+    "gate_prior_weight": 0.25,
     "reconstruction_weight": 0.0
   },
   "training": {

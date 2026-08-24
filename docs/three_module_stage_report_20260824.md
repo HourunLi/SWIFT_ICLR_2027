@@ -5,6 +5,13 @@
 - 报告基线 commit：`572d3625fd942a266edfa91c4fb3b90db8aa8d33`
 - 证据等级：`small-scale real screening`
 
+> 2026-08-24 gate 更新：用户将“保留 `main` 原始 prior→reward-gate shared-gradient
+> coupling 且默认开启”确定为方法身份约束。六权重 v2 工程选择已完成，当前
+> `gate_prior_weight=.25`；这是同一 dev 上选出的工程默认值，不是独立 efficacy 结论。
+> 本报告正文已同步当前路由；原 P0/P1/Full 数字仍对应当时 gate-off 的冻结消融，不会
+> 因默认改变而重解释。详见
+> [`clean_gate_tuning_v2_results.md`](clean_gate_tuning_v2_results.md)。
+
 本报告回答五个问题：当前接入的三个模块分别是什么、代码上如何实现、如何进入训练与最终
 Best-of-N 选择、各自目前有什么效果、这些监督数据最初如何得到，以及组合训练后发生了什么。
 下一步如何扩充数据只在末尾列出待讨论的决策点，不在本报告中提前冻结新协议。
@@ -80,12 +87,14 @@ exact-token all-layer features
           ├─ H onset head：H0 只经共享表示间接影响 score
           │                 H1 tail 直接训练 score 使用的 value_t
           │
-          └─ Key/Complete heads：当前经共享表示间接影响 score
-                                prior→gate 对齐关闭，prior 不直接进公式
+          └─ Key/Complete heads：direct/mutual 经共享表示间接影响 score
+                                fused prior 还以 .25 loss 对齐 reward gate
+                                gate 再直接参与 scalar score
 ```
 
 一个容易混淆但非常重要的事实是：推理时不会把 `hallucination_probability` 直接从 reward 中减掉，
-也不会把 `key_prior/complete_prior` 直接乘到 reward 上。不同 cell 的 forward score 公式相同，差别来自
+也不会把 `key_prior/complete_prior` 直接乘到 reward 上。prior 的“直接接入”发生在训练时：detached
+fused prior 约束本来就参与 score 的 reward gate。所有 cell 的 forward score 公式仍相同，差别来自
 训练时哪些 loss 改变了共享参数、gate、value 或 residual。
 
 ## 3. 模块一：Semantic/Style Consistency
@@ -292,18 +301,20 @@ complete map 拟合 stopgrad(key map)
 
 权重为 `.25`。`P0` 只有 direct BCE，`P1` 是 direct BCE + mutual。
 
-代码还实现了 `0.5 key + 0.5 complete` fused prior、reward gate 对齐和 complete reconstruction 接口，
-但当前 `gate_prior_weight=0`、`reconstruction_weight=0`。reconstruction 没有独立外部 768-d target；用同一
-candidate 的 pooled feature 会形成平凡自重构 shortcut，因此保持关闭。
+代码还实现了 `0.5 key + 0.5 complete` fused prior、reward gate 对齐和 complete reconstruction 接口。
+当前 `gate_prior_weight=.25`：归一化 reward gate 对 detached fused prior 做 full-trajectory squared-L2，
+更新 gate head 和共享 encoder；`reconstruction_weight=0`。reconstruction 没有独立外部 768-d target；
+用同一 candidate 的 pooled feature 会形成平凡自重构 shortcut，因此保持关闭。
 
 ### 5.3 如何影响最终选择
 
-在当前 clean 配置里，key/complete/fused prior 不进入 forward score 公式，prior→reward gate 对齐也关闭。
-所以 P0/P1 对最终选择只有间接路径：direct/mutual loss 更新 prior heads 和共享 encoder，进而可能改变
-gate/value/residual。
+在当前 clean 配置里，key/complete/fused prior 仍不作为独立项进入 forward score 公式，但
+prior→reward gate 对齐已经默认开启。影响路径分两部分：direct/mutual loss 通过共享 encoder 间接改变
+gate/value/residual；同时 detached fused prior 以 `.25` 的 alignment loss 训练 reward gate，而 gate
+直接决定 score 中各 token 的权重。
 
-这解释了为什么“prior target 能学会”与“BoN 提升”是两件不同的事。若未来重新开启 gate alignment，prior
-才会通过训练 reward gate 更直接影响哪些 token 获得更高权重；这需要独立消融，不能从当前结果倒推。
+这解释了为什么“prior target 能学会”“gate 对齐变好”和“BoN 提升”仍是三件不同的事。对齐路径开启
+只证明 prior 获得了一条更直接的训练路由，不自动证明这个 inductive bias 对最终选择有益。
 
 ### 5.4 当前效果
 
@@ -318,7 +329,10 @@ P0 相对 C0 的 BoN@16 只有 `+0.07` point，seed 方向不稳定；P0→P1 �
 提高 key/complete AP/AUROC，也没有降低 held-out map discrepancy。
 
 阶段裁决是：**direct membership 在这个小 dev 上可学；ranking efficacy 和 mutual 的增量价值未建立。**
-当前不继续打开 gate alignment 或 reconstruction。
+冻结的 P0/P1 数字都来自 gate-off cell。后续独立 gate v2 中，`.25` 的 BoN@16 为 `91.87%`，
+P0 为 `91.80%`，差 `+0.07` point 且两个配对区间跨 0；`10` 的 raw point estimate 为
+`92.07%`。因此当前默认打开 `.25` 是方法身份和保守工程选择，不是 ranking efficacy；
+reconstruction 仍关闭。
 
 ### 5.5 训练数据怎样得到
 
@@ -419,8 +433,9 @@ post-onset 相对下降。当前结果说明问题不是“tail loss 没接上�
 ### 8.3 Direct 与 mutual prior：可学不等于能帮助选择
 
 P0 在 16-row dev 上明显提高 key/complete target AUROC，但 BoN@16 几乎不变；P1 的 mutual 又没有增量。
-由于当前 prior 不直接进入 score，这种结果在机制上并不矛盾：辅助 head 可以准确，最终 reward 仍未获得
-有用的候选排序信号。
+这些冻结 cell 当时没有 gate coupling，所以该结果在机制上并不矛盾。当前默认新增了
+fused-prior→gate 的训练路由，但 v2 的 `.25−P0` 仍只有 `+0.07` point 且区间跨 0：辅助 head
+可以准确、甚至 gate 可以被拉近，最终 reward 仍未必获得可泛化的候选排序信号。
 
 ### 8.4 Full：所有训练路径同时存在，但收益没有相加
 

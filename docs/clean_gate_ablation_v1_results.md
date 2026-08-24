@@ -3,6 +3,12 @@
 状态：2026-08-24 完成 `P0` 与 `PG0` 的 2-cell × 3-seed × 3-epoch
 matched screen。证据等级为 `small-scale real screening`，不是正式 efficacy result。
 
+> 当前状态更新：本文是不可改写的 `.0625` 单点历史结论。用户随后明确要求保留并默认
+> 开启 `main` 原始 coupling；v2 冻结网格按近优规则选出 `.25` 作为
+> `dev-tuned engineering default`。当前默认与完整新证据见
+> [`clean_gate_tuning_v2_results.md`](clean_gate_tuning_v2_results.md)。这项后续工程裁决
+> 不把 v1 的负结果改写成 efficacy 成功。
+
 ## 结论先行
 
 当前 `main` 原始有效强度的 prior→gate coupling **工程上能运行，也确实会改变最终选择，
@@ -22,9 +28,9 @@ matched screen。证据等级为 `small-scale real screening`，不是正式 eff
   最终候选。绝大多数变化发生在相同 correctness 的候选之间；净正确性变化为
   `+1/-4/+1` 个 query，总计正好是 `-2/1500 = -.13` points。
 
-因此 `gate_prior_weight` 继续保持默认 `0`，不把 PG0 接入 `best_current` 或 Full，也不在
-同一 16-row dev 上事后改成 `.25`、`10` 或增加 epoch。若未来重开，先扩充独立 prior
-监督并重新验证 P0 direct learnability，再把新的 coupling objective 作为独立假设预注册。
+因此本文在 v1 完成时的裁决是 `gate_prior_weight` 保持默认 `0`，不把 PG0 接入
+`best_current` 或 Full。该裁决后来被用户的方法身份决定与预先冻结的 v2 工程调参取代；
+当前 `.25` 默认仍不是独立 efficacy 证据，不能反向抹去本轮 `.0625` 的失败。
 
 ## 冻结协议与 provenance
 
@@ -144,8 +150,8 @@ ranking 全池的 gate squared-L2 也复现了 mechanism 的 seed pattern：seed
 3. **prior protection 通过。** key/complete AP 没有超过 `.05` 的下降，gate 没有塌缩。
 4. **ranking 未通过。** BoN@16 点估计 `-.13` points、区间跨 0；pairwise 的小正点估计
    不足以替代主指标。
-5. **默认保持关闭。** `configs/best_current.json` 和 Full 不改，当前实验不续到 5 epochs，
-   不在相同 dev 上 sweep `.25/10`。
+5. **v1 当时的默认裁决是关闭。** `configs/best_current.json` 和 Full 当时不改，当前实验
+   不续到 5 epochs；后续 v2 的用户授权、冻结规则与当前默认另见新结果文档。
 6. **重开的最早条件。** 先把 prior train 扩到约 300–500 条独立、覆盖不同长度/推理结构
    的 trajectory，并建立 100–200 条 query-disjoint mechanism dev；重新跑 P0 direct
    learnability 后，才比较新的 gate coupling。

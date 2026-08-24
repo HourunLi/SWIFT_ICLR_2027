@@ -334,5 +334,5 @@ def test_train_cli_uses_single_config_and_identity_development_override():
     assert config.hidden_dim == 8
     assert config.encoder_type == "identity"
     assert config.progress_score_weight == 0.0
-    assert config.gate_prior_weight == 0.0
+    assert config.gate_prior_weight == 0.25
     assert training["prior_phase_mode"] == "joint"

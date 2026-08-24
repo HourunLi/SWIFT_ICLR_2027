@@ -100,8 +100,32 @@ protection 与 gate-collapse guard 通过。BoN@16 从 `.9180→.9167`，逐 see
 gate 确实影响了 score：各 seed 有 `53.2%/75.6%/57.6%` query 更换最终候选；其中绝大
 多数 correctness 不变，错→对与对→错合计为 `18 vs 20`，净少 2/1500。准确裁决是：
 工程 direct coupling 闭环，但 main-scale objective 没建立 alignment learnability 或
-ranking efficacy。保持默认 0，不并入 Full，不在同一 tiny dev 上 sweep weight/epoch。
-完整证据见 [`clean_gate_ablation_v1_results.md`](clean_gate_ablation_v1_results.md)。
+ranking efficacy。该实验当时支持保持默认 0；它作为 `.0625` 单点的历史结果保留，完整
+证据见 [`clean_gate_ablation_v1_results.md`](clean_gate_ablation_v1_results.md)。
+
+### Prior→reward gate 工程默认值选择 v2
+
+用户随后把“保留 `main` 原始 shared-gradient coupling，并默认开启”定为方法身份约束，
+同时授权在当前开发 population 上选一个相对保守的固定强度。新协议在查看结果前提交
+`.25/1/4/10` 四点配置，复用已完成的 `0/.0625` anchors；12 个新 run 使用相同 3968-row
+train、16-row mechanism dev、500×16 ranking development、3 epochs 和 seeds 42/43/44。
+mutual、C、H/tail、progress 与 reconstruction 全关，只改变 `gate_prior_weight`。
+
+所有正权重均通过 finite、key/complete AP protection、normalized entropy 与 effective
+support 门。BoN@16 三-seed mean 为：`0=.9180`、`.0625=.9167`、`.25=.9187`、
+`1=.9180`、`4=.9173`、`10=.9207`。`10` 是 raw best，但 `.25` 与它恰好相差冻结的
+near-tie 阈值 `.002`，所以按“近似时选更小权重”规则固定 `.25`。`.25−P0` 仅 `+.07`
+point，fixed-seed interval `[-.80,+.87]` points、hierarchical interval
+`[-1.20,+1.53]` points，均跨 0。
+
+因此 `RewardConfig` 和 `configs/best_current.json` 现在都默认 `.25`。它保持
+`origin/main` 的 gate normalization、detached 50/50 fused prior、full-trajectory
+squared-L2、shared mask 与 shared-encoder gradient 路径；没有引入新的推理分数项。
+clean 外层 `prior_weight=1`，故绝对 coupling 系数 `.25`，是原 main 总有效系数 `.0625`
+的 4 倍。这个值的证据标签只能是 `dev-tuned engineering default`：同一 500-query dev
+参与了选择，而且选中点没有改善 held-out gate L2。扩大独立 prior/ranking 数据后应固定
+`.25` 做 off/on 复测，不再消费当前 dev 调参。完整结果见
+[`clean_gate_tuning_v2_results.md`](clean_gate_tuning_v2_results.md)。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -138,7 +162,7 @@ ranking efficacy。保持默认 0，不并入 Full，不在同一 tiny dev 上 s
 | query-level Best-of-N evaluator | 精简后移植 | 固定 candidate prefix、tie 和 bootstrap 语义 |
 | Dual-prior direct key/complete supervision | 默认启用 | standalone 与 clean 小 dev 均显示 target learnability；clean ranking 增益未建立 |
 | 双向 stop-gradient mutual distillation | 默认启用，权重 `.25` | 历史保护门通过，但 clean P0→P1 没有机制或 ranking 增量，不应再写成 efficacy 证据 |
-| shared-gradient gate-prior alignment | 公式保留，默认权重 0 | 历史强尺度未建立 ranking 增益；clean main-scale P0→PG0 又未改善 held-out alignment，BoN@16 `-.13` points，故不启用 |
+| shared-gradient gate-prior alignment | 公式保留，默认权重 `.25` | 用户要求保留 main 方法路径；v2 按冻结近优规则选出 `.25` 作为 dev-tuned 工程默认值。排名 efficacy 仍未建立，扩大数据后固定 off/on 复测 |
 | sparse-span hallucination | 不迁移到当前核心 | 点估计小门通过，但 onset、blind transfer 和联合门失败；且用户指定回 main |
 | online batch-local extraction | 暂不迁移 | 只有小样本等价性，没有大规模吞吐结论；会显著扩大 trainer |
 | Strict / Encoded baseline model variants | 不迁移 | 保持 clean 主干单一模型；后续 matched ablation 在独立分支或最小 baseline 中重建，不把多 variant 类塞回核心 |
@@ -216,14 +240,14 @@ hallucination_onset = k
 
 需要同时保留反面证据：旧分支对 absolute-margin tail 做过多 fold / seed 复核，tail-specific locality 0/3 seeds 通过，存在全局 value shift；relative 和 clean-matched repair 也失败。2026-08-24 的 clean gold-tail 消融再次出现全局 value shift，且 H0→H1 的 BoN@16 三 seed 都回退。因此“回 main”只解释方法身份和为何保留实现；当前 objective 已未通过这轮 locality/ranking 筛选门，不应继续在同一 16-row dev 上调权重。
 
-## 关闭支线的当前裁决
+## 可选与关闭支线的当前裁决
 
 | 支线 | 当前代码状态 | 默认 | 重新开启条件 |
 |---|---|---:|---|
 | path-level MIL | 保留稳定 log-space noisy-or | `0` | 更大、定义稳定的 path labels；单独 matched ablation |
 | pseudo-onset tail | 保留 | `0` | H boundary 在独立数据通过后再启用，避免循环自训练 |
 | progress | head 与 loss 保留 | loss `0`，score weight `0` | 有独立于 token advantage 的 target，并明确 reward/progress 分工 |
-| gate-prior alignment | 原 shared-gradient 公式保留 | `0` | 当前 main-scale 机制/ranking 门已失败；先扩 prior 监督并重验 direct，再预注册新 coupling，而非同 dev 调权重 |
+| gate-prior alignment | 原 shared-gradient 公式保留 | `.25`，开启 | 用户方法身份约束下的 dev-tuned 工程值；扩大 prior/ranking 数据后固定权重做 off/on 独立复测，不再在当前 dev 调参 |
 | complete reconstruction | 仅外部 target 接口保留 | `0` | 获得独立 evidence/answer embedding；禁止同 trajectory 自重构 |
 | sparse-span H | 未迁移 | 不适用 | 若重开需新实现、独立标签和与 onset-tail 的明确语义比较 |
 | relative tail | 未迁移 | 不适用 | 新方法、新 validation，不继续消费旧 16-row dev |
@@ -237,7 +261,7 @@ hallucination_onset = k
 
 ### `configs/best_current.json`
 
-唯一默认配置。真实输入为 `33×3072`，layer encoder 输出 768，condition bottleneck 256。默认 active loss 是 final + consistency + main hallucination onset/tail + direct/mutual dual prior；MIL、pseudo、progress、gate 和 reconstruction 关闭。
+唯一默认配置。真实输入为 `33×3072`，layer encoder 输出 768，condition bottleneck 256。默认 active loss 是 final + consistency + main hallucination onset/tail + direct/mutual dual prior + `.25` main-style gate alignment；MIL、pseudo、progress 和 reconstruction 关闭。
 
 ### `src/clir_features.py`
 
@@ -282,7 +306,7 @@ hallucination_onset = k
 - consistency 证据只有 27 对且没有 held-out relations。
 - H 证据来自很少的 Silver trajectory，首错边界一致性弱；clean onset ±5 仍为 0，恢复的 main gold-tail 再次未通过 locality/ranking 门。
 - dual prior 只有很少的 adjudicated Gold trajectory；clean direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
-- gate-prior、progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
+- gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
 - checkpoint 已写 code commit/branch/dirty-worktree、完整命令和 Python/PyTorch/CUDA/device；上游标签/checker一致性、protected test 和 baseline completeness 仍不满足正式论文级协议。
@@ -292,10 +316,10 @@ hallucination_onset = k
 ## 下一步
 
 1. 保持完整测试、toy resume 和真实 feature contract gate；如重新抽取，在新目录做 extraction smoke 并绑定 model revision/checksum，不就地覆盖历史 payload。
-2. 先扩大并 query-disjoint 划分 consistency relations 与可靠 H onset labels：C train 至少 300–500 个语义组、held-out 100–200 组；H train 至少 200 个正 onset + 200 个显式 clean，H dev 至少 100+100。不要继续在当前 16-row mechanism dev 上选 threshold、weight 或 epoch。
+2. 先扩大并 query-disjoint 划分 consistency relations 与可靠 H onset labels：C train 至少 300–500 个语义组、held-out 100–200 组；H train 至少 200 个正 onset + 200 个显式 clean，H dev 至少 100+100。当前 16-row mechanism dev 已用于筛选，不再用它选择 threshold、weight 或 epoch。
 3. 用新数据预注册并完整重跑 `C0/C1/H0/CH0` 2×2；主检验仍是各单模块增量和 `CH0-C1-H0+C0` 交互。当前负交互只用于决定复测设计，不能直接写成普遍结论。
 4. 统一 train/ranking checker 为 v5，并把 ranking validation 扩到约 1500–2000 个独立 query ×16；若预算允许，outcome train 扩到约 1500–2000 queries ×8。锁验证结论后再开 protected test。
 5. H 先单独通过 token/path calibration 与 onset boundary，再设计新的 localized reward coupling；当前 gold-tail、MIL 和 pseudo-tail 都不进入下一轮 full。
-6. prior 先扩到约 300–500 条独立 train trajectory 与 100–200 条 query-disjoint dev，复核 direct target 的跨样本/跨域 learnability；当前 `.0625` shared-gradient gate 不继续在同 dev 调权重。若提出 KL/gradient-balanced/head-only/runtime-fusion 等新 coupling，必须作为新假设预注册。若要归因 encoder，最小重建 strict/encoded SWIFT 等预算 baseline。
+6. prior 先扩到约 300–500 条独立 train trajectory 与 100–200 条 query-disjoint dev，复核 direct target 的跨样本/跨域 learnability；在新 ranking population 上固定 `.25` 比较 gate off/on，不再调权重。若提出 KL/gradient-balanced/head-only/runtime-fusion 等新 coupling，必须作为新假设预注册。若要归因 encoder，最小重建 strict/encoded SWIFT 等预算 baseline。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

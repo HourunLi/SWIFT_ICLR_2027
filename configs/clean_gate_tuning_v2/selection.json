@@ -1,0 +1,129 @@
+{
+  "schema_version": "clir-clean-gate-selection-v2",
+  "completed_utc": "2026-08-24",
+  "evidence_tier": "dev-tuned engineering default",
+  "scientific_boundary": "The same 500-query ranking development population was used to select the weight. These results do not establish held-out efficacy.",
+  "implementation": {
+    "family": "origin/main shared-gradient prior-to-reward-gate squared-L2",
+    "gate_attention": "normalize(sigmoid(gate_logits))",
+    "fused_prior": "normalize(0.5 * key_prior + 0.5 * complete_prior).detach()",
+    "changed_factor": "gate_prior_weight only"
+  },
+  "protocol": {
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "train_rows": 3968,
+    "train_queries": 496,
+    "paired_prior_train_trajectories": 48,
+    "mechanism_dev_trajectories": 16,
+    "ranking_dev_queries": 500,
+    "candidates_per_ranking_query": 16,
+    "eligibility": {
+      "finite_all_seeds": true,
+      "minimum_mean_normalized_gate_entropy": 0.5,
+      "minimum_mean_effective_token_fraction": 0.2,
+      "maximum_key_ap_drop_from_p0": 0.05,
+      "maximum_complete_ap_drop_from_p0": 0.05
+    },
+    "selection": "Highest eligible three-seed mean BoN@16; among candidates within 0.002 absolute of the best, choose the smallest weight."
+  },
+  "cells": {
+    "p0_direct_prior": {
+      "gate_prior_weight": 0.0,
+      "reused_anchor": true,
+      "bon16_mean": 0.918,
+      "bon16_sample_sd": 0.007211102550927985,
+      "bon16_per_seed": {"42": 0.91, "43": 0.924, "44": 0.92},
+      "pairwise_mean": 0.6891252955082742,
+      "key_ap_mean": 0.2969298651899543,
+      "complete_ap_mean": 0.9210439998464567,
+      "gate_squared_l2_mean": 0.011953182751312852,
+      "normalized_gate_entropy_mean": 0.9686961340779666,
+      "effective_token_fraction_mean": 0.8149450817908095
+    },
+    "pg00625_main_effective": {
+      "gate_prior_weight": 0.0625,
+      "reused_anchor": true,
+      "eligible": true,
+      "bon16_mean": 0.9166666666666666,
+      "bon16_sample_sd": 0.0050332229568471705,
+      "bon16_per_seed": {"42": 0.912, "43": 0.916, "44": 0.922},
+      "pairwise_mean": 0.6926713947990543,
+      "key_ap_mean": 0.2925601044298724,
+      "complete_ap_mean": 0.9251285276098263,
+      "gate_squared_l2_mean": 0.013346629401591295,
+      "normalized_gate_entropy_mean": 0.9658357925703852,
+      "effective_token_fraction_mean": 0.7907459380845552
+    },
+    "g025_main_inner": {
+      "gate_prior_weight": 0.25,
+      "reused_anchor": false,
+      "eligible": true,
+      "bon16_mean": 0.9186666666666667,
+      "bon16_sample_sd": 0.0041633319989322695,
+      "bon16_per_seed": {"42": 0.92, "43": 0.922, "44": 0.914},
+      "pairwise_mean": 0.6892566325190438,
+      "key_ap_mean": 0.28973374758594556,
+      "complete_ap_mean": 0.9256425230917437,
+      "gate_squared_l2_mean": 0.012797865473354856,
+      "normalized_gate_entropy_mean": 0.9669434767839779,
+      "effective_token_fraction_mean": 0.7952073453329064
+    },
+    "g100_balanced": {
+      "gate_prior_weight": 1.0,
+      "reused_anchor": false,
+      "eligible": true,
+      "bon16_mean": 0.918,
+      "bon16_sample_sd": 0.0040000000000000036,
+      "bon16_per_seed": {"42": 0.922, "43": 0.914, "44": 0.918},
+      "pairwise_mean": 0.6886656159705806,
+      "key_ap_mean": 0.27051798554139833,
+      "complete_ap_mean": 0.9152162418971784,
+      "gate_squared_l2_mean": 0.010270213281425336,
+      "normalized_gate_entropy_mean": 0.966355829117102,
+      "effective_token_fraction_mean": 0.772242688197745
+    },
+    "g400_intermediate": {
+      "gate_prior_weight": 4.0,
+      "reused_anchor": false,
+      "eligible": true,
+      "bon16_mean": 0.9173333333333334,
+      "bon16_sample_sd": 0.003055050463303896,
+      "bon16_per_seed": {"42": 0.918, "43": 0.914, "44": 0.92},
+      "pairwise_mean": 0.6930654058313633,
+      "key_ap_mean": 0.26329033255107676,
+      "complete_ap_mean": 0.9152238543644405,
+      "gate_squared_l2_mean": 0.005608601425289332,
+      "normalized_gate_entropy_mean": 0.9472227300642789,
+      "effective_token_fraction_mean": 0.7289666573976804
+    },
+    "g1000_historical_strong": {
+      "gate_prior_weight": 10.0,
+      "reused_anchor": false,
+      "eligible": true,
+      "bon16_mean": 0.9206666666666666,
+      "bon16_sample_sd": 0.006429100507328643,
+      "bon16_per_seed": {"42": 0.918, "43": 0.916, "44": 0.928},
+      "pairwise_mean": 0.6933937483582873,
+      "key_ap_mean": 0.3073393972726338,
+      "complete_ap_mean": 0.9269559473317664,
+      "gate_squared_l2_mean": 0.0009335973759334593,
+      "normalized_gate_entropy_mean": 0.8591509875134191,
+      "effective_token_fraction_mean": 0.36445043969846974
+    }
+  },
+  "selected": {
+    "cell": "g025_main_inner",
+    "gate_prior_weight": 0.25,
+    "raw_best_cell": "g1000_historical_strong",
+    "raw_best_bon16_mean": 0.9206666666666666,
+    "selected_bon16_mean": 0.9186666666666667,
+    "absolute_gap": 0.002,
+    "reason": "The gap is exactly the frozen 0.002 near-tie boundary, so the smaller eligible weight is selected. It also restores the exact inner coefficient declared by origin/main."
+  },
+  "artifacts": {
+    "training_commit": "d1896aee6ab85d851f0a53aa55f6da487a4b602e",
+    "candidate_signature_sha256": "93f5d1bafcc81c109c8f2d7f8672e8e233baa45ff57eb88a888d0a7090e5a040",
+    "paired_summary_sha256": "3aaf0d67378c2bb189bf1794e6d0f683822f1b5aca2836037dedd11084db277c"
+  }
+}

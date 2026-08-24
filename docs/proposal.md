@@ -208,7 +208,21 @@ L_mutual = MSE(A_key, stopgrad(A_comp))
 A_fused = normalize(0.5·A_key + 0.5·A_comp)
 ```
 
-代码保留 reward gate 向 detached fused prior 对齐的 MSE，也保留 external reconstruction target 接口；二者当前权重都为 0。原因是 direct/mutual 已显示 learnability，而 shared-gradient gate objective 尚未建立 held-out ranking 增益，reconstruction 也没有可靠外部 target。禁止用同一 candidate 的 pooled feature 构造平凡自重构 target。
+默认同时保留 `origin/main` 的 shared-gradient gate coupling：
+
+```text
+A_gate = normalize(sigmoid(gate_logits))
+L_gate = squared-L2(A_gate, stopgrad(A_fused))
+```
+
+`gate_prior_weight=.25`。它不会在推理时把 prior 额外加到 score，而是在训练时让 fused
+prior 约束本来就参与 scalar score 的 reward gate；梯度更新 gate head 和共享 encoder，
+不通过该 loss 更新 detached prior target。该 `.25` 是在当前开发 population 上按冻结规则
+选出的工程默认值，也与 `origin/main` 的内部系数相同；clean 外层 `prior_weight=1`，所以
+绝对 coupling 系数为 `.25`，而原 main 的绝对系数为 `.25×.25=.0625`。
+
+external reconstruction target 接口仍保留但权重为 0，因为没有可靠外部 target。禁止用
+同一 candidate 的 pooled feature 构造平凡自重构 target。
 
 ## 当前默认总目标
 
@@ -220,7 +234,8 @@ L = 1.0·L_final
   + 1.0·L_hall
   + 0.5·L_value
   + 0.5·L_tail
-  + 1.0·(L_key_direct + L_complete_direct + 0.25·L_mutual)
+  + 1.0·(L_key_direct + L_complete_direct
+          + 0.25·L_mutual + 0.25·L_gate)
 ```
 
 这是一种 sparse multi-task objective：不同 row 可以只具有其中一部分标签。每种监督有独立 mask；没有 target 就不计算相应分量。
@@ -232,7 +247,6 @@ path MIL
 pseudo-onset tail
 progress regression
 progress contribution to score
-gate-prior alignment
 complete reconstruction
 ```
 
@@ -247,7 +261,7 @@ complete reconstruction
 | Main onset-tail shaping 会改善 reward ranking | 未验证假设；历史 absolute/relative/clean-matched 实现均暴露问题 |
 | Direct key/complete targets 可学习 | 48/16、3 seeds 的 standalone gate 通过 |
 | Mutual distillation 降低 branch discrepancy 且不明显损伤 localization | standalone 3/3 seeds 保护门通过 |
-| Shared gate-prior alignment 改善 Best-of-N | 未建立；clean main-scale P0→PG0 的 alignment L2 `.01195→.01335`、BoN@16 `.9180→.9167`，区间跨 0；历史强尺度也无增益，当前关闭 |
+| Shared gate-prior alignment 改善 Best-of-N | 未建立。v2 同 dev 调参中 `.25` 的 BoN@16 `.9187` vs P0 `.9180`，两个配对区间跨 0；`10` 的 raw point estimate `.9207` 也未形成独立验证。默认 `.25` 是方法身份约束下的 dev-tuned 工程值，不是 efficacy 结论 |
 | 三模块联合优于 correctness-only | 未建立；历史 JALL BoN@16 `.912`，J0 `.920`，扩展门失败 |
 
 这些证据主要来自 Phi/GSM8K 小规模实验，不能支持跨模型、跨领域或正式机制结论。工程 pipeline 运行、auxiliary target 可学习和 Best-of-N 改善必须分开报告。
@@ -270,10 +284,13 @@ correctness only
 + main hallucination onset/tail
 + direct dual prior
 + mutual distillation
++ main-style prior-to-gate alignment
 full active integration
 ```
 
-任何默认关闭分量都应在独立 protocol 下只改变一个因素后重开，不能在同一小 dev 上连续扫描 weight、margin、threshold 或 routing。
+下一轮扩大 prior 数据后，应把 `.25` 固定为 on cell，与 gate-off cell 做独立配对复测；
+不再在当前 16-row mechanism dev / 500-query ranking dev 上连续扫描 weight、epoch、margin、
+threshold 或 routing。任何其他默认关闭分量仍应在独立 protocol 下只改变一个因素后重开。
 
 ## 预期贡献与当前表述
 

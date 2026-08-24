@@ -69,7 +69,7 @@ seed+query hierarchical interval 仍为 `[-2.73,+.47]` points，不能升级为�
 三个模块的实现路径、最终分数耦合、历史数据生产流程、单模块效果和组合现象已整理为
 [`docs/three_module_stage_report_20260824.md`](docs/three_module_stage_report_20260824.md)，另有
 便于阅读和分享的
-[`PDF 版`](docs/clir_three_module_stage_report_20260824.pdf)。
+[`PDF 版（含 gate v2 当前状态补充页）`](docs/clir_three_module_stage_report_20260824.pdf)。
 
 ### Prior→reward gate 独立消融
 
@@ -81,16 +81,31 @@ PG0 direct-prior+gate 的 2-cell × 3-seed × 3-epoch 对比。PG0 使用 `.0625
 squared-L2 从 `.01195` 恶化到 `.01335`，只有 1/3 seed 改善；BoN@16 从 `.9180`
 变为 `.9167`，paired delta `-.13` points，fixed-seed query interval
 `[-.87,+.60]` points，seed+query interval `[-1.20,+1.00]` points。gate 虽使
-`53%–76%` 的 query 更换最终候选，但三 seed 合计净少选对 2/1500 次。故默认 gate
-仍为 0，不并入 `best_current`/Full，也不在当前 16-row dev 上事后调大权重或加 epoch。
-完整结果与下一数据门见
+`53%–76%` 的 query 更换最终候选，但三 seed 合计净少选对 2/1500 次。这仍是 `.0625`
+这个单点的有效反证；完整历史结果见
 [`docs/clean_gate_ablation_v1_results.md`](docs/clean_gate_ablation_v1_results.md)。
+
+用户随后明确将“保留 `main` 原始 shared-gradient coupling 且默认开启”定为方法身份约束，
+并允许在当前开发 population 上选择一个保守强度。为此在查看新结果前冻结
+[`configs/clean_gate_tuning_v2`](configs/clean_gate_tuning_v2) 的 `.25/1/4/10` 网格，并
+复用 `0/.0625` anchors，完成 6-weight × 3-seed × 3-epoch 严格配对评测。所有正权重通过
+机制健康门；`10` 的 BoN@16 点估计最高 `.9207`，`.25` 为 `.9187`，差值恰好是冻结的
+near-tie 边界 `.002`，因此按“近似时选更小权重”规则固定 `.25`。
+
+`best_current` 和 `RewardConfig` 现已默认启用 `.25`。它保持 `origin/main` 的内部系数、
+MSE、detach、mask 与 shared-gradient 路径，但 clean 的外层 `prior_weight=1`，所以总 loss
+中的绝对 coupling 系数是 `.25`。`.25−P0` 的 BoN@16 只有 `+.07` point，两个配对区间都
+跨 0；这是使用同一 dev 选出的 **dev-tuned engineering default**，不是 gate efficacy
+结论。完整结果见
+[`docs/clean_gate_tuning_v2_results.md`](docs/clean_gate_tuning_v2_results.md)。扩大数据后将
+固定 `.25` 重做独立 `off/on` 诊断，而不在当前 dev 上继续调参。
 
 ## 目录
 
 ```text
 configs/best_current.json             唯一默认模型与训练配置
 configs/clean_gate_ablation_v1/       P0→PG0 prior-to-gate 冻结消融
+configs/clean_gate_tuning_v2/         六权重工程默认值选择与结构化结果
 src/clir_features.py                  identity/layer-axis 特征编码器
 src/clir_data.py                      JSONL 数据、严格 token 对齐、collate、sampler
 src/consistency_localized_reward.py   reward model、三模块和 loss
@@ -106,6 +121,7 @@ docs/proposal.md                      与当前实现一致的方法说明
 docs/handoff.md                       迁移裁决、历史证据和下一步
 docs/clean_ablation_v1_results.md     7-cell 主矩阵与 CH0 交互补测结果
 docs/clean_gate_ablation_v1_results.md  prior→reward gate 三 seed 结果
+docs/clean_gate_tuning_v2_results.md    gate 权重选择、机制门与证据边界
 docs/three_module_stage_report_20260824.md  三模块实现、数据与效果阶段报告
 docs/clir_three_module_stage_report_20260824.pdf  阶段报告 PDF 版
 ```
@@ -148,7 +164,7 @@ pip install -r requirements.txt
 | progress loss | `0.0` | head 仍输出；且 `progress_score_weight=0.0`，不进入 scalar score |
 | key / complete direct prior | `1.0 / 1.0` | 有对应 token target 时启用 |
 | bidirectional prior distillation | `0.25` | 双向 stop-gradient mutual MSE |
-| gate-prior alignment | `0.0` | 公式保留，因历史 ranking gate 未过而默认关闭 |
+| gate-prior alignment | `0.25` | 默认开启；保持 `main` 原始 shared-gradient 公式，当前是 dev-tuned 工程值 |
 | complete reconstruction | `0.0` | 只接受外部 target，默认关闭 |
 
 当前 hallucination 默认不是 `panzhixin` 的 sparse-span diagnostic：它回到 `main` 的定义——若 `hallucination_onset=k`，则第 `k` 个生成 token 起都属于受污染 tail，H head 做 token BCE，reward value path 同时受到负 tail 约束。这是方法身份选择，不是已经建立的效果结论。

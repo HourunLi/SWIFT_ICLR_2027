@@ -63,7 +63,7 @@ class RewardConfig:
     key_prior_weight: float = 1.0
     complete_prior_weight: float = 1.0
     prior_distill_weight: float = 0.25
-    gate_prior_weight: float = 0.0
+    gate_prior_weight: float = 0.25
     reconstruction_weight: float = 0.0
 
     def __post_init__(self) -> None:

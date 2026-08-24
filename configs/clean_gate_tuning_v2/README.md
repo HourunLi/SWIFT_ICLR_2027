@@ -1,10 +1,12 @@
 # Clean prior-to-gate weight tuning v2
 
-Status: frozen before inspecting any new `0.25 / 1 / 4 / 10` training,
-mechanism, or ranking metrics. The user has made a method-identity decision that
-the original `main` shared-gradient prior-to-reward-gate path must remain
-enabled by default. This protocol selects an engineering default on the current
-development population; it is not an independent efficacy test.
+Status: protocol frozen before inspecting any new `0.25 / 1 / 4 / 10`
+training, mechanism, or ranking metrics; all 12 new runs and the six-weight
+paired summary completed on 2026-08-24. The selected default is `.25`. The user
+has made a method-identity decision that the original `main` shared-gradient
+prior-to-reward-gate path must remain enabled by default. This protocol selects
+an engineering default on the current development population; it is not an
+independent efficacy test.
 
 ## Fixed implementation
 
@@ -72,3 +74,16 @@ After selection, the chosen positive value is written to
 `configs/best_current.json`. A matched three-seed integrated full-cell run may
 be used as an engineering interaction check, but it does not reopen selection
 or upgrade the evidence tier.
+
+## Completed selection
+
+All positive cells passed the finite, prior-protection, entropy, and effective-
+support eligibility gates. The raw highest mean BoN@16 was `10.0` at `.92067`;
+the `.25` cell reached `.91867`, exactly `.002` lower. The frozen near-tie rule
+therefore selects the smaller `.25` weight. Its P0-relative BoN@16 delta was
+only `+.00067`, with both paired intervals crossing zero, so the result is
+labeled `dev-tuned engineering default`, not a performance gain.
+
+See [`selection.json`](selection.json) for the machine-readable decision and
+[`docs/clean_gate_tuning_v2_results.md`](../../docs/clean_gate_tuning_v2_results.md)
+for the full interpretation.

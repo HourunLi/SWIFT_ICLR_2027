@@ -18,9 +18,34 @@
 
 证据等级是 `small-scale real pipeline pilot`。它证明 clean 代码可以消费旧全层 BF16 artifact、联合 loss 可以真实更新并产出完整 checkpoint/score；1 epoch/1 seed、区间跨 0、没有 matched correctness-only clean baseline，所以不能证明任何单模块或 full integration 增益。
 
-已冻结 `configs/clean_ablation_v1` 的 7-cell 三 epoch 筛选矩阵：C0 correctness-only、C1 consistency、H0 onset BCE、H1 onset BCE+negative tail、P0 direct priors、P1 direct+mutual priors、full integration。所有 cell 的架构、初始化 RNG、sampler、优化器和预算相同，仅 loss-family 权重变化。先完整跑 seed 42；若数据/hash/finite gate 正常，则不按 seed-42 排名挑选，而是全矩阵扩到 seeds 43/44。只有所有 cell 的三 epoch 曲线均未饱和且 mechanism dev 未明显恶化时，才统一续到五 epoch。
+`configs/clean_ablation_v1` 冻结了 7-cell 三 epoch 筛选矩阵：C0 correctness-only、C1 consistency、H0 onset BCE、H1 onset BCE+negative tail、P0 direct priors、P1 direct+mutual priors、full integration。所有 cell 的架构、初始化 RNG、sampler、优化器和预算相同，仅 loss-family 权重变化。预注册 staging 是先完整跑 seed 42；若数据/hash/finite gate 正常，则不按 seed-42 排名挑选，而是全矩阵扩到 seeds 43/44；只有所有 cell 的三 epoch 曲线均未饱和且 mechanism dev 未明显恶化时，才统一续到五 epoch。该协议现已执行完毕，结果见下一节。
 
 数据承载边界也已量化：train correctness 为 3590 正/378 负；consistency 只有 27 个训练正 pair 且没有 held-out relation；H train 为 17 个正 onset + 31 个 clean，dev 为 6 + 10；prior 虽有每个 head 14,307 个 token 标签，但只来自 48 条相关 trajectory，dev 只有 16 条。故这套数据足够做 matched engineering/screening ablation，不足以做正式机制归因；更多 epoch 只会重复相同标签，不能替代扩标和独立 held-out mechanism set。
+
+## 2026-08-24 三随机种子消融状态
+
+`configs/clean_ablation_v1` 的 7 个 cell 已完整运行 seeds 42/43/44、每个 3 epochs，
+没有按 seed-42 结果挑选扩跑对象。21 个 checkpoint 都绑定
+`da913318dae92ed8d436564729b92afb4c93f44c`、`dirty=false`、配置/数据/环境/命令；
+统一 500×16 ranking scoring 和严格 candidate parity 也已完成。新增
+`summarize_clir_ablation.py` 做跨 cell/seed 的候选、标签、input/checkpoint hash 校验及
+paired-query uncertainty，`evaluate_clir_mechanisms.py` 分开评估 H、onset、value shift
+和 dual-prior target。
+
+BoN@16 mean ± sample SD：C0 `.9173 ± .0061`、C1 `.9220 ± .0040`、H0
+`.9267 ± .0110`、H1 `.9187 ± .0058`、P0/P1 均 `.9180 ± .0072`、full
+`.9160 ± .0080`。相对 C0，C1 为 `+.47` points、H0 为 `+.93`、P1 为
+`+.07`、full 为 `-.13`；所有 paired query bootstrap 区间跨 0。H0→H1 的 gold-tail
+增量是 `-.80` points，三个 seed 都回退。H1 的 `post-onset − pre-onset` token value
+约为 0，但所有 token value 整体约为 `-.62`，再次呈现 global shift 而非 locality。
+
+direct priors 在 16-row dev 上可学（P0 key/complete AUROC `.663/.869`），但 mutual
+没有增量机制或 ranking 收益；H0/H1 有弱 token/path 排序信号，onset ±5 仍为 0；
+consistency 没有 held-out relation set。多个 auxiliary cell 的 mechanism-dev 随 epoch
+恶化，故统一 3→5 epoch 门失败，没有继续训练。完整数字、区间与裁决见
+[`clean_ablation_v1_results.md`](clean_ablation_v1_results.md)。正确状态是：工程矩阵闭环
+通过，部分 auxiliary target 在小 dev 上可学，任何模块的 held-out ranking efficacy 和
+full integration 增益都尚未建立。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -34,7 +59,7 @@
 | CLI/config | 有意 breaking | main 的 loss-heavy CLI 改为一个 JSON 方法配置加少量运行覆盖项，旧命令不能原样复用 |
 | `panzhixin` manifest | 已验证兼容 | nested `feature_metadata`、`feature_sha256`/`condition_sha256` 和全层 BF16 路径已在 3968/8000 manifests 上通过 |
 | `panzhixin` 研究协议 | 不自动兼容 | sparse H、strict/encoded variants、versioned runner、标注与多 seed summarizer 没有迁入；不能把可读 manifest 等同于可复现旧协议 |
-| evaluator | 工程兼容、formal 能力不足 | frozen prefix、stable tie、common population、random/oracle/pairwise aggregate 已有；缺少旧分支 parity-checked multi-seed paired summary 与独立 per-query report |
+| evaluator | 工程兼容，已补多 seed 配对 | frozen prefix、stable tie、common population、random/oracle/pairwise aggregate、机制诊断及 parity-checked multi-seed paired summary 已有；formal 仍缺 protected test、held-out consistency evaluator 和完整 baseline 矩阵 |
 
 ## 迁移裁决
 
@@ -42,7 +67,7 @@
 |---|---|---|
 | SWIFT-style token reward/gate、trajectory residual | 保留 | `main` 的核心 score 语义 |
 | 通用 semantic/style consistency | 保留 | `main` 接口不绑定某一种 rewrite 路线 |
-| Hallucination onset→tail BCE 与负 tail reward | 保留为默认 | 用户要求回到 `main` 的原始方法身份 |
+| Hallucination onset BCE 与负 tail reward | 实现与整合默认保留，但分开裁决 | onset BCE 有弱诊断/排名点信号；2026-08-24 gold-tail 的 locality/ranking 门失败，不能因默认 active 就声称有效 |
 | condition attention 256 维瓶颈 | 保留 | `main` 修复了 raw hidden width 上的二次参数爆炸 |
 | exact prompt/output token ID 对齐 | 移植 | `panzhixin` 最重要的数据正确性经验 |
 | embedding + 全部 block hidden states | 移植 | 真实 Phi 数据链已经跑通 |
@@ -55,8 +80,8 @@
 | finite loss/gradient、grad clip | 移植 | 基础训练可靠性 |
 | 原子 full-state checkpoint 和精确 resume | 精简后移植 | 保留 model/optimizer/RNG/data contract，不搬复杂 run-record 系统 |
 | query-level Best-of-N evaluator | 精简后移植 | 固定 candidate prefix、tie 和 bootstrap 语义 |
-| Dual-prior direct key/complete supervision | 默认启用 | standalone 3 seeds learnability gate 通过 |
-| 双向 stop-gradient mutual distillation | 默认启用，权重 `.25` | 3/3 seeds 保护门通过 |
+| Dual-prior direct key/complete supervision | 默认启用 | standalone 与 clean 小 dev 均显示 target learnability；clean ranking 增益未建立 |
+| 双向 stop-gradient mutual distillation | 默认启用，权重 `.25` | 历史保护门通过，但 clean P0→P1 没有机制或 ranking 增量，不应再写成 efficacy 证据 |
 | shared-gradient gate-prior alignment | 公式保留，默认权重 0 | 目标可学，但未建立 ranking 增益，早期还损伤 key AP |
 | sparse-span hallucination | 不迁移到当前核心 | 点估计小门通过，但 onset、blind transfer 和联合门失败；且用户指定回 main |
 | online batch-local extraction | 暂不迁移 | 只有小样本等价性，没有大规模吞吐结论；会显著扩大 trainer |
@@ -114,7 +139,9 @@ exact all-layer features
 - 因扩展门失败，seeds 43/44 没有继续跑。
 - 后续 drop-one、supervision packing、condition gradient routing、frozen probe、temporal smoother和 H-v3/v3a 都没有修复核心问题。
 
-因此新分支不能写成“三模块联合有效”。准确状态是：三模块接口已整合，已有部分 standalone learnability evidence，新的 clean 配置尚未做多 seed 联合效果验证。
+因此新分支不能写成“三模块联合有效”。2026-08-24 的 clean 三 seed matched matrix 也已
+完成，但 full 相对 C0 为 `-.13` points 且区间跨 0；准确状态是：三模块接口已整合，
+部分 auxiliary target 有小样本 learnability，联合或单模块 ranking efficacy 未建立。
 
 ## 为什么 Hallucination 回到 `main`
 
@@ -131,7 +158,7 @@ hallucination_onset = k
   → gate-weighted scalar score 的 value path 因此受到影响
 ```
 
-需要同时保留反面证据：旧分支对 absolute-margin tail 做过多 fold / seed 复核，tail-specific locality 0/3 seeds 通过，存在全局 value shift；relative 和 clean-matched repair 也失败。因此“回 main”是方法身份和重新整合的选择，不是 tail 效果已经被证明。新结果出来前必须把它写成待检验假设。
+需要同时保留反面证据：旧分支对 absolute-margin tail 做过多 fold / seed 复核，tail-specific locality 0/3 seeds 通过，存在全局 value shift；relative 和 clean-matched repair 也失败。2026-08-24 的 clean gold-tail 消融再次出现全局 value shift，且 H0→H1 的 BoN@16 三 seed 都回退。因此“回 main”只解释方法身份和为何保留实现；当前 objective 已未通过这轮 locality/ranking 筛选门，不应继续在同一 16-row dev 上调权重。
 
 ## 关闭支线的当前裁决
 
@@ -195,24 +222,24 @@ hallucination_onset = k
 - extraction 虽原子发布单个 tensor 和最终 manifest，`--overwrite` 中途失败仍可在旧 manifest 下留下部分新 feature；正式运行应使用新目录而不是就地覆盖。
 - 只支持预抽取 feature 训练，全层 payload 存储昂贵；online extraction 尚未进入 clean trainer。
 - 当前模型用 pointwise correctness BCE，没有 pairwise/listwise ranking objective。
-- `best_current` 尚未在历史 3968-row 数据上重新做三 seed matched matrix。
+- clean 已在历史 3968-row 数据上完成 7-cell、三 seed matched matrix；它没有扩大独立机制样本，也没有使 `best_current` 成为 efficacy winner。
 - consistency 证据只有 27 对且没有 held-out relations。
-- H 证据来自 64 条 Silver，首错边界一致性弱；恢复的 main tail 假设未获得新验证。
-- dual prior 只有 64 条 adjudicated Gold；direct/mutual learnability 不等于 ranking improvement。
+- H 证据来自很少的 Silver trajectory，首错边界一致性弱；clean onset ±5 仍为 0，恢复的 main gold-tail 再次未通过 locality/ranking 门。
+- dual prior 只有很少的 adjudicated Gold trajectory；clean direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
 - gate-prior、progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
-- checkpoint 尚未写 code commit / dirty-worktree 状态；目前 artifact provenance 对正式论文级运行仍少这一层。
+- checkpoint 已写 code commit/branch/dirty-worktree、完整命令和 Python/PyTorch/CUDA/device；上游标签/checker一致性、protected test 和 baseline completeness 仍不满足正式论文级协议。
 - trainer 的 feature reference 会绑定 path、size、mtime 与 manifest 内 checksum 声明，但不会在每次训练前重 hash 数百 GiB payload；必须先确认 durable exhaustive mirror-verification report。
-- clean evaluator 尚不能单独完成跨 variants/seeds 的 parity 检查和 paired contrast；单个 BoN 数字不能替代 matched matrix。
+- clean evaluator 与新增 summarizer 已能完成跨 variants/seeds 的 parity 检查和 paired contrast；本地大 scored/checkpoint artifact 默认不进 Git，正式发布仍需独立 artifact manifest/存储。
 
 ## 下一步
 
-1. 先保证 `pytest -q` 全过，并锁定 clean 分支的最小 toy generate→train→resume→score→evaluate 闭环。
-2. 旧 3968-row manifest 的 schema/首条 BF16 reader smoke 已通过；下一步在新目录做小型真实 extraction smoke，核对 33 层、3072 宽、exact token 长度、revision/checksum 和模型参数量，不立即复制完整历史 artifact。
-3. 先补 checkpoint 的 commit/dirty provenance，并发布 versioned matched configs；用同一 query-disjoint 数据、初始化策略和至少 3 seeds，重建 correctness-only、`+C`、`+H onset-tail`、`+P direct`、`+P mutual`、full integration 矩阵。若要归因 encoder，还要最小重建 strict/encoded baseline；不要只扩跑一个 JALL 数字。
-4. 扩大并独立划分 consistency relations、H onset labels 和 prior targets，避免继续在历史 16-row mechanism dev 上选方法。
-5. 只有在定位指标先通过后，才重开 MIL、pseudo-tail 或新 tail objective；每条支线必须有单独 control 和 ranking 保护门。
-6. 补齐 parity-checked multi-seed paired summarizer/per-query report，再考虑加入 pairwise/listwise reward objective，并与 correctness BCE、encoded backbone 和完整 CLIR 做等预算比较。
+1. 保持完整测试、toy resume 和真实 feature contract gate；如重新抽取，在新目录做 extraction smoke 并绑定 model revision/checksum，不就地覆盖历史 payload。
+2. 扩大并 query-disjoint 划分 consistency relations、可靠 H onset labels 和 prior trajectories；不要继续在当前 16-row mechanism dev 上选 threshold、weight 或 epoch。
+3. 统一 train/ranking checker 版本，并把 ranking validation 扩到足以分辨约 1 point 差异的独立 query population；锁结论后再开 protected test。
+4. H 先单独通过 token/path calibration 与 onset boundary，再设计新的 localized reward coupling；当前 gold-tail、MIL 和 pseudo-tail 都不进入下一轮 full。
+5. prior 先复核 direct target 的跨样本/跨域 learnability；没有增量门前不继续 mutual/gate coupling。consistency 必须补 held-out relation evaluator。
+6. 若要归因 encoder，最小重建 strict/encoded SWIFT 等预算 baseline；之后再考虑 pointwise 与 pairwise/listwise objective 比较，而不是继续盲目增加 full epochs。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

@@ -29,7 +29,27 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 
 query 内 correct-vs-wrong pairwise accuracy 为 `.6241`（5076 comparisons）。BoN@16 相对 random expected 的 paired query delta 为 `+.0135`，10,000 次 query bootstrap 95% 区间 `[-.0045,+.03175]`，跨 0。正确结论是：clean integration 已建立 `small-scale real pipeline pilot` 和弱排序信号；它只有 1 epoch/1 seed，且没有 matched clean correctness-only baseline，不能把结果归因给 consistency、hallucination 或 dual prior，也不能声称三模块联合有效。
 
-后续 matched 消融已经冻结在 [`configs/clean_ablation_v1`](configs/clean_ablation_v1)：correctness-only、`+C`、H BCE only、H BCE+tail、direct prior、mutual prior 和 full 共 7 个 cell。第一阶段统一 seed 42 / 3 epochs，健康门通过后所有 cell 一起扩到 seeds 43/44，不根据单 seed 结果挑选扩跑对象。当前 correctness 有 3590 正/378 负候选，足够做小规模排序筛选；但机制监督只有 27 个 consistency 正 pair、17 个正 onset + 31 个 clean onset、48 条 prior trajectory，mechanism dev 也只有 6 个正 onset + 10 个 clean，因此增加 epoch 不能把这组实验升级为正式机制证据。
+## 2026-08-24 clean ablation v1
+
+[`configs/clean_ablation_v1`](configs/clean_ablation_v1) 的 7-cell × 3-seed × 3-epoch
+matched matrix 已全部完成：correctness-only、`+C`、H BCE only、H BCE+gold tail、
+direct prior、direct+mutual prior 和 full 共 21 个 run。所有 run 使用同一 496-query
+train、16-row mechanism dev 和 500×16 ranking population；checkpoint code/environment
+provenance、候选 parity、checkpoint hash 与 scored-input hash 均通过。
+
+BoN@16 三 seed 均值为：C0 `.9173`、C1 `.9220`、H0 `.9267`、H1 `.9187`、P0
+`.9180`、P1 `.9180`、full `.9160`。相对 C0 的 paired delta 中，C1 为 `+.47`
+points，H0 为 `+.93` points，P1 为 `+.07` points，full 为 `-.13` points；所有
+query-bootstrap 区间都跨 0。H0→H1 的 gold-tail 增量在三个 seed 都回退，均值
+`-.80` points；机制诊断同时显示 tail 没有形成 onset-localized value drop，而是把全局
+token value 推到约 `-.62`。direct priors 在 16-row dev 上可学，但 mutual 没有额外
+机制或 ranking 收益；consistency 因没有 held-out relation set 仍无法验证关系泛化。
+
+3→5 epoch 的预注册扩展门未通过：多个 auxiliary cell 的 train loss 下降时 mechanism-dev
+反而恶化，继续训练只会重复 27 个 consistency pair、17 个正 onset + 31 个 clean 和 48
+条 prior trajectory。完整协议、置信区间、机制指标和裁决见
+[`docs/clean_ablation_v1_results.md`](docs/clean_ablation_v1_results.md)。这组结果仍是
+`small-scale real screening`；不能声称三模块联合有效。
 
 ## 目录
 
@@ -42,10 +62,13 @@ extract_hidden_states.py              exact-ID teacher-forced 全层特征抽取
 train_clir.py                         训练、验证、原子 checkpoint、精确续训
 score_clir.py                         打分、定位诊断、Best-of-N 选择
 evaluate_clir.py                      query-level Best-of-N 与 pairwise 评估
+evaluate_clir_mechanisms.py           H/onset/value 与 dual-prior 机制诊断
+summarize_clir_ablation.py            多 seed 候选 parity 与 paired contrast
 examples/create_toy_clir_data.py      仅供管线 smoke test 的合成数据
 tests/                                模型、数据、续训与评估测试
 docs/proposal.md                      与当前实现一致的方法说明
 docs/handoff.md                       迁移裁决、历史证据和下一步
+docs/clean_ablation_v1_results.md     7-cell × 3-seed 筛选结果与裁决
 ```
 
 ## 环境
@@ -262,6 +285,21 @@ score tie 使用最早 candidate，保证结果稳定。默认要求每个 query
 
 评估前会检查 score 全部 finite、correctness 严格为 finite `0/1`，candidate index 不重复且显式 index 从 0 连续。报告原子写入，记录 `input_jsonl_sha256` 以绑定输入 scored manifest；已存在的输出需显式 `--overwrite`。
 
+机制标签存在时，可把 H 排序、onset 阈值、pre/tail value shift 和 key/complete prior
+learnability 与 task ranking 分开评估：
+
+```bash
+python evaluate_clir_mechanisms.py \
+  --input_jsonl outputs/mechanism_dev_scored.jsonl \
+  --output_json outputs/mechanism_metrics.json
+```
+
+matched 多 seed 比较使用 `summarize_clir_ablation.py`。它要求目录为
+`seed_<seed>/<cell>/validation_{scored,metrics}.*`，逐行核对所有 run 的候选身份、顺序、
+correctness、scored-input hash 和 checkpoint hash，再对同 query outcome 做 paired
+bootstrap；具体调用和预声明 contrasts 见
+[`docs/clean_ablation_v1_results.md`](docs/clean_ablation_v1_results.md)。
+
 ## Toy smoke test
 
 Toy 数据只验证代码路径，不能证明方法有效：
@@ -304,9 +342,9 @@ pytest -q
 - 仓库没有 rollout、rewrite、hallucination onset 或 dual-prior target 的生成/人工标注系统。
 - 默认仍使用预抽取全层 feature，真实数据的磁盘开销很大；没有集成 batch-local online extraction。
 - 当前 objective 是 pointwise correctness BCE 加可用 auxiliary supervision，尚无 pairwise/listwise reward objective。
-- 当前 clean integration 尚未在扩大数据和多 seed 上重跑，不能从代码整合推出三模块联合增益。
+- clean integration 已在现有小数据上完成三 seed matched matrix，但没有扩充独立机制标签或 protected test；full 没有优于 correctness-only。
 - 历史 consistency、hallucination 和 prior 标签规模都很小，不能支持跨域或正式机制结论。
-- clean checkpoint 当前记录配置、数据/split hash、feature reference、optimizer/RNG 和 metrics，但还没有记录 code commit 与 dirty-worktree 状态；正式实验前必须补齐。
-- clean evaluator 有 frozen-prefix、bootstrap 与 pairwise aggregate，但没有旧分支的多 seed parity/paired-contrast 汇总器和独立 per-query report artifact；正式比较前需要补回等价能力。
+- clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代缺失的数据 provenance 上游与 protected-test protocol。
+- clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired summarizer；尚未重建 strict/encoded SWIFT 等预算 baseline，也没有单独的 held-out consistency evaluator。
 
 研究假设、已有证据与未验证部分见 [`docs/proposal.md`](docs/proposal.md)；迁移依据和历史负结果见 [`docs/handoff.md`](docs/handoff.md)。

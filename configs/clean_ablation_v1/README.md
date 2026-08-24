@@ -53,3 +53,12 @@ consistency positive pairs with no held-out relation set, 17 positive plus 31
 clean onset rows, and 48 prior trajectories. Mechanism-dev contains only 6
 positive onset and 10 clean rows. More epochs do not increase those independent
 sample counts.
+
+## Completion status
+
+The full seven-cell matrix completed at seeds 42, 43, and 44 for three epochs.
+All run/candidate parity gates passed. The uniform five-epoch extension gate did
+not pass because several auxiliary mechanism-dev curves deteriorated while
+training loss decreased. Do not resume a result-selected subset. Ranking,
+mechanism, uncertainty, and component decisions are frozen in
+[`docs/clean_ablation_v1_results.md`](../../docs/clean_ablation_v1_results.md).

@@ -281,6 +281,13 @@ Prior 比 v2 明显改善：eligibility=`60/60`，Key/Complete macro F1=`.9167/.
 包，不运行 adjudication/finalize，不抽 hidden state，也不训练。`triage` 已补 raw-gate fail-fast 状态，
 避免旧输出误报为“第三模型包已就绪”。
 
+用户随后同意优先用提示词修复 C，而不是先加复杂相似度算法。新的
+[`data_expansion_smoke_protocol_v4.md`](data_expansion_smoke_protocol_v4.md) 已冻结为 C-only prompt
+development：同一提示词先做数学路径判断，再做表达差异判断，并明确公式/数字/必然顺序相同不等于照抄。
+第一阶段只回放上述 14 条已检查争议，门为至少13/14 agreement、每边 review≤1 且 accept/reject 各≥2；
+这些行不训练、不算新证据。通过后才制作 30 条不复用 v2/v3 C item/query 的新确认 pair，门为27/30。
+当前状态是 `READY_FOR_DEVELOPMENT_REPLAY`，只需两个全新 A/B 上下文，不调用第三模型。
+
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
 | 维度 | 结论 | 边界 |
@@ -473,9 +480,9 @@ hallucination_onset = k
 
 1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
    失败作为 pipeline-smoke 诊断。
-2. 新版本必须在新自然样本上重做 C/Prior，而不是调整 v3 阈值：C 增加冻结的 lexical/structural
-   diversity band、真实 near-copy hard controls 和不同中间量负例；Prior 先标显式 dependency edges，再由
-   确定性传递闭包得到 Complete，或预注册等价组容错，避免让两个合理集合靠第三模型强行统一。
+2. 先完成 C prompt-v4 的两个 14 条开发回放；通过后再做 30 条全新确认。若新确认不过，停止提示词路线，
+   再考虑机械 similarity band；不得降低门或重标 v3 冒充通过。Prior 仍需在新版本中先标显式 dependency
+   edges，再由确定性传递闭包得到 Complete，或预注册等价组容错。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
 4. 根据 source/numeric/unit-count 分层 yield、裁决成本和许可另发正式扩量协议；目标仍是 C train

@@ -1,0 +1,8 @@
+请完整读取并严格执行下面文件中的“CLIR Consistency prompt repair v4”规则：
+/prodcpfs/user/panzhixin/ICLR_2027/configs/data_expansion_smoke_v4/consistency_prompt.md
+
+你是独立标注槽位 A。直接读取规则指定的自然 pair JSONL 和14-ID清单，只处理清单项。不得读取历史
+labels、triage、raw report、README、handoff、PRIVATE 文件或 B 的输出。把恰好14行合法 JSONL 写到：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_smoke_v4/labels_a/consistency_prompt_replay.jsonl
+
+除了该输出文件，不修改任何文件。完成后只报告输出路径和行数，不在聊天中复述标签。

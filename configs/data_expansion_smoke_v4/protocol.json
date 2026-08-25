@@ -1,0 +1,48 @@
+{
+  "schema_version": "clir-consistency-prompt-repair-v4",
+  "status": "READY_FOR_DEVELOPMENT_REPLAY",
+  "parent_protocol": "clir-data-expansion-smoke-v3",
+  "parent_terminal_status": "STOP_RAW_GATE_FAILURE",
+  "scope": "consistency_prompt_only",
+  "prompt_path": "configs/data_expansion_smoke_v4/consistency_prompt.md",
+  "prompt_sha256": "d5ef2f9d021168014dbd36306b9345ec2da816ea5fd3d32ec15bde1ca413317c",
+  "launch_prompt_a": "configs/data_expansion_smoke_v4/launch_prompt_a.txt",
+  "launch_prompt_a_sha256": "5bdecee45e7077410f0d2b9612af8b471fb9fb71351a23c2c3a412df2507dae8",
+  "launch_prompt_b": "configs/data_expansion_smoke_v4/launch_prompt_b.txt",
+  "launch_prompt_b_sha256": "596b82a6a82e4aac20f90fb7b6c2d24f0fa671617ca256f3f0bb1fcf82bbd847",
+  "development_replay": {
+    "source_items": "run_artifacts/data_expansion_smoke_v3/proposals/annotation_consistency_natural.jsonl",
+    "item_ids_path": "configs/data_expansion_smoke_v4/consistency_prompt_replay_ids.txt",
+    "item_ids_sha256": "ff969e3407cea18918b63b403b3bcf24bfa8b4b62dcaa533b60f73a36f2fe136",
+    "item_count": 14,
+    "labels_a": "run_artifacts/data_expansion_smoke_v4/labels_a/consistency_prompt_replay.jsonl",
+    "labels_b": "run_artifacts/data_expansion_smoke_v4/labels_b/consistency_prompt_replay.jsonl",
+    "report": "run_artifacts/data_expansion_smoke_v4/consistency_prompt_replay_report.json",
+    "decision_agreement_min_count": 13,
+    "decision_agreement_denominator": 14,
+    "review_count_max_per_annotator": 1,
+    "accept_count_min_per_annotator": 2,
+    "reject_count_min_per_annotator": 2,
+    "rationale_prefix_required": true,
+    "third_model_allowed": false,
+    "eligible_for_training": false,
+    "eligible_as_reliability_evidence": false
+  },
+  "fresh_confirmation_if_replay_passes": {
+    "fresh_query_distinct_pairs": 30,
+    "exclude_all_v2_v3_consistency_item_ids_and_query_ids": true,
+    "decision_agreement_min_count": 27,
+    "decision_agreement_denominator": 30,
+    "review_count_max_per_annotator": 2,
+    "accept_count_min_per_annotator": 3,
+    "reject_count_min_per_annotator": 3,
+    "raw_gate_failure_cannot_be_rescued_by_adjudication": true,
+    "passing_authorizes": "separate_scaled_consistency_data_protocol_only"
+  },
+  "annotator_independence": {
+    "different_model_families_required": true,
+    "fresh_context_per_annotator": true,
+    "peer_labels_hidden": true,
+    "previous_labels_and_reports_hidden": true
+  }
+}

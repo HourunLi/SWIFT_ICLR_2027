@@ -16,6 +16,7 @@ from prepare_clir_smoke import (
     command_dedup_triage,
     command_fixture,
     command_triage,
+    evaluate_consistency_prompt_replay,
     evaluate_package_reliability,
 )
 from src.clir_smoke import (
@@ -1013,6 +1014,51 @@ def test_third_model_is_independent_before_anonymous_adjudication(
         "option_2",
     }
     assert "option_identity" not in public_packet[0]
+
+
+def test_consistency_prompt_replay_requires_agreement_and_both_decisions():
+    gates = {
+        "decision_agreement_min_count": 13,
+        "decision_agreement_denominator": 14,
+        "review_count_max_per_annotator": 1,
+        "accept_count_min_per_annotator": 2,
+        "reject_count_min_per_annotator": 2,
+    }
+
+    def label(index: int, decision: str) -> dict[str, str]:
+        prefix = "[ACCEPT_STYLE]" if decision == "accept" else "[REJECT_COPY]"
+        return {
+            "task": "consistency",
+            "item_id": f"item-{index}",
+            "decision": decision,
+            "confidence": "high",
+            "rationale": f"{prefix} frozen replay fixture",
+        }
+
+    labels_a = [
+        label(index, "accept" if index < 7 else "reject") for index in range(14)
+    ]
+    labels_b = [dict(row) for row in labels_a]
+    labels_b[0] = label(0, "reject")
+    passed = evaluate_consistency_prompt_replay(
+        labels_a=labels_a,
+        labels_b=labels_b,
+        gates=gates,
+    )
+    assert passed["status"] == "PASS_DEVELOPMENT_REPLAY"
+    assert passed["agreement"]["exact_target_agree"] == 13
+    assert passed["fresh_confirmation_allowed"] is True
+    assert passed["eligible_for_training"] is False
+
+    all_accept = [label(index, "accept") for index in range(14)]
+    failed = evaluate_consistency_prompt_replay(
+        labels_a=all_accept,
+        labels_b=all_accept,
+        gates=gates,
+    )
+    assert failed["status"] == "STOP_REPLAY_FAILURE"
+    assert "reject_count_a" in failed["failed_gate_names"]
+    assert failed["fresh_confirmation_allowed"] is False
 
 
 def test_eight_query_fixture_is_deterministic(tmp_path: Path, capsys):

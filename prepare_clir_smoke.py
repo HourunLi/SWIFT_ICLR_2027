@@ -54,6 +54,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_PROTOCOL = (
     PROJECT_ROOT / "configs" / "data_expansion_smoke_v3" / "protocol.json"
 )
+DEFAULT_CONSISTENCY_PROMPT_REPAIR_PROTOCOL = (
+    PROJECT_ROOT / "configs" / "data_expansion_smoke_v4" / "protocol.json"
+)
 
 
 def load_protocol(path: str | Path) -> dict[str, Any]:
@@ -100,6 +103,11 @@ def _read_id_file(path: str | Path | None) -> list[str]:
     if any(not isinstance(value, str) or not value for value in values):
         raise ValueError(f"{source}: exclusion IDs must be non-empty strings")
     return list(values)
+
+
+def _project_path(path: str | Path) -> Path:
+    resolved = Path(path)
+    return resolved if resolved.is_absolute() else PROJECT_ROOT / resolved
 
 
 def _prompt_for(question: str, template: str) -> str:
@@ -2471,6 +2479,132 @@ def _validate_label_file(
     ]
 
 
+def evaluate_consistency_prompt_replay(
+    *,
+    labels_a: Sequence[Mapping[str, Any]],
+    labels_b: Sequence[Mapping[str, Any]],
+    gates: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Apply the frozen prompt-development gates without treating replay as data."""
+
+    agreement = agreement_report("consistency", labels_a, labels_b)
+    expected_prefixes = {
+        "accept": ("[ACCEPT_STYLE]",),
+        "reject": ("[REJECT_REASONING]", "[REJECT_COPY]"),
+        "review": ("[REVIEW]",),
+    }
+    results: list[dict[str, Any]] = []
+
+    def add(name: str, passed: bool, **details: Any) -> None:
+        results.append(
+            {"name": name, "status": "PASS" if passed else "FAIL", **details}
+        )
+
+    add(
+        "decision_agreement_count",
+        agreement["exact_target_agree"] >= gates["decision_agreement_min_count"],
+        value=agreement["exact_target_agree"],
+        threshold=gates["decision_agreement_min_count"],
+        denominator=gates["decision_agreement_denominator"],
+    )
+    annotator_reports: dict[str, Any] = {}
+    for slot, labels in (("a", labels_a), ("b", labels_b)):
+        counts = Counter(str(row["decision"]) for row in labels)
+        bad_prefix_ids = [
+            str(row["item_id"])
+            for row in labels
+            if not str(row["rationale"]).startswith(
+                expected_prefixes[str(row["decision"])]
+            )
+        ]
+        annotator_reports[slot] = {
+            "decision_counts": dict(counts),
+            "invalid_rationale_prefix_item_ids": bad_prefix_ids,
+        }
+        add(
+            f"review_count_{slot}",
+            counts["review"] <= gates["review_count_max_per_annotator"],
+            value=counts["review"],
+            threshold=gates["review_count_max_per_annotator"],
+        )
+        for decision in ("accept", "reject"):
+            threshold = gates[f"{decision}_count_min_per_annotator"]
+            add(
+                f"{decision}_count_{slot}",
+                counts[decision] >= threshold,
+                value=counts[decision],
+                threshold=threshold,
+            )
+        add(
+            f"rationale_prefixes_{slot}",
+            not bad_prefix_ids,
+            invalid_item_ids=bad_prefix_ids,
+        )
+    failed = [row["name"] for row in results if row["status"] == "FAIL"]
+    return {
+        "schema_version": "clir-consistency-prompt-replay-report-v4",
+        "status": "PASS_DEVELOPMENT_REPLAY" if not failed else "STOP_REPLAY_FAILURE",
+        "failed_gate_names": failed,
+        "fresh_confirmation_allowed": not failed,
+        "third_model_allowed": False,
+        "eligible_for_training": False,
+        "eligible_as_reliability_evidence": False,
+        "interpretation": (
+            "prompt-development regression on already inspected disputes; "
+            "passing authorizes only a fresh 30-pair confirmation"
+        ),
+        "agreement": agreement,
+        "annotators": annotator_reports,
+        "gates": results,
+    }
+
+
+def command_consistency_prompt_check(args: argparse.Namespace) -> None:
+    protocol_path = Path(args.repair_protocol)
+    protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
+    if protocol.get("schema_version") != "clir-consistency-prompt-repair-v4":
+        raise ValueError("consistency prompt check requires the frozen v4 protocol")
+    replay = protocol["development_replay"]
+    prompt_path = _project_path(protocol["prompt_path"])
+    ids_path = _project_path(replay["item_ids_path"])
+    if file_sha256(prompt_path) != protocol["prompt_sha256"]:
+        raise ValueError("v4 consistency prompt SHA-256 mismatch")
+    if file_sha256(ids_path) != replay["item_ids_sha256"]:
+        raise ValueError("v4 replay item-ID SHA-256 mismatch")
+    item_ids = _read_id_file(ids_path)
+    if len(item_ids) != replay["item_count"] or len(set(item_ids)) != len(item_ids):
+        raise ValueError("v4 replay ID population is not the frozen 14 unique items")
+    all_items = read_jsonl(_project_path(replay["source_items"]))
+    by_id = {str(item["item_id"]): item for item in all_items}
+    missing = sorted(set(item_ids) - set(by_id))
+    if missing:
+        raise ValueError(f"v4 replay source lacks {len(missing)} frozen item IDs")
+    items = [by_id[item_id] for item_id in item_ids]
+    labels_a = _validate_label_file(
+        "consistency",
+        _project_path(replay["labels_a"]),
+        items,
+    )
+    labels_b = _validate_label_file(
+        "consistency",
+        _project_path(replay["labels_b"]),
+        items,
+    )
+    report = evaluate_consistency_prompt_replay(
+        labels_a=labels_a,
+        labels_b=labels_b,
+        gates=replay,
+    )
+    report["protocol_sha256"] = file_sha256(protocol_path)
+    report["prompt_sha256"] = protocol["prompt_sha256"]
+    report["item_ids_sha256"] = replay["item_ids_sha256"]
+    report["labels_a_sha256"] = file_sha256(_project_path(replay["labels_a"]))
+    report["labels_b_sha256"] = file_sha256(_project_path(replay["labels_b"]))
+    output = Path(args.output) if args.output else _project_path(replay["report"])
+    atomic_write_json(output, report)
+    print(json.dumps(report, indent=2))
+
+
 def _load_and_validate_adjudications(
     task: str,
     path: str | Path | None,
@@ -3189,6 +3323,17 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("--labels-b-dir", required=True)
     triage.add_argument("--output-dir", required=True)
     triage.set_defaults(func=command_triage)
+
+    consistency_prompt_check = commands.add_parser(
+        "consistency-prompt-check",
+        help="validate the frozen 14-item Consistency prompt-development replay",
+    )
+    consistency_prompt_check.add_argument(
+        "--repair-protocol",
+        default=str(DEFAULT_CONSISTENCY_PROMPT_REPAIR_PROTOCOL),
+    )
+    consistency_prompt_check.add_argument("--output")
+    consistency_prompt_check.set_defaults(func=command_consistency_prompt_check)
 
     adjudication_package = commands.add_parser(
         "adjudication-package",

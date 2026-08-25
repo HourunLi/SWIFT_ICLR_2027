@@ -220,6 +220,18 @@ Complete=全部 material units 的退化；但 exact target 仅 `25/60`，最低
 生成在本地，但不得发送；本轮不 finalize、不抽 hidden state、不训练，也不产生模块 efficacy 或 Best-of-N
 结论。代码现会在 triage 时显式执行这个停止规则，避免把裁决误当成能救活 raw failure。
 
+## Consistency 提示词修复 v4：先做 14 条开发回放
+
+v2/v3 有 36 个完全相同的 C pair；B 的 36 个 decision 全部复现，A 却把其中 9 个从 accept 改为 reject，
+8 个理由是“近乎照抄”。因此先按
+[`docs/data_expansion_smoke_protocol_v4.md`](docs/data_expansion_smoke_protocol_v4.md) 做一个不改 schema、
+不加相似度算法的提示词修复：先判断数学路径，再判断表达差异，并明确相同公式、数字和必然顺序不能单独
+作为照抄证据。
+
+当前状态是 `READY_FOR_DEVELOPMENT_REPLAY`。先用 14 条已知争议做 A/B prompt regression，至少13/14
+一致且通过反退化门后，才冻结提示词并制作 30 条不复用旧 C query 的新确认样本。14 条回放只用于开发，
+不训练、不产生新可靠性证据，也不改变 v3 的失败终态。
+
 ## 目录
 
 ```text
@@ -229,7 +241,8 @@ configs/clean_gate_ablation_v1/       P0→PG0 prior-to-gate 冻结消融
 configs/clean_gate_tuning_v2/         gate 工程默认值选择训练配置
 configs/data_expansion_smoke_v2/      双审查后多题源扩量 smoke 的机器可读协议
 configs/data_expansion_smoke_v3/      当前 MATH 扩量 smoke 的机器协议与标注语义
-prepare_clir_smoke.py                  v2/v3 source→rollout→双标→硬门的唯一入口
+configs/data_expansion_smoke_v4/      Consistency 提示词修复、14-ID 回放清单与机器门
+prepare_clir_smoke.py                  v2/v3 数据管线与 v4 Consistency prompt gate 入口
 src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约
 src/clir_features.py                  identity/layer-axis 特征编码器
 src/clir_data.py                      JSONL 数据、严格 token 对齐、collate、sampler
@@ -246,6 +259,7 @@ docs/proposal.md                      与当前实现一致的方法说明
 docs/handoff.md                       迁移裁决、历史证据和下一步
 docs/data_expansion_smoke_protocol_v2.md  双审查整合后的 100-query smoke 协议
 docs/data_expansion_smoke_protocol_v3.md  当前 160-query primary acquisition 与双标协议
+docs/data_expansion_smoke_protocol_v4.md  Consistency 提示词修复与新样本确认门
 ```
 
 当前分支顶端只保留训练/打分/评测代码、测试、可运行配置、README、handoff、核心方法说明和

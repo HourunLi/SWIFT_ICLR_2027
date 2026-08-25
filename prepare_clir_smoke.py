@@ -564,7 +564,10 @@ def command_rollout(args: argparse.Namespace) -> None:
 
 
 def materialize_rows(
-    raw_rows: Sequence[Mapping[str, Any]], tokenizer: Any | None = None
+    raw_rows: Sequence[Mapping[str, Any]],
+    tokenizer: Any | None = None,
+    *,
+    checker_version: str = "clir_numeric_multisource_v3",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     processed: list[dict[str, Any]] = []
     failures: Counter[str] = Counter()
@@ -576,6 +579,7 @@ def materialize_rows(
                 raw_reference=str(row["reference_answer"]),
                 source=str(row["source"]),
                 finish_reason=row.get("finish_reason"),
+                checker_version=checker_version,
             )
         )
         try:
@@ -631,7 +635,11 @@ def command_materialize(args: argparse.Namespace) -> None:
     if not getattr(tokenizer, "is_fast", False):
         raise ValueError("unitizer v2 requires a fast tokenizer with offset mappings")
     raw_rows = read_jsonl(args.rollouts)
-    processed, report = materialize_rows(raw_rows, tokenizer)
+    processed, report = materialize_rows(
+        raw_rows,
+        tokenizer,
+        checker_version=str(protocol["checker"]["version"]),
+    )
     population = validate_rollout_population(
         processed, candidate_count=int(generation["candidate_count"])
     )
@@ -731,7 +739,7 @@ def _simple_units(texts: Sequence[str]) -> tuple[str, list[dict[str, Any]]]:
 
 
 def _protocol_controls(
-    task: str, count: int
+    task: str, count: int, *, control_version: str = "v3"
 ) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     """Create balanced, synthetic comprehension controls that are never trained."""
 
@@ -801,15 +809,34 @@ def _protocol_controls(
             }
         elif task == "prior":
             usable = index % 2 == 0
+            control_problem = (
+                "Mina has 2 apples and receives 3 more. How many apples?"
+            )
             if usable:
-                texts = [
-                    "Mina starts with 2 apples.",
-                    "She receives 3 more apples.",
-                    "Adding gives 2+3=5.",
-                    "Therefore the answer is 5 apples.",
-                ]
                 eligibility = "usable"
-                key, complete = [2, 3], [0, 1, 2, 3]
+                if control_version == "v2":
+                    texts = [
+                        "Mina starts with 2 apples.",
+                        "She receives 3 more apples.",
+                        "Adding gives 2+3=5.",
+                        "Therefore the answer is 5 apples.",
+                    ]
+                    key, complete = [2, 3], [0, 1, 2, 3]
+                elif control_version == "v3":
+                    control_problem = (
+                        "Mina has 2 apples, receives 3 more, and then gives "
+                        "1 apple away. How many apples remain?"
+                    )
+                    texts = [
+                        "Mina starts with 2 apples.",
+                        "She receives 3 more apples and then gives 1 away.",
+                        "The intermediate total is 2+3=5.",
+                        "After giving one away, 5-1=4 apples remain.",
+                        "Therefore the answer is 4 apples.",
+                    ]
+                    key, complete = [3], [2, 3]
+                else:
+                    raise ValueError(f"unsupported control_version {control_version!r}")
             else:
                 texts = ["I cannot solve this problem."]
                 eligibility = "no_auditable_reasoning"
@@ -819,7 +846,7 @@ def _protocol_controls(
                 "item_id": item_id,
                 "query_id": f"control:prior:{index}",
                 "source": "synthetic-control",
-                "problem": "Mina has 2 apples and receives 3 more. How many apples?",
+                "problem": control_problem,
                 "trajectory": trajectory,
                 "units": units,
                 "output_token_ids_sha256": stable_priority(
@@ -842,6 +869,8 @@ def _protocol_controls(
 
 def build_annotation_packages(
     natural_items: Mapping[str, Sequence[Mapping[str, Any]]],
+    *,
+    control_version: str = "v3",
 ) -> tuple[dict[str, dict[str, list[dict[str, Any]]]], dict[str, Any]]:
     packages: dict[str, dict[str, list[dict[str, Any]]]] = {"a": {}, "b": {}}
     private: dict[str, Any] = {
@@ -855,7 +884,9 @@ def build_annotation_packages(
         if len(natural_ids) != len(set(natural_ids)):
             raise ValueError(f"{task}: natural item IDs are not unique")
         control_count = max(1, math.ceil(len(natural) * 0.10))
-        controls = _protocol_controls(task, control_count)
+        controls = _protocol_controls(
+            task, control_count, control_version=control_version
+        )
         control_items = [item for item, _ in controls]
         repeat_count = max(1, math.ceil(len(natural) * 0.20))
         repeat_sources = sorted(
@@ -885,6 +916,7 @@ def build_annotation_packages(
         packages["a"][task] = package_a
         packages["b"][task] = package_b
         private["tasks"][task] = {
+            "control_version": control_version,
             "natural_item_ids": natural_ids,
             "controls": [
                 {"item_id": item["item_id"], "expected_annotation": expected}
@@ -902,6 +934,7 @@ def build_annotation_packages(
 
 
 def command_package(args: argparse.Namespace) -> None:
+    protocol = load_protocol(args.protocol)
     items_dir = Path(args.items_dir)
     natural = {
         "consistency": read_jsonl(items_dir / "annotation_consistency_natural.jsonl"),
@@ -910,7 +943,10 @@ def command_package(args: argparse.Namespace) -> None:
         ),
         "prior": read_jsonl(items_dir / "annotation_prior_natural.jsonl"),
     }
-    packages, private = build_annotation_packages(natural)
+    packages, private = build_annotation_packages(
+        natural,
+        control_version=str(protocol.get("annotation_protocol_version", "v2")),
+    )
     output_dir = Path(args.output_dir)
     for annotator in ("a", "b"):
         for task, rows in packages[annotator].items():
@@ -1001,6 +1037,14 @@ def command_triage(args: argparse.Namespace) -> None:
         "tasks": {},
     }
     public_counts: dict[str, Any] = {}
+    public_raw_report: dict[str, Any] = {
+        "schema_version": "clir-raw-annotation-report-v2",
+        "interpretation": (
+            "raw A/B agreement and package reliability before third-model "
+            "audit or adjudication; agreement is not accuracy"
+        ),
+        "tasks": {},
+    }
     for task, item_name in item_names.items():
         natural_items = read_jsonl(items_dir / item_name)
         natural_by_id = {str(item["item_id"]): item for item in natural_items}
@@ -1056,8 +1100,33 @@ def command_triage(args: argparse.Namespace) -> None:
             "needs_blind_adjudication": len(disputes),
             "third_independent_total": len(third_ids),
         }
+        raw = agreement_report(task, list(by_a.values()), list(by_b.values()))
+        raw.update(
+            {
+                "auto_agree_nonlow": len(auto_agree),
+                "pre_adjudication_fraction": len(disputes) / len(natural_ids)
+                if natural_ids
+                else None,
+                "low_confidence_a": sum(
+                    row["confidence"] == "low" for row in by_a.values()
+                ),
+                "low_confidence_b": sum(
+                    row["confidence"] == "low" for row in by_b.values()
+                ),
+            }
+        )
+        public_raw_report["tasks"][task] = {
+            "agreement": raw,
+            "package_reliability": evaluate_package_reliability(
+                task=task,
+                private_task=private_package["tasks"][task],
+                labels_a=all_a,
+                labels_b=all_b,
+            ),
+        }
     atomic_write_json(output_dir / "PRIVATE_triage_manifest.json", private_triage)
     atomic_write_json(output_dir / "triage_counts.json", public_counts)
+    atomic_write_json(output_dir / "raw_annotation_report.json", public_raw_report)
     print(
         json.dumps(
             {
@@ -2169,7 +2238,7 @@ def build_parser() -> argparse.ArgumentParser:
     rollout.set_defaults(func=command_rollout)
 
     materialize = commands.add_parser(
-        "materialize", help="run checker v2 and exact-token unitizer v2"
+        "materialize", help="run the protocol-pinned checker and exact-token unitizer"
     )
     materialize.add_argument("--rollouts", required=True)
     materialize.add_argument("--output", required=True)

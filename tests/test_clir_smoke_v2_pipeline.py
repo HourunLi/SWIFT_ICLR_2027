@@ -17,6 +17,7 @@ from prepare_clir_smoke import (
     evaluate_package_reliability,
 )
 from src.clir_smoke import (
+    agreement_report,
     annotation_signature,
     atomic_write_json,
     atomic_write_jsonl,
@@ -33,6 +34,34 @@ from src.clir_smoke import (
     unitize_exact_tokens,
     validate_annotation,
 )
+
+
+def test_prior_agreement_report_scores_disjoint_sets_as_zero():
+    labels_a = [
+        {
+            "item_id": "item-0",
+            "eligibility": "usable",
+            "key_unit_indices": [0],
+            "complete_unit_indices": [0, 1],
+            "confidence": "high",
+            "rationale": "fixture a",
+        }
+    ]
+    labels_b = [
+        {
+            "item_id": "item-0",
+            "eligibility": "usable",
+            "key_unit_indices": [2],
+            "complete_unit_indices": [2, 3],
+            "confidence": "high",
+            "rationale": "fixture b",
+        }
+    ]
+
+    report = agreement_report("prior", labels_a, labels_b)
+
+    assert report["key_macro_f1"] == 0.0
+    assert report["complete_macro_f1"] == 0.0
 
 
 def _char_tokenization(response: str) -> dict:
@@ -65,6 +94,45 @@ def test_numeric_checker_matches_common_multisource_forms(source, reference, res
     assert checked["correctness"] == 1
     assert checked["eligible_for_supervision"] is True
     assert checked["correctness_semantics"] == "numeric_value_match_v2"
+    assert checked["checker_version"] == "clir_numeric_multisource_v3"
+
+
+@pytest.mark.parametrize(
+    ("reference", "response", "expected"),
+    [
+        ("#### 38", r"Answer: \boxed{38 cents}.", "38/1"),
+        ("#### 1", r"Answer: \boxed{1 raccoon is left in the woods}.", "1/1"),
+        ("#### 6", r"Answer: \boxed{Your Answer: $6}.", "6/1"),
+        ("#### 15", r"Answer: \boxed{$15 for 10 sprays}.", "15/1"),
+        ("#### 5", r"Answer: \boxed{x = 2 + 3 = 5}.", "5/1"),
+        ("#### 10/3", r"Answer: \boxed{3 hours 20 minutes}.", "10/3"),
+    ],
+)
+def test_numeric_checker_extracts_governed_value_from_boxed_prose(
+    reference, response, expected
+):
+    checked = check_numeric_response(
+        response=response,
+        raw_reference=reference,
+        source="gsm8k",
+    )
+
+    assert checked["numeric_value_match"] == 1
+    assert checked["normalized_candidate_answer"] == [expected]
+    assert checked["parse_route"] == "boxed_numeric_subexpression"
+
+
+def test_numeric_checker_v2_remains_reproducible_after_v3_parser_fix():
+    checked = check_numeric_response(
+        response=r"Answer: \boxed{38 cents}.",
+        raw_reference="#### 38",
+        source="gsm8k",
+        checker_version="clir_numeric_multisource_v2",
+    )
+
+    assert checked["checker_version"] == "clir_numeric_multisource_v2"
+    assert checked["numeric_value_match"] == 0
+    assert checked["checker_status"] == "parse_failed"
 
 
 def test_numeric_checker_fails_closed_on_conflicting_boxes_and_truncation():
@@ -565,6 +633,36 @@ def test_blind_packages_hide_controls_and_measure_self_repeat():
     assert annotation_signature("consistency", labels_a[0])
 
 
+def test_prior_controls_are_versioned_and_v3_exercises_a_multistep_chain():
+    natural = _natural_items()
+    _, private_v2 = build_annotation_packages(natural, control_version="v2")
+    packages_v3, private_v3 = build_annotation_packages(
+        natural, control_version="v3"
+    )
+
+    expected_v2 = next(
+        row["expected_annotation"]
+        for row in private_v2["tasks"]["prior"]["controls"]
+        if row["expected_annotation"]["eligibility"] == "usable"
+    )
+    expected_v3 = next(
+        row["expected_annotation"]
+        for row in private_v3["tasks"]["prior"]["controls"]
+        if row["expected_annotation"]["eligibility"] == "usable"
+    )
+    v3_item = next(
+        item
+        for item in packages_v3["a"]["prior"]
+        if item["item_id"] == expected_v3["item_id"]
+    )
+
+    assert expected_v2["key_unit_indices"] == [2, 3]
+    assert expected_v2["complete_unit_indices"] == [0, 1, 2, 3]
+    assert expected_v3["key_unit_indices"] == [3]
+    assert expected_v3["complete_unit_indices"] == [2, 3]
+    assert "gives 1 apple away" in v3_item["problem"]
+
+
 def test_vllm_outputs_are_restored_by_completion_index():
     outputs = [
         SimpleNamespace(index=2),
@@ -697,7 +795,17 @@ def test_third_model_is_independent_before_anonymous_adjudication(
     triage_private = json.loads(
         (triage_dir / "PRIVATE_triage_manifest.json").read_text(encoding="utf-8")
     )
+    raw_report = json.loads(
+        (triage_dir / "raw_annotation_report.json").read_text(encoding="utf-8")
+    )
     assert triage_private["tasks"]["consistency"]["dispute_item_ids"] == ["natural-0"]
+    assert raw_report["tasks"]["consistency"]["agreement"]["items"] == 10
+    assert (
+        raw_report["tasks"]["consistency"]["package_reliability"][
+            "hidden_controls"
+        ]["a"]["accuracy"]
+        == 1.0
+    )
     public_packet = read_jsonl(adjudication_dir / "adjudicator" / "consistency.jsonl")
     assert len(public_packet) == 1
     assert "independent_annotation" in public_packet[0]

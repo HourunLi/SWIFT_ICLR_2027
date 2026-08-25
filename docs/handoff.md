@@ -159,8 +159,9 @@ numeric mismatch、78 candidate-not-numeric mismatch 与 3 conflicting-boxed-ans
 
 确定性 proposal 已发布：40 个 C pairs/hash=`6a97b2bf…9145`，60 个 H/P rows/hash=`36a2b380…80cb`。
 H/P 恰为 GSM8K match/mismatch 各 18、ASDiv-A 各 12；C/H query overlap=24，trajectory overlap=0；
-H/P material-claim unit 最少 5、中位数 12。A/B 盲包已生成，但正式 C/H/P 双标、triage/finalize、
-hidden-state 抽取和训练仍为 pending，绝不能写成已经得到新训练数据。冻结规模与预算为：
+H/P material-claim unit 最少 5、中位数 12。A=`gpt-5.5-sol`/xhigh、B=`claude-opus-5`/high 已完成
+C/H/P 六个隔离上下文；全部 label 文件通过 population/schema/index 校验，A 的三组 self-repeat 均为
+100%。但 v2 按预注册规则失败，未进入第三模型、finalize、hidden-state 抽取或训练。冻结规模与预算为：
 
 - outcome：60 GSM8K train +40 ASDiv-A queries，每题 8 条 Phi rollout，共 800 raw trajectories；
 - Consistency：标 40 个 GSM8K natural proposals，按冻结顺序留下前 30 个最终 accept；
@@ -206,12 +207,31 @@ token partition 通过、32 numeric match/32 mismatch、2 个 C 与4 个 H/P pro
 包，第三模型独立输出落盘后，`adjudication-package` 才暴露匿名 Option 1/2。`finalize` 任一预注册门失败
 就只写失败报告，不发布 `pre_extraction.jsonl`。
 
-当前下一步是把 `blind_packages/annotator_a/` 只发给 A、`annotator_b/` 只发给 B，并让 Consistency、H、
-Prior 分别使用全新上下文。A 包含 C/H/P=`52/78/78` 行（自然项、隐藏 controls 与仅 A 可见 self-repeat），
-B 为 `44/66/66` 行（自然项与隐藏 controls）。不能发送 `PRIVATE_package_manifest.json`。若仍使用不暴露
-temperature 的聊天产品，本轮只能报告为有明确 temperature 偏离的 pipeline pilot；要宣称完整通过正式
-annotation-quality gate，就必须改用能记录 temperature=`0` 与准确 revision 的调用方式。源数据、候选、
-模型输出与其他大 artifact 都留在 `run_artifacts/`，不推远端。
+双标的原始诊断如下；这些是 `dual-AI Silver, no human verification` 的一致性结果，不是准确率：
+
+| 任务 | 原始结果 | v2 门 |
+|---|---|---|
+| C | 36/40 decision 一致；A/B accept=34/38；κ=.459；controls 各 4/4 | agreement=.90、分歧=.10；κ 因 B reject<5 按协议 N/A |
+| H | path 60/60；54 clean、6 common-positive；exact/±1 onset=5/6；controls 各 6/6 | common-positive 6<15、±1=.833<.85，且 final 20 positive 无解 |
+| Prior | eligibility 60/60；Key F1=.928；Complete F1=.784；exact sets 27/60；controls 各 3/6 | control<1、Complete<.82、分歧/裁决候选 .55>.40 |
+
+H 的 30 条所谓 numeric mismatch 中，24 条其实是正确链，只因输出 `\boxed{38 cents}` 一类 boxed
+prose 被 v2 checker 当成不可解析并误记 0；A/B 都将它们判 clean，剩余 6 条真实 mismatch 才全部给出
+positive onset。这是明确的 checker 系统性假阴性。按冻结协议，checker 改动必须升版、重建所有依赖
+proposal 并重做标注，因此不允许用第三模型把 v2 的 raw gate “裁成通过”。v2 状态固定为
+`FAIL_PIPELINE_CHECKER_AND_YIELD`，本地产物只留审计。
+
+实现已补三项工程缺陷：`clir_numeric_multisource_v3` 能从 boxed 单位短语/答案句/等式/金额/复合时长中
+提取受支配数值，同时 `materialize` 由协议显式钉住 checker，仍能复现 v2；set F1 在完全不相交时现在返回
+0 而不再除零崩溃；`triage` 会原子写出裁决前 raw agreement/control/self-repeat 报告。用 v3 只读重算同一
+800 rows 得到 754 match、42 parsed mismatch、1 non-numeric refusal、3 conflicting boxes。机制可用的
+mismatch 只覆盖 13 个 GSM8K 和 1 个 ASDiv query，仍不足 20 个 query-distinct positive。Prior 的 33 条
+Complete 分歧中 29 条是 B 为 A 的严格超集，而 Key 55/60 完全一致；新版必须把“沿候选实际依赖链的所有
+非冗余步骤”与“可重新计算出的最短证明”分开写清，并使用真正检验多步链的 control。
+
+下一步先与用户冻结 v3 acquisition 和标签定义，不继续消费 v2 第三模型预算。若继续使用不暴露
+temperature 的聊天产品，结果仍只能报告为带明确 temperature 偏离的 pipeline pilot。源数据、模型输出和
+其他大 artifact 全部留在 `run_artifacts/`，不推远端。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -383,9 +403,9 @@ hallucination_onset = k
 
 ## 已知限制
 
-- 已有 smoke-v2 的真实 800-row Phi rollout、numeric checker/unitizer audit、40 C/60 H/P proposal 和双 AI
-  机制标注入口；没有人工/专家复核，也没有通用 rewrite verifier。C/H/P 双标和 final gates 尚未执行，
-  extractor 仍只接受上游已经可靠保存并通过 v2 全部门的 exact IDs。
+- smoke-v2 已完成真实 800-row Phi rollout、40 C/60 H/P 双 AI 标注和 raw triage，但因 checker 假阴性、
+  H positive yield 与 Prior stability 硬门失败而停止；没有人工/专家复核，也没有发布可训练 final manifest。
+  extractor 仍只接受上游已经可靠保存且通过新版全部门的 exact IDs。
 - extractor 现在会把 `--revision` 传给模型加载器，并写 model/revision/dtype 与 feature checksum；但本地模型若无 config commit 且未显式传 revision，`feature_revision` 仍可为 null。resume data contract 会使用 checksum 字段，不会每次重新 hash 巨大 feature 来验证 manifest 中的声明。
 - extraction 虽原子发布单个 tensor 和最终 manifest，`--overwrite` 中途失败仍可在旧 manifest 下留下部分新 feature；正式运行应使用新目录而不是就地覆盖。
 - 只支持预抽取 feature 训练，全层 payload 存储昂贵；online extraction 尚未进入 clean trainer。
@@ -403,15 +423,17 @@ hallucination_onset = k
 
 ## 下一步
 
-1. 真实 source→dedup→60/40 freeze→800 rollout→checker/unitizer→40 C/60 H/P proposal→blind package
-   已完成；下一步分别发送 A/B 三个任务包，绝不发送 private manifest，也不把 H 与 Prior 放在同一对话。
-2. A/B 输出先过 population/schema 与 hidden-control/self-repeat 门，再运行 `triage`；第三模型先独立回答
-   全部分歧与 15% auto-agree audit，保存后才生成匿名裁决包。原始 agreement 门失败时裁决不能救活该轮。
-3. `finalize` 只有在 C/H/P 的预注册一致性、反退化、joint-yield 与 exact-token 门全过时才能发布
-   `pre_extraction.jsonl`。若聊天界面不暴露 temperature，明确记录协议偏离，不得写“正式 v2 全通过”。
-4. 全门通过后，先按 800 条实际 prompt/output token 数估算存储，再在全新目录抽取 `33×3072` BF16
-   feature；截断/非法/ambiguous-answer rows 不进训练，不就地覆盖历史 payload。
-5. 根据 source/numeric/unit-count 分层 yield、裁决成本和 ASDiv 许可另发正式扩量协议；目标仍是 C train
+1. 冻结 v3 checker/协议：保留 v2 可复现路径，用 v3 重建 checker audit；在任何新标注前先决定新增更难
+   query、第三题源或受控错误 acquisition，目标至少 20 个 query-distinct positive，且不能再把 parse failure
+   当错误富集代理。
+2. 重写 Complete 指南和示例：题面始终可用，排除计划/复述/重复 wrapper，但保留候选实际采用的每个唯一
+   中间推导；新 hidden control 必须是 Key 与 Complete 真正不同的多步链。
+3. v3 重新 freeze proposal/package 后才发送新的六个 A/B 任务；旧标签只作失败诊断，不跨 manifest 搬运。
+   A/B 输出仍先过 population/schema/control/self-repeat，再运行第三模型独立 audit 和匿名裁决；raw gate
+   失败时裁决不能救活。
+4. `finalize` 只有在 C/H/P 的预注册一致性、反退化、joint-yield 与 exact-token 门全过时才能发布
+   `pre_extraction.jsonl`；随后才估算存储并在全新目录抽取 `33×3072` BF16 feature。
+5. 根据 source/numeric/unit-count 分层 yield、裁决成本和许可另发正式扩量协议；目标仍是 C train
    300–500/held-out 100–200、H train 200+200/dev 100+100、prior train 300–500/dev 100–200，以及统一
    checker 的 1500–2000 independent queries ×16 ranking validation。
 6. 用新数据完整重跑 `C0/C1/H0/CH0`；H 先过 boundary/calibration，当前 gold-tail、MIL、pseudo-tail 不进

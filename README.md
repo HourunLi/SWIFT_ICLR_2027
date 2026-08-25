@@ -100,7 +100,7 @@ MSE、detach、mask 与 shared-gradient 路径，但 clean 的外层 `prior_weig
 [`docs/handoff.md`](docs/handoff.md)。扩大数据后将
 固定 `.25` 重做独立 `off/on` 诊断，而不在当前 dev 上继续调参。
 
-## 2026-08-25 多题源扩量 smoke v2：真实 proposal 已冻结，等待 C/H/P 双标
+## 2026-08-25 多题源扩量 smoke v2：双标完成，按预注册规则停止
 
 v1 收到两份互盲外部 AI 审查后被共同判为 block，且从未执行，状态是
 `superseded_before_execution`。v1 原文、审查提示词和逐项裁决已从当前分支顶端移出；最后一份
@@ -125,14 +125,32 @@ temperature，因此本地 roster 明确记录为 unknown/unverified；这不能
 `vllm==0.5.3.post1`、TP=1、BF16、`max_num_seqs=32` 完成 100×8=800 条 rollout：800 条均为正常 stop，
 没有空输出或长度截断，原始有序行 hash 为 `3b47bd39…101f`。
 
-真实 checker/unitizer 得到 680 条 numeric match、39 条明确 numeric mismatch、78 条无法解析出数值并按
-冻结语义记为 numeric mismatch，以及 3 条 conflicting-boxed-answer ineligible。799/800 条通过
-exact-token unitization；唯一失败行使用了解码文字相同但 token 切法非规范的生成序列，并且本身就是
-conflicting-boxed-answer，因此按协议保留审计但不进入 proposal。确定性规则最终冻结 40 个 Consistency
-pairs（hash `6a97b2bf…9145`）与 60 条 H/P rows（hash `36a2b380…80cb`）。H/P 分层恰为 GSM8K
-match/mismatch 各 18、ASDiv-A 各 12；C/H 在 query 层重叠 24 个，但 trajectory 重叠为 0。所有 proposal
-均通过 unit/token 契约，H/P 的 material-claim units 最少 5、中位数 12。互盲包现已生成，正式 C/H/P
-双标、triage/finalize、hidden-state 抽取和训练仍未开始，因此新增数据还不可用于训练。
+冻结的 v2 checker/unitizer 当时得到 680 条 numeric match、39 条明确 numeric mismatch、78 条
+candidate-not-numeric mismatch 和 3 条 conflicting-boxed-answer ineligible；799/800 条通过 exact-token
+unitization。由此冻结了 40 个 Consistency pairs（hash `6a97b2bf…9145`）与 60 条 H/P rows（hash
+`36a2b380…80cb`）。A=`gpt-5.5-sol`/xhigh、B=`claude-opus-5`/high 已分别完成 C/H/P 六个隔离上下文，
+所有文件通过 population、schema、index 与 A-self-repeat 校验。原始结果是：
+
+| 任务 | 原始结果 | 预注册裁决 |
+|---|---|---|
+| Consistency | decision 36/40 一致，A/B accept 为 34/38，κ=.459；隐藏控制各 4/4，A 自重复 8/8 | 90% agreement 与 10% 分歧率达到工程门；因 B 仅 2 个 reject，κ 门按协议不适用 |
+| Hallucination | path 60/60 一致；54 clean、仅 6 个共同 positive，onset exact 与 ±1 均为 5/6；隐藏控制各 6/6，A 自重复 12/12 | positive 支持数 6<15、±1=.833<.85，且不可能凑出最终 20 positive，失败 |
+| Key/Complete | eligibility 60/60；Key F1=.928，Complete F1=.784；exact set 仅 27/60，33/60 需裁决；隐藏控制各 3/6，A 自重复 12/12 | control<100%、Complete F1<.82、裁决率 .55>.40，三项失败 |
+
+H 的异常不是“Phi 几乎没有错误”这么简单。30 条冻结 numeric-mismatch proposal 中，24 条实际推理和
+答案都正确，只是写成 `\boxed{38 cents}`、`\boxed{9 glasses}` 等“数字+单位/文字”；v2 checker 把整个
+boxed 内容当纯数字，解析失败后误记为 0。两位盲标者都把这 24 条判为 clean，因而准确暴露了 checker
+系统性假阴性。按协议，checker 改动必须升版、重建 proposal 并重做所有依赖标注，所以 v2 在此正式记为
+`FAIL_PIPELINE`：不送第三模型粉饰原始门、不 finalize、不抽 hidden state，也不训练。
+
+代码已加入协议钉住的 backward-compatible checker：v2 仍可复现旧结果；新的
+`clir_numeric_multisource_v3` 会从 boxed prose 提取受支配数值，并覆盖单位短语、答案句、等式、金额和
+复合时长回归。用 v3 对同一批 800 rollout 只读重算为 754 numeric match、42 parsed mismatch、1 个
+non-numeric refusal 和 3 个冲突 box；可用于机制 proposal 的真实 mismatch 只覆盖 13 个 GSM8K query 和
+1 个 ASDiv-A query。现有池因此仍不足以支持 20 个 query-distinct positive onset，下一版必须先扩大/加难
+acquisition，而不是再次标同一份包。Prior 另暴露了定义边界：55/60 条 Key 完全一致；Complete 的 33 条
+分歧中有 29 条是 B 取 A 的严格超集，说明“实际依赖链”与“可压缩的最短证明”需要在新版指南和控制题中
+明确区分。
 
 v2 把 train-only query 池扩为 `60 GSM8K +40 ASDiv-A`，每题 8 条 Phi rollout，共 800 raw rows；
 自然标注预算仍只送 40 个 Consistency proposals 和同一批 60 个 H/P proposals。所有 proposal 的机械
@@ -165,10 +183,10 @@ python prepare_clir_smoke.py fixture \
 [`docs/data_expansion_smoke_protocol_v2.md`](docs/data_expansion_smoke_protocol_v2.md#16-2026-08-25-实现状态与唯一执行入口)；
 可复制提示词在
 [`configs/data_expansion_smoke_v2/annotation_prompts.md`](configs/data_expansion_smoke_v2/annotation_prompts.md)。
-当前执行缺口是完成 C/H/P 的三套互盲双标与后续 triage/finalize；若继续使用不暴露 temperature 的聊天
-产品，必须把它报告成偏离 temperature=`0` 的 pipeline pilot，不能宣称完整通过正式 annotation-quality
-gate。A/B 的分发目录、任务隔离和可复制提示词见
-[`configs/data_expansion_smoke_v2/annotation_prompts.md`](configs/data_expansion_smoke_v2/annotation_prompts.md)。
+当前下一步不是继续 v2 裁决，而是先冻结 v3 acquisition：决定新增多少更难 query/是否引入第三题源，
+确保修正 checker 后至少有足够的 query-distinct mismatch；同时把 Complete 定义、例子与隐藏控制题改成
+同一口径。只有 v3 的 checker yield 与 proposal manifest 在任何新标签出现前重新冻结，才生成新的六份
+盲包。若继续使用不暴露 temperature 的聊天产品，仍只能报告为带明确复现偏离的 Silver pipeline pilot。
 
 ## 目录
 

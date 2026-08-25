@@ -27,7 +27,11 @@ import xml.etree.ElementTree as ET
 
 
 SMOKE_SCHEMA = "clir-data-expansion-smoke-v2"
-CHECKER_VERSION = "clir_numeric_multisource_v2"
+CHECKER_VERSION = "clir_numeric_multisource_v3"
+SUPPORTED_CHECKER_VERSIONS = {
+    "clir_numeric_multisource_v2",
+    CHECKER_VERSION,
+}
 CORRECTNESS_SEMANTICS = "numeric_value_match_v2"
 UNITIZER_VERSION = "clir_material_claim_unitizer_v2"
 LABEL_TIER = "silver_dual_ai_v2"
@@ -644,19 +648,80 @@ def _answer_span(response: str) -> str | None:
     return None
 
 
-def _extract_candidate_literals(response: str) -> tuple[list[str], str, int]:
+def _first_compound_duration(text: str) -> str | None:
+    """Normalize a leading ``H hours M minutes`` answer to one hour fraction."""
+
+    duration = re.search(
+        r"([-+]?\d+(?:\.\d+)?)\s*(?:\\text\{\s*)?(?:hours?|hrs?)\b\s*\}?"
+        r"\s*(?:and\s+)?(\d+(?:\.\d+)?)\s*"
+        r"(?:\\text\{\s*)?(?:minutes?|mins?)\b\s*\}?",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if duration is None:
+        return None
+    earlier = _numeric_expressions(text[: duration.start()])
+    if earlier:
+        return None
+    try:
+        hours = Fraction(Decimal(duration.group(1)))
+        minutes = Fraction(Decimal(duration.group(2)))
+    except InvalidOperation:
+        return None
+    value = hours + minutes / 60
+    return rf"\frac{{{value.numerator}}}{{{value.denominator}}}"
+
+
+def _governed_numeric_expression(text: str) -> str | None:
+    """Extract the numeric value governed by boxed/final-answer prose.
+
+    A direct numeric literal remains authoritative.  Otherwise equality spans
+    use their right-hand side, compound durations stay a single value, and
+    ordinary answer prose uses its first number so qualifiers such as
+    ``$15 for 10 sprays`` cannot silently replace the answer with ``10``.
+    """
+
+    if numeric_options(text):
+        return text
+    governed_text = text.rsplit("=", 1)[1] if "=" in text else text
+    duration = _first_compound_duration(governed_text)
+    if duration is not None:
+        return duration
+    expressions = _numeric_expressions(governed_text)
+    if not expressions:
+        return None
+    selected = expressions[-1] if "=" in text else expressions[0]
+    return selected[2]
+
+
+def _extract_candidate_literals(
+    response: str, *, normalize_boxed_prose: bool
+) -> tuple[list[str], str, int]:
     boxes = boxed_answers(response)
     usable_boxes = [value for value in boxes if not _boxed_placeholder(value)]
     if usable_boxes:
-        return usable_boxes, "boxed", len(boxes)
+        if not normalize_boxed_prose:
+            return usable_boxes, "boxed", len(boxes)
+        normalized_boxes = [
+            _governed_numeric_expression(value) or value for value in usable_boxes
+        ]
+        route = (
+            "boxed"
+            if normalized_boxes == usable_boxes
+            else "boxed_numeric_subexpression"
+        )
+        return normalized_boxes, route, len(boxes)
     span = _answer_span(response)
     if span is not None:
-        expressions = _numeric_expressions(span)
-        if expressions:
-            # Answer prose such as "$15 for 10 sprays" is governed by its first
-            # number; equality spans retain the right-most expression.
-            selected = expressions[-1] if "=" in span else expressions[0]
-            return [selected[2]], "answer_cue", len(boxes)
+        if not normalize_boxed_prose:
+            expressions = _numeric_expressions(span)
+            if expressions:
+                selected = expressions[-1] if "=" in span else expressions[0]
+                return [selected[2]], "answer_cue", len(boxes)
+            return [span], "answer_cue_non_numeric", len(boxes)
+        governed = _governed_numeric_expression(span)
+        if governed is not None:
+            return [governed], "answer_cue", len(boxes)
         return [span], "answer_cue_non_numeric", len(boxes)
     expressions = _numeric_expressions(response)
     return ([expressions[-1][2]] if expressions else []), "last_numeric", len(boxes)
@@ -678,15 +743,21 @@ def check_numeric_response(
     raw_reference: str,
     source: str,
     finish_reason: str | None = None,
+    checker_version: str = CHECKER_VERSION,
 ) -> dict[str, Any]:
     """Return auditable numeric-value-match semantics for GSM8K/ASDiv-A."""
 
     if not isinstance(response, str):
         raise TypeError("response must be a string")
+    if checker_version not in SUPPORTED_CHECKER_VERSIONS:
+        raise ValueError(
+            f"unsupported checker_version {checker_version!r}; expected one of "
+            f"{sorted(SUPPORTED_CHECKER_VERSIONS)}"
+        )
     reference_literal = _reference_literal(source, raw_reference)
     reference_options = numeric_options(reference_literal)
     base = {
-        "checker_version": CHECKER_VERSION,
+        "checker_version": checker_version,
         "correctness_semantics": CORRECTNESS_SEMANTICS,
         "reference_answer": reference_literal,
         "explicit_unit_status": "not_checked",
@@ -729,7 +800,10 @@ def check_numeric_response(
             "eligible_for_supervision": False,
         }
 
-    literals, route, box_count = _extract_candidate_literals(response)
+    literals, route, box_count = _extract_candidate_literals(
+        response,
+        normalize_boxed_prose=checker_version == CHECKER_VERSION,
+    )
     parsed_options = [numeric_options(value) for value in literals]
     usable = [
         (value, options) for value, options in zip(literals, parsed_options) if options
@@ -1437,8 +1511,11 @@ def _set_f1(left: Sequence[int], right: Sequence[int]) -> float:
         return 1.0
     if not left_set or not right_set:
         return 0.0
-    precision = len(left_set & right_set) / len(left_set)
-    recall = len(left_set & right_set) / len(right_set)
+    overlap = len(left_set & right_set)
+    if overlap == 0:
+        return 0.0
+    precision = overlap / len(left_set)
+    recall = overlap / len(right_set)
     return 2 * precision * recall / (precision + recall)
 
 

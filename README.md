@@ -186,7 +186,7 @@ python prepare_clir_smoke.py fixture \
 v2 不再继续裁决或训练；它只保留为失败审计与 backward-compatible checker 回归。v3 acquisition 已按
 下面的新协议完成，旧标签不跨 manifest 搬运。
 
-## 2026-08-25 多题源扩量 smoke v3：主批次过 readiness，等待双 AI
+## 2026-08-25 多题源扩量 smoke v3：H 通过，C/Prior raw gate 停止
 
 canonical 规格是
 [`docs/data_expansion_smoke_protocol_v3.md`](docs/data_expansion_smoke_protocol_v3.md)，机器契约与标注语义在
@@ -206,8 +206,19 @@ query-distinct parsed mismatch 有 57 个，超过预注册最低 30；40 个 C 
 H/P 的 60 条固定为 GSM8K match/mismatch `10/8`、ASDiv-A match `12`、MATH match/mismatch `8/22`；
 parse failure 不得冒充错误富集。Complete 现明确指候选实际依赖链里所有被后续使用的唯一非冗余中间
 步骤，不得压缩成另一条更短证明。盲包已生成：A=`52/78/78`，B=`44/66/66`（C/H/P，含隐藏控制和
-A-only self-repeat）；下一步只做六个隔离的 A/B 标注，回来后先运行 raw triage，再决定是否启动第三模型。
-这一轮仍不抽 hidden state、不训练、不产生模块 efficacy 或 Best-of-N 结论。
+A-only self-repeat）。六份 A/B 标签已全部通过 population/schema/index 校验；每个任务两边的 hidden
+controls 都是 100%，A 的 self-repeat 也都是 100%，说明输出不是随机或格式性失败。
+
+raw triage 随后按冻结门停止。C 只有 `26/40=.65` 决策一致，低于 `.90`；至少 `14/40=.35` 必须裁决，
+高于 `.20`。A/B accept 数为 `25/39`，且 B 只有 1 个 reject，表明两者对“近乎照抄”和“关键中间量是否
+改变”的边界并不一致。H 是这一轮唯一完整通过所有 raw 门的任务：path agreement=`59/60=.9833`，
+共同 positive=30，五个以上 material units 上 exact/±1 onset 都是 `26/30=.8667`，最低需裁决
+`5/60=.0833`。Prior 的 eligibility=`60/60`、Key F1=`.9167`、Complete F1=`.9267` 都通过，且没有
+Complete=全部 material units 的退化；但 exact target 仅 `25/60`，最低需裁决 `35/60=.5833`，超过 `.40`。
+
+因此终态是 `STOP_RAW_GATE_FAILURE`，`third_model_send_allowed=false`。第三模型包虽由旧 triage 路径机械
+生成在本地，但不得发送；本轮不 finalize、不抽 hidden state、不训练，也不产生模块 efficacy 或 Best-of-N
+结论。代码现会在 triage 时显式执行这个停止规则，避免把裁决误当成能救活 raw failure。
 
 ## 目录
 

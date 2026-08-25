@@ -990,6 +990,9 @@ def test_third_model_is_independent_before_anonymous_adjudication(
     raw_report = json.loads(
         (triage_dir / "raw_annotation_report.json").read_text(encoding="utf-8")
     )
+    raw_gate_decision = json.loads(
+        (triage_dir / "raw_gate_decision.json").read_text(encoding="utf-8")
+    )
     assert triage_private["tasks"]["consistency"]["dispute_item_ids"] == ["natural-0"]
     assert raw_report["tasks"]["consistency"]["agreement"]["items"] == 10
     assert (
@@ -998,6 +1001,8 @@ def test_third_model_is_independent_before_anonymous_adjudication(
         ]["accuracy"]
         == 1.0
     )
+    assert raw_gate_decision["status"] == "STOP_RAW_GATE_FAILURE"
+    assert raw_gate_decision["third_model_send_allowed"] is False
     public_packet = read_jsonl(adjudication_dir / "adjudicator" / "consistency.jsonl")
     assert len(public_packet) == 1
     assert "independent_annotation" in public_packet[0]

@@ -2,7 +2,7 @@
 
 冻结日期：2026-08-25 UTC
 
-当前执行状态：`PRIMARY_ACQUISITION_READY_FOR_DUAL_AI_ANNOTATION`
+当前执行状态：`STOP_RAW_GATE_FAILURE`
 
 机器契约：[`../configs/data_expansion_smoke_v3/protocol.json`](../configs/data_expansion_smoke_v3/protocol.json)，
 冻结 SHA-256 为 `4c6dad263aa45232b04e40a7a58257f1f9b75130b050951994222206ef24b306`。
@@ -161,11 +161,38 @@ A/B 完成后，先机械验证 population/schema/index/control/self-repeat，�
 Key/Complete F1、隐藏控制、自一致性、裁决率、onset 位置退化、Complete 全选退化和 joint final yield。
 任一硬门失败就停止，不抽 hidden state、不训练。
 
-## 8. 当前唯一下一步
+## 8. 2026-08-25 raw triage 结果
 
-把本地六份互盲 JSONL 分别交给 A/B，写回 `run_artifacts/data_expansion_smoke_v3/labels_a|b/`。不要把
-`PRIVATE_package_manifest.json`、checker、reference、strata、另一位答案或历史 v2 标签发给标注者。
-标签回来后运行 `triage`，先看 raw gates，再决定是否消费第三模型预算。
+六份互盲标签全部落盘，并通过 population、schema、item ID、枚举和 unit-index 校验。每个任务的 A/B
+hidden controls 都是 100%，A-only self-repeat 也都是 100%。这证明两套输出稳定遵循格式与简单控制题，
+不证明自然标签事实准确。
+
+| raw 项目 | 实得 | 冻结门 | 结果 |
+|---|---:|---:|---|
+| C decision agreement | 26/40 = .6500 | ≥ .90 | FAIL |
+| C 最低需裁决比例 | 14/40 = .3500 | ≤ .20 | FAIL |
+| H path agreement | 59/60 = .9833 | ≥ .85 | PASS |
+| H common positive | 30 | ≥ 15 | PASS |
+| H 5+ unit exact onset | 26/30 = .8667 | ≥ .70 | PASS |
+| H 5+ unit ±1 onset | 26/30 = .8667 | ≥ .85 | PASS |
+| H 最低需裁决比例 | 5/60 = .0833 | ≤ .35 | PASS |
+| Prior eligibility | 60/60 = 1.0 | ≥ .95 | PASS |
+| Key macro F1 | .9167 | ≥ .65 | PASS |
+| Complete macro F1 | .9267 | ≥ .82 | PASS |
+| Prior 最低需裁决比例 | 35/60 = .5833 | ≤ .40 | FAIL |
+
+其余 raw 门，包括 H 类别特异一致率/κ、Prior joint usable 与 Complete 全选退化门，也全部通过。C 的
+A/B accept 数为 25/39，主要分歧是“近乎照抄”与关键中间量边界。Prior 的 Key exact 为55/60、Complete
+exact 为26/60；Complete 分歧多数是一个集合为另一个的严格子集，说明链条接近但可选 unit 仍不唯一。
+
+冻结规则规定 raw failure 不能由第三模型或裁决救活，因此本轮终态为 `STOP_RAW_GATE_FAILURE`，
+`third_model_send_allowed=false`。旧 triage 已机械生成的第三模型文件不得发送；不运行 adjudication、
+finalize、hidden-state extraction 或训练。H 的 raw 通过只能称为标注可操作性证据，不能称为标签准确或
+模块有效。
+
+下一版必须使用新自然样本并在标注前重冻：C 要把 near-copy/diversity 边界机械化并加入真实 hard
+controls；Prior 要通过显式 dependency edge→确定性闭包或预注册等价组容错来唯一化 Complete。H 若继续，
+也应在新 query 上独立确认，不能把已经看过结果的本批标签改名后当确认实验。
 
 所有 source rows、rollouts、盲包和标签留在 `run_artifacts/`，不推 Git。远端只保留执行代码、机器协议、
 标注语义、README、handoff 和本 canonical 文档。

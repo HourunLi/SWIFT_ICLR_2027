@@ -258,9 +258,28 @@ primary readiness 已通过：机制可用、query-distinct parsed mismatch 为 
 Complete 已改成候选实际依赖链里所有被后续使用的唯一非冗余中间步骤，不能压成可重算的最短证明；新的
 prior hidden control 明确区分中间量与直接答案。盲包已经生成，A 的 C/H/P 为 52/78/78，B 为44/66/66，
 含约 10% controls 与 A-only 20% self-repeat。用户指定 A=`gpt-5.5-sol`/xhigh、B=`claude-opus-5`/high；
-六个本地一键提示词位于 `run_artifacts/data_expansion_smoke_v3/annotation/`，不得推远端或发 PRIVATE
-manifest。当前状态是 `READY_FOR_FROZEN_V3_PROPOSAL_AND_ANNOTATION`：尚未收到 v3 标签、未 triage、
-未抽 hidden state、未训练。
+六个隔离任务均已落盘并通过 population/schema/index 检查。所有 task/annotator hidden controls 都是
+100%，A 的三类 self-repeat 也都是 100%。原始标签及报告仅在 `run_artifacts/`，不得推远端或发送
+PRIVATE manifest。
+
+raw triage 的终态是 `STOP_RAW_GATE_FAILURE`，失败项正好三条：C agreement=`26/40=.65<.90`、C 最低
+裁决比例=`14/40=.35>.20`、Prior 最低裁决比例=`35/60=.5833>.40`。C 中 A/B accept 数为25/39，B 只
+reject 1 条；14 个争议里 10 个的理由直接围绕“是否近乎照抄”，另 2 个围绕乘法结合/单位表示是否已改变
+关键中间量，2 个围绕是否修正/新增了错误。也就是说主要问题是自然样本上的 near-copy/方法边界没有被
+操作化到两模型同一阈值，不是格式错误或标注者随机漂移。
+
+H 是清晰的正结果，但只限于标注可操作性：path=`59/60=.9833`、κ=`.9667`、共同 positive=30、五个以上
+material units 上 exact 与 ±1 onset 均为 `26/30=.8667`、最低裁决比例 `5/60=.0833`，所有 raw H 门均过。
+这不等于标签事实准确，也不是 H 模块有效性证据。
+
+Prior 比 v2 明显改善：eligibility=`60/60`，Key/Complete macro F1=`.9167/.9267`，两边均 0 条
+`Complete=全部 material units`；Key exact=`55/60`。但 Complete exact 只有 `26/60`，导致两类 target
+同时 exact 的只有 `25/60`。在 Complete 分歧中，24 条是 B 为 A 的严格子集、4 条是 A 为 B 的严格子集、
+6 条非嵌套，说明依赖链大体相近但自然链的可选 unit 仍未唯一化。
+
+冻结协议禁止裁决救活 raw failure，所以 `third_model_send_allowed=false`：不得发送已经机械生成的第三模型
+包，不运行 adjudication/finalize，不抽 hidden state，也不训练。`triage` 已补 raw-gate fail-fast 状态，
+避免旧输出误报为“第三模型包已就绪”。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -432,9 +451,9 @@ hallucination_onset = k
 
 ## 已知限制
 
-- smoke-v2 已完成真实 800-row Phi rollout、40 C/60 H/P 双 AI 标注和 raw triage，但因 checker 假阴性、
-  H positive yield 与 Prior stability 硬门失败而停止；v3 primary acquisition/readiness 已通过但尚未双标。
-  两版都没有人工/专家复核，也没有发布可训练 final manifest；extractor 仍只接受通过新版全部门的 exact IDs。
+- smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
+  C raw agreement/裁决比例和 Prior 裁决比例失败。v3 的 H raw 门全部通过，只支持“当前定义可稳定操作”
+  的诊断，不可单独绕过 all-task finalizer。两版都没有人工/专家复核或可训练 final manifest。
 - extractor 现在会把 `--revision` 传给模型加载器，并写 model/revision/dtype 与 feature checksum；但本地模型若无 config commit 且未显式传 revision，`feature_revision` 仍可为 null。resume data contract 会使用 checksum 字段，不会每次重新 hash 巨大 feature 来验证 manifest 中的声明。
 - extraction 虽原子发布单个 tensor 和最终 manifest，`--overwrite` 中途失败仍可在旧 manifest 下留下部分新 feature；正式运行应使用新目录而不是就地覆盖。
 - 只支持预抽取 feature 训练，全层 payload 存储昂贵；online extraction 尚未进入 clean trainer。
@@ -452,12 +471,13 @@ hallucination_onset = k
 
 ## 下一步
 
-1. 分别把本地六份 v3 提示词发送到六个全新上下文，得到 A/B 的 C/H/P JSONL；不要泄露 PRIVATE
-   manifest、checker、reference、strata、v2 标签或另一位模型答案。
-2. 先机械校验 population/schema/index/control/self-repeat 并冻结 raw report，再生成第三模型的独立 audit
-   与 dispute 包；第三模型独立答案落盘后才允许看匿名 Option 1/2。raw gate 失败时裁决不能救活。
-3. `finalize` 只有在 C/H/P 的预注册一致性、反退化、joint-yield 与 exact-token 门全过时才能发布
-   `pre_extraction.jsonl`；随后才估算存储并在全新目录抽取 `33×3072` BF16 feature。
+1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
+   失败作为 pipeline-smoke 诊断。
+2. 新版本必须在新自然样本上重做 C/Prior，而不是调整 v3 阈值：C 增加冻结的 lexical/structural
+   diversity band、真实 near-copy hard controls 和不同中间量负例；Prior 先标显式 dependency edges，再由
+   确定性传递闭包得到 Complete，或预注册等价组容错，避免让两个合理集合靠第三模型强行统一。
+3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
+   v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
 4. 根据 source/numeric/unit-count 分层 yield、裁决成本和许可另发正式扩量协议；目标仍是 C train
    300–500/held-out 100–200、H train 200+200/dev 100+100、prior train 300–500/dev 100–200，以及统一
    checker 的 1500–2000 independent queries ×16 ranking validation。

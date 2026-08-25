@@ -1592,6 +1592,250 @@ def evaluate_package_reliability(
     }
 
 
+def evaluate_raw_annotation_gates(
+    *,
+    protocol: Mapping[str, Any],
+    natural_items: Mapping[str, Sequence[Mapping[str, Any]]],
+    labels: Mapping[str, Mapping[str, Sequence[Mapping[str, Any]]]],
+    task_reports: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Apply every pre-adjudication gate that is already decidable."""
+
+    thresholds = protocol["preregistered_gates"]
+    results: list[dict[str, Any]] = []
+
+    def add(
+        name: str,
+        value: float | int | None,
+        operator: str,
+        threshold: float | int,
+        **counts: Any,
+    ) -> None:
+        if value is None:
+            status = "FAIL"
+        elif operator == ">=":
+            status = "PASS" if value >= threshold else "FAIL"
+        elif operator == "<=":
+            status = "PASS" if value <= threshold else "FAIL"
+        else:
+            raise ValueError(f"unsupported raw gate operator {operator}")
+        results.append(
+            {
+                "name": name,
+                "value": value,
+                "operator": operator,
+                "threshold": threshold,
+                "status": status,
+                **counts,
+            }
+        )
+
+    for task in ("consistency", "hallucination", "prior"):
+        reliability = task_reports[task]["package_reliability"]
+        for slot in ("a", "b"):
+            control = reliability["hidden_controls"][slot]
+            add(
+                f"{task}_hidden_control_accuracy_{slot}",
+                control["accuracy"],
+                ">=",
+                thresholds["hidden_control_accuracy_per_annotator_per_task"],
+                numerator=control["correct"],
+                denominator=control["total"],
+            )
+        repeat = reliability["annotator_a_self_agreement"]
+        add(
+            f"{task}_annotator_a_self_agreement",
+            repeat["rate"],
+            ">=",
+            thresholds["annotator_a_decision_self_agreement_min"],
+            numerator=repeat["agree"],
+            denominator=repeat["total"],
+        )
+
+    c_raw = task_reports["consistency"]["agreement"]
+    add(
+        "consistency_decision_agreement",
+        c_raw["exact_target_agreement"],
+        ">=",
+        thresholds["consistency_decision_agreement_min"],
+        numerator=c_raw["exact_target_agree"],
+        denominator=c_raw["items"],
+    )
+    add(
+        "consistency_required_adjudication_fraction_lower_bound",
+        c_raw["pre_adjudication_fraction"],
+        "<=",
+        thresholds["consistency_adjudication_fraction_max"],
+    )
+    if _consistency_kappa_applicable(c_raw):
+        add(
+            "consistency_kappa",
+            c_raw["decision_kappa"],
+            ">=",
+            thresholds["consistency_kappa_min_when_each_class_has_at_least_five_calls"],
+        )
+    else:
+        results.append(
+            {
+                "name": "consistency_kappa",
+                "value": c_raw["decision_kappa"],
+                "status": "NOT_APPLICABLE",
+                "reason": "one decision class has fewer than five calls",
+            }
+        )
+
+    h_raw = task_reports["hallucination"]["agreement"]
+    for name, threshold_name in (
+        ("hallucination_path_agreement", "hallucination_path_agreement_min"),
+        (
+            "hallucination_positive_specific_agreement",
+            "hallucination_positive_specific_agreement_min",
+        ),
+        (
+            "hallucination_clean_specific_agreement",
+            "hallucination_clean_specific_agreement_min",
+        ),
+    ):
+        raw_field = {
+            "hallucination_path_agreement": "raw_path_agreement",
+            "hallucination_positive_specific_agreement": (
+                "positive_specific_agreement"
+            ),
+            "hallucination_clean_specific_agreement": "clean_specific_agreement",
+        }[name]
+        add(name, h_raw[raw_field], ">=", thresholds[threshold_name])
+    add(
+        "hallucination_positive_rate_absolute_gap",
+        h_raw["positive_rate_absolute_gap"],
+        "<=",
+        thresholds["hallucination_positive_rate_absolute_gap_max"],
+    )
+    add(
+        "hallucination_kappa",
+        h_raw["path_kappa"],
+        ">=",
+        thresholds["hallucination_kappa_min_when_both_classes_have_support"],
+    )
+    add(
+        "hallucination_common_positive_count",
+        h_raw["common_positive"],
+        ">=",
+        thresholds["hallucination_common_positive_count_min"],
+    )
+    h_items = {str(item["item_id"]): item for item in natural_items["hallucination"]}
+    h_a = {str(row["item_id"]): row for row in labels["a"]["hallucination"]}
+    h_b = {str(row["item_id"]): row for row in labels["b"]["hallucination"]}
+    common_positive_five = [
+        item_id
+        for item_id, item in h_items.items()
+        if sum(unit["kind"] == "material_claim" for unit in item["units"]) >= 5
+        and h_a[item_id]["status"] == h_b[item_id]["status"] == "hallucinated"
+    ]
+    exact_five = sum(
+        h_a[item_id]["first_bad_unit_index"] == h_b[item_id]["first_bad_unit_index"]
+        for item_id in common_positive_five
+    )
+    plus_one_five = sum(
+        abs(
+            int(h_a[item_id]["first_bad_unit_index"])
+            - int(h_b[item_id]["first_bad_unit_index"])
+        )
+        <= 1
+        for item_id in common_positive_five
+    )
+    add(
+        "hallucination_exact_onset_unit_agreement_on_five_plus_unit_rows",
+        exact_five / len(common_positive_five) if common_positive_five else None,
+        ">=",
+        thresholds[
+            "hallucination_exact_onset_unit_agreement_min_on_five_plus_unit_rows"
+        ],
+        numerator=exact_five,
+        denominator=len(common_positive_five),
+    )
+    add(
+        "hallucination_plus_minus_one_unit_agreement",
+        plus_one_five / len(common_positive_five) if common_positive_five else None,
+        ">=",
+        thresholds["hallucination_plus_minus_one_unit_agreement_min"],
+        numerator=plus_one_five,
+        denominator=len(common_positive_five),
+    )
+    add(
+        "hallucination_required_adjudication_fraction_lower_bound",
+        h_raw["pre_adjudication_fraction"],
+        "<=",
+        thresholds["hallucination_adjudication_fraction_max"],
+    )
+
+    p_raw = task_reports["prior"]["agreement"]
+    add(
+        "prior_eligibility_agreement",
+        p_raw["eligibility_agreement"],
+        ">=",
+        thresholds["prior_eligibility_agreement_min"],
+        numerator=p_raw["eligibility_agree"],
+        denominator=p_raw["items"],
+    )
+    add(
+        "prior_joint_usable_overlap",
+        p_raw["usable_overlap"],
+        ">=",
+        thresholds["prior_joint_usable_overlap_min"],
+    )
+    add(
+        "key_macro_unit_f1",
+        p_raw["key_macro_f1"],
+        ">=",
+        thresholds["key_macro_unit_f1_min"],
+    )
+    add(
+        "complete_macro_unit_f1",
+        p_raw["complete_macro_f1"],
+        ">=",
+        thresholds["complete_macro_unit_f1_min"],
+    )
+    p_items = {str(item["item_id"]): item for item in natural_items["prior"]}
+    for slot in ("a", "b"):
+        usable = [
+            row for row in labels[slot]["prior"] if row["eligibility"] == "usable"
+        ]
+        all_selected = sum(
+            set(row["complete_unit_indices"])
+            == {
+                unit["unit_index"]
+                for unit in p_items[str(row["item_id"])]["units"]
+                if unit["kind"] == "material_claim"
+            }
+            for row in usable
+        )
+        add(
+            f"complete_equals_all_material_units_fraction_{slot}",
+            all_selected / len(usable) if usable else None,
+            "<=",
+            thresholds["complete_equals_all_material_units_fraction_max_per_annotator"],
+            numerator=all_selected,
+            denominator=len(usable),
+        )
+    add(
+        "prior_required_adjudication_fraction_lower_bound",
+        p_raw["pre_adjudication_fraction"],
+        "<=",
+        thresholds["prior_adjudication_fraction_max"],
+    )
+
+    failed = [row["name"] for row in results if row["status"] == "FAIL"]
+    return {
+        "status": (
+            "PASS_RAW_ANNOTATION_GATES" if not failed else "STOP_RAW_GATE_FAILURE"
+        ),
+        "failed_gate_names": failed,
+        "third_model_send_allowed": not failed,
+        "adjudication_cannot_rescue_raw_failure": True,
+        "results": results,
+    }
+
+
 def command_triage(args: argparse.Namespace) -> None:
     """Freeze third-model independent audit/dispute items after A/B complete."""
 
@@ -1622,8 +1866,14 @@ def command_triage(args: argparse.Namespace) -> None:
         ),
         "tasks": {},
     }
+    natural_items_by_task: dict[str, list[dict[str, Any]]] = {}
+    natural_labels: dict[str, dict[str, list[dict[str, Any]]]] = {
+        "a": {},
+        "b": {},
+    }
     for task, item_name in item_names.items():
         natural_items = read_jsonl(items_dir / item_name)
+        natural_items_by_task[task] = natural_items
         natural_by_id = {str(item["item_id"]): item for item in natural_items}
         package_a = read_jsonl(package_dir / "annotator_a" / f"{task}.jsonl")
         package_b = read_jsonl(package_dir / "annotator_b" / f"{task}.jsonl")
@@ -1640,6 +1890,8 @@ def command_triage(args: argparse.Namespace) -> None:
             for row in all_b
             if str(row["item_id"]) in natural_ids
         }
+        natural_labels["a"][task] = list(by_a.values())
+        natural_labels["b"][task] = list(by_b.values())
         auto_agree = [
             item_id
             for item_id in natural_ids
@@ -1701,15 +1953,36 @@ def command_triage(args: argparse.Namespace) -> None:
                 labels_b=all_b,
             ),
         }
+    protocol = load_protocol(getattr(args, "protocol", DEFAULT_PROTOCOL))
+    raw_gate_decision = evaluate_raw_annotation_gates(
+        protocol=protocol,
+        natural_items=natural_items_by_task,
+        labels=natural_labels,
+        task_reports=public_raw_report["tasks"],
+    )
+    public_raw_report["raw_gate_decision"] = raw_gate_decision
     atomic_write_json(output_dir / "PRIVATE_triage_manifest.json", private_triage)
     atomic_write_json(output_dir / "triage_counts.json", public_counts)
     atomic_write_json(output_dir / "raw_annotation_report.json", public_raw_report)
+    atomic_write_json(output_dir / "raw_gate_decision.json", raw_gate_decision)
+    send_allowed = raw_gate_decision["third_model_send_allowed"]
     print(
         json.dumps(
             {
-                "status": "third_independent_packages_ready",
-                "send_only": "third_independent/",
+                "status": (
+                    "third_independent_packages_ready"
+                    if send_allowed
+                    else "STOP_RAW_GATE_FAILURE"
+                ),
+                "third_model_send_allowed": send_allowed,
+                "send_only": "third_independent/" if send_allowed else None,
+                "do_not_send_reason": (
+                    None
+                    if send_allowed
+                    else "pre-registered raw annotation gates failed"
+                ),
                 "never_send": "PRIVATE_triage_manifest.json",
+                "failed_gate_names": raw_gate_decision["failed_gate_names"],
                 "counts": public_counts,
             },
             indent=2,

@@ -2,7 +2,7 @@
 
 冻结日期：2026-08-25 UTC
 
-状态：`real_source_export_and_tokenizer_audit_complete_pending_blind_dedup`
+状态：`dedup_ab_schema_and_agreement_passed_pending_annotator_provenance`
 
 证据等级：`pipeline smoke`
 
@@ -459,7 +459,9 @@ token 轴 unitizer、C/H/P proposal、三类 schema validator、隐藏控制项�
 本地确定性 fixture 已跑通 8 queries/64 rows：64/64 exact-token 分区通过，32 条 numeric match、32 条
 mismatch，2 个 C proposal、4 个 H/P proposal、一次第三模型裁决及最终 2 positive+2 clean 均闭环。
 真实源也已导出为 7473 条 GSM8K train +1218 条 ASDiv-A，并汇总 1108 个历史 query exclusions；29 对
-near-duplicate 中 2 对因两端均已排除而跳过，当前冻结送标分母为 27 对。固定 Phi tokenizer 边界回归已
+near-duplicate 中 2 对因两端均已排除而跳过，冻结送标分母为 27 对。A/B 两份输出已通过 schema/population
+校验，27/27 target 一致，7 duplicate/20 distinct，κ=1.0；第三模型盲包为 0 行。A/B 模型身份与
+temperature provenance 尚待补录，所以 decisions/query manifest 尚未发布。固定 Phi tokenizer 边界回归已
 通过。Phi rollout、C/H/P 双 AI 标注、hidden-state 抽取和训练仍未开始。
 
 唯一入口按以下顺序执行（所有产物都在 Git 忽略的 `run_artifacts/`）：
@@ -503,8 +505,8 @@ python prepare_clir_smoke.py dedup-triage \
   --output "$SMOKE_ROOT/dedup/third_independent_items.jsonl"
 ```
 
-第三个不同系列模型独立判断 `third_independent_items.jsonl`，输出中必须记录
-`independent_answer_completed=true`。然后运行：
+若 `third_independent_items.jsonl` 非空，第三个不同系列模型才需要独立判断，输出中必须记录
+`independent_answer_completed=true`；若为 0 行，不得为了填 roster 虚构一次第三模型调用。然后运行：
 
 `annotation/model_roster.json` 必须填写真实调用身份，不得把占位符原样留下：
 
@@ -513,19 +515,18 @@ python prepare_clir_smoke.py dedup-triage \
   "primary_annotators": [
     {"provider": "<provider-a>", "model_id": "<model-a>", "model_family": "<family-a>", "revision": "<revision-or-date-a>"},
     {"provider": "<provider-b>", "model_id": "<model-b>", "model_family": "<family-b>", "revision": "<revision-or-date-b>"}
-  ],
-  "adjudicator": {"provider": "<provider-c>", "model_id": "<model-c>", "model_family": "<family-c>", "revision": "<revision-or-date-c>"}
+  ]
 }
 ```
 
-三种 `model_family` 必须彼此不同且都不是 Phi；实际原始响应和调用时间留在本地审计目录。
+A/B 的 `model_family` 必须彼此不同且都不是 Phi。只有第三模型实际产生了标签时，才增加
+`"adjudicator": {...}`；届时三种 family 必须互异。实际原始响应和调用时间留在本地审计目录。
 
 ```bash
 python prepare_clir_smoke.py resolve-dedup \
   --candidates "$SMOKE_ROOT/dedup/candidates.jsonl" \
   --labels-a "$SMOKE_ROOT/dedup/labels_a.jsonl" \
   --labels-b "$SMOKE_ROOT/dedup/labels_b.jsonl" \
-  --adjudications "$SMOKE_ROOT/dedup/adjudications.jsonl" \
   --roster "$SMOKE_ROOT/annotation/model_roster.json" \
   --output "$SMOKE_ROOT/dedup/decisions.jsonl"
 python prepare_clir_smoke.py freeze \
@@ -546,6 +547,9 @@ python prepare_clir_smoke.py package \
   --items-dir "$SMOKE_ROOT/proposals" \
   --output-dir "$SMOKE_ROOT/blind_packages"
 ```
+
+上面的零分歧路径不传 `--adjudications`。若第三模型确实返回了非空结果，则在 `resolve-dedup` 中额外加入
+`--adjudications "$SMOKE_ROOT/dedup/adjudications.jsonl"`，同时在 roster 中记录真实 adjudicator。
 
 A 和 B 分别收到自己的目录，H 与 Prior 各开独立上下文；复制用提示词见
 [`../configs/data_expansion_smoke_v2/annotation_prompts.md`](../configs/data_expansion_smoke_v2/annotation_prompts.md)。

@@ -142,10 +142,12 @@ unitizer、C/H/P proposal、隐藏控制项、自一致性、第三模型先独�
 outcome/ranking/mechanism population 共形成 1108 个唯一 GSM8K query exclusions。固定 Phi tokenizer 的
 小数/货币、缩写、LaTeX/Unicode、空行和 terminal EOS 回归均通过。
 
-近重复检索共发现 29 对，其中 2 对两端都已经被历史排除，送标没有意义；剩余 27 对已按 hash 冻结在
-本地忽略目录，等待两个不同模型系列互盲判断。恰有一端被历史排除的 4 对仍保留，因为一旦判 duplicate，
-另一端也必须随整簇排除。800-row Phi rollout、正式 C/H/P 双 AI 标注和 hidden-state 抽取仍为 pending，
-绝不能写成真实 v2 已跑通或已经得到训练数据。冻结规模与预算为：
+近重复检索共发现 29 对，其中 2 对两端都已经被历史排除，送标没有意义；剩余 27 对按 hash 冻结后完成了
+A/B 互盲回答。两份文件的 population/schema 均通过，target 判断 27/27 一致，7 duplicate/20 distinct，
+κ=1.0；`dedup-triage` 为 0 行，所以不需要第三模型。恰有一端被历史排除的 4 对保留在原始分母，因为一旦
+判 duplicate，另一端也必须随整簇排除。现在仍需补齐 A/B provider/model family/revision/temperature
+provenance，确认不同系列且非 Phi 后才能正式发布去重决定。800-row Phi rollout、正式 C/H/P 双 AI 标注和
+hidden-state 抽取仍为 pending，绝不能写成真实 v2 已跑通或已经得到训练数据。冻结规模与预算为：
 
 - outcome：60 GSM8K train +40 ASDiv-A queries，每题 8 条 Phi rollout，共 800 raw trajectories；
 - Consistency：标 40 个 GSM8K natural proposals，按冻结顺序留下前 30 个最终 accept；
@@ -191,11 +193,9 @@ token partition 通过、32 numeric match/32 mismatch、2 个 C 与4 个 H/P pro
 包，第三模型独立输出落盘后，`adjudication-package` 才暴露匿名 Option 1/2。`finalize` 任一预注册门失败
 就只写失败报告，不发布 `pre_extraction.jsonl`。
 
-当前下一步不是立即跑 Phi，而是把
-`run_artifacts/data_expansion_smoke_v2/dedup/candidates.jsonl` 分别交给 A/B。两份完整 27 行输出落盘后，
-运行 `dedup-triage` 生成不含 A/B 答案的第三模型盲包；第三模型只处理该包并带
-`independent_answer_completed=true` 回传。随后 `resolve-dedup -> freeze -> rollout`。源数据、候选、模型
-输出与其他大 artifact 都留在 `run_artifacts/`，不推远端。
+当前下一步不是再找第三模型：盲包为 0 行。只需补录两位实际 A/B 的 provider、准确 model ID/family、
+revision/date alias 和 temperature 控制；独立性门通过后运行 `resolve-dedup -> freeze -> rollout`。源数据、
+候选、模型输出与其他大 artifact 都留在 `run_artifacts/`，不推远端。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -387,8 +387,8 @@ hallucination_onset = k
 
 ## 下一步
 
-1. 代码、tiny fixture、真实源导出、历史排除汇总和 pinned-tokenizer 边界回归已完成；下一步只把冻结的
-   27 个 near-duplicate candidates 分别送给 A/B，再由第三模型独立解决 `dedup-triage` 输出的分歧。
+1. 代码、tiny fixture、真实源导出、历史排除汇总、pinned-tokenizer 回归和 27 对去重的 A/B schema/
+   agreement 门已完成；下一步补录并验证两位模型的 provider/family/revision/temperature provenance。
 2. 去重决定落盘后发布 60/40 query、cluster 和永久排除 manifests；再在固定 `datasets==3.6.0`、
    `vllm==0.5.3.post1`、NumPy 1.26 环境运行 100-query×8 rollout，并对实际 rollout 重过截断、多 boxed、
    checker 与 exact-token unit audit。预先通过的 tokenizer 边界回归不能替代真实 rollout 门。

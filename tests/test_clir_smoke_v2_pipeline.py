@@ -10,6 +10,7 @@ from prepare_clir_smoke import (
     _ordered_vllm_candidates,
     build_annotation_packages,
     command_adjudication_package,
+    command_resolve_dedup,
     command_dedup_triage,
     command_fixture,
     command_triage,
@@ -341,6 +342,77 @@ def test_dedup_triage_hides_primary_answers_and_only_sends_unresolved(tmp_path: 
     assert third[0]["requires_independent_answer"] is True
     assert "annotation_a" not in third[0]
     assert "annotation_b" not in third[0]
+
+
+def test_dedup_resolve_needs_no_third_model_when_all_primary_labels_agree(
+    tmp_path: Path,
+):
+    candidate = {
+        "pair_id": "pair-0",
+        "left_query_id": "left-0",
+        "right_query_id": "right-0",
+        "left_question": "Question A",
+        "right_question": "Question B",
+        "decision": None,
+    }
+    label_a = {
+        "pair_id": "pair-0",
+        "decision": "distinct",
+        "confidence": "high",
+        "rationale": "Different relations.",
+    }
+    label_b = {
+        "pair_id": "pair-0",
+        "decision": "distinct",
+        "confidence": "medium",
+        "rationale": "Different structures.",
+    }
+    paths = {
+        "candidates": tmp_path / "candidates.jsonl",
+        "labels_a": tmp_path / "labels_a.jsonl",
+        "labels_b": tmp_path / "labels_b.jsonl",
+        "roster": tmp_path / "roster.json",
+        "output": tmp_path / "decisions.jsonl",
+    }
+    atomic_write_jsonl(paths["candidates"], [candidate])
+    atomic_write_jsonl(paths["labels_a"], [label_a])
+    atomic_write_jsonl(paths["labels_b"], [label_b])
+    atomic_write_json(
+        paths["roster"],
+        {
+            "primary_annotators": [
+                {
+                    "provider": "provider-a",
+                    "model_id": "model-a",
+                    "model_family": "family-a",
+                    "revision": "revision-a",
+                },
+                {
+                    "provider": "provider-b",
+                    "model_id": "model-b",
+                    "model_family": "family-b",
+                    "revision": "revision-b",
+                },
+            ]
+        },
+    )
+    command_resolve_dedup(
+        SimpleNamespace(
+            **paths,
+            adjudications=None,
+        )
+    )
+
+    assert read_jsonl(paths["output"]) == [
+        {
+            "pair_id": "pair-0",
+            "decision": "distinct",
+            "label_source": "auto_agree",
+        }
+    ]
+    report = json.loads(paths["output"].with_suffix(".report.json").read_text())
+    assert report["third_model_item_count"] == 0
+    assert report["third_model_label_count"] == 0
 
 
 def test_jaccard_prefix_index_matches_brute_force_candidate_set():

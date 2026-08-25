@@ -1,6 +1,6 @@
 {
   "schema_version": "clir-data-expansion-smoke-v2",
-  "status": "real_source_export_and_tokenizer_audit_complete_pending_blind_dedup",
+  "status": "dedup_ab_schema_and_agreement_passed_pending_annotator_provenance",
   "frozen_at_utc": "2026-08-25",
   "evidence_tier": "pipeline_smoke",
   "supersedes": {
@@ -283,7 +283,10 @@
     "deterministic_fixture_status": "pass_8_queries_64_rows",
     "real_source_export_status": "completed_local_7473_gsm8k_plus_1218_asdiv_a",
     "prior_query_exclusions_status": "completed_local_1108_unique_gsm8k_train_queries",
-    "near_duplicate_status": "27_actionable_pairs_hash_frozen_pending_blind_a_b",
+    "near_duplicate_status": "27_of_27_ab_target_agreement_7_duplicate_20_distinct_pending_annotator_provenance",
+    "dedup_labels_a_sha256": "9d27184507be16404de8aa28e85a70a4570941b6bcd185e9ab24e626eb755ff3",
+    "dedup_labels_b_sha256": "b252365a2cc0b836a3031be8926dc1fa67c729827d083fa92a6a720e559e7522",
+    "dedup_third_independent_item_count": 0,
     "pinned_phi_tokenizer_regression_status": "pass_decimal_currency_abbreviation_latex_unicode_blank_line_terminal_eos",
     "real_rollout_status": "pending",
     "real_dual_ai_annotation_status": "pending",

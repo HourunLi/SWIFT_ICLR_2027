@@ -115,9 +115,11 @@ finalizer 已实现；8-query/64-row 确定性 fixture 已通过。
 真实 acquisition 已推进到去重门：本地已按固定 revision 导出 `7473` 条 GSM8K train 和 `1218` 条
 ASDiv-A，共 `8691` 条；从旧 outcome/ranking/mechanism population 汇总并规范化出 `1108` 个不可复用的
 GSM8K query ID。冻结检索器找到 29 对 near-duplicate candidate，其中 2 对的两端都已在历史排除表内，
-无需付费标注；当前 hash 固定、真正需要 A/B 判断的是 `27` 对。固定 Phi tokenizer 的小数/货币、缩写、
-LaTeX/Unicode、空行和 terminal EOS 回归也已通过。真实 800 条 Phi rollout、正式 C/H/P 双标、
-hidden-state 抽取和训练仍未开始，因此新增数据还不可用于训练。
+无需付费标注；hash 固定后实际送标 `27` 对。两份 A/B 回答均通过完整 population/schema 校验，target
+判断 `27/27` 一致：`7` 对 duplicate、`20` 对 distinct，Cohen κ=`1.0`；`dedup-triage` 输出 0 行，因此
+无需第三模型。当前只差记录并验证 A/B 确实来自两个不同、非 Phi 的模型系列及其调用版本，之后即可冻结
+题池。固定 Phi tokenizer 的小数/货币、缩写、LaTeX/Unicode、空行和 terminal EOS 回归也已通过。真实
+800 条 Phi rollout、正式 C/H/P 双标、hidden-state 抽取和训练仍未开始，因此新增数据还不可用于训练。
 
 v2 把 train-only query 池扩为 `60 GSM8K +40 ASDiv-A`，每题 8 条 Phi rollout，共 800 raw rows；
 自然标注预算仍只送 40 个 Consistency proposals 和同一批 60 个 H/P proposals。所有 proposal 的机械
@@ -150,9 +152,8 @@ python prepare_clir_smoke.py fixture \
 [`docs/data_expansion_smoke_protocol_v2.md`](docs/data_expansion_smoke_protocol_v2.md#16-2026-08-25-实现状态与唯一执行入口)；
 可复制提示词在
 [`configs/data_expansion_smoke_v2/annotation_prompts.md`](configs/data_expansion_smoke_v2/annotation_prompts.md)。
-当前唯一外部动作是：把本地 `run_artifacts/data_expansion_smoke_v2/dedup/candidates.jsonl` 分别发给两个
-不同模型系列的 AI，二者不能共享上下文或看到对方答案。A/B 回传完整 27 行后先运行 `dedup-triage`，只把
-分歧/低置信行交给第三个不同系列模型独立判断，再冻结 60/40 query 池并启动 800-row rollout。
+当前唯一缺口是补录 A/B 的 provider、准确 model ID/model family、revision/date alias，以及 temperature
+是否可控为 0。独立性记录通过后直接 `resolve-dedup -> freeze`；本轮没有分歧，不能虚构第三模型调用。
 
 ## 目录
 

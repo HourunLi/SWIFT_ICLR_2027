@@ -280,23 +280,40 @@ def command_resolve_dedup(args: argparse.Namespace) -> None:
     candidates = read_jsonl(args.candidates)
     labels_a = _validate_dedup_labels(read_jsonl(args.labels_a), candidates)
     labels_b = _validate_dedup_labels(read_jsonl(args.labels_b), candidates)
+    by_a = {str(row["pair_id"]): row for row in labels_a}
+    by_b = {str(row["pair_id"]): row for row in labels_b}
+    third_item_ids = {
+        str(candidate["pair_id"])
+        for candidate in candidates
+        if not _dedup_auto_agrees(
+            by_a[str(candidate["pair_id"])], by_b[str(candidate["pair_id"])]
+        )
+    }
+
     roster = json.loads(Path(args.roster).read_text(encoding="utf-8"))
     primary = roster.get("primary_annotators", [])
-    adjudicator = roster.get("adjudicator")
-    if not isinstance(adjudicator, Mapping):
-        raise ValueError("dedup roster requires a third adjudicator")
-    validate_annotator_roster([*primary[:2], adjudicator], generator_family="phi")
-    families = {
-        str(row["model_family"]).casefold() for row in [*primary[:2], adjudicator]
-    }
-    if len(families) != 3:
-        raise ValueError("dedup A/B/third model families must all differ")
+    if not isinstance(primary, list) or len(primary) != 2:
+        raise ValueError("dedup roster requires exactly two primary annotators")
+    validate_annotator_roster(primary, generator_family="phi")
+
     adjudications = read_jsonl(args.adjudications) if args.adjudications else []
     third_ids = [str(row.get("pair_id")) for row in adjudications]
     if len(third_ids) != len(set(third_ids)):
         raise ValueError("dedup adjudications contain duplicate pair_id values")
-    by_a = {str(row["pair_id"]): row for row in labels_a}
-    by_b = {str(row["pair_id"]): row for row in labels_b}
+    unexpected_third = set(third_ids) - third_item_ids
+    if unexpected_third:
+        raise ValueError("dedup adjudications include an auto-agreed or unknown pair")
+
+    adjudicator = roster.get("adjudicator")
+    if adjudications:
+        if not isinstance(adjudicator, Mapping):
+            raise ValueError("third-model dedup labels require an adjudicator roster")
+        validate_annotator_roster([*primary, adjudicator], generator_family="phi")
+        families = {
+            str(row["model_family"]).casefold() for row in [*primary, adjudicator]
+        }
+        if len(families) != 3:
+            raise ValueError("dedup A/B/third model families must all differ")
     by_third = {str(row.get("pair_id")): row for row in adjudications}
     decisions: list[dict[str, Any]] = []
     sources: Counter[str] = Counter()
@@ -337,6 +354,8 @@ def command_resolve_dedup(args: argparse.Namespace) -> None:
         "kappa": cohen_kappa(left, right),
         "decision_counts": dict(Counter(row["decision"] for row in decisions)),
         "label_sources": dict(sources),
+        "third_model_item_count": len(third_item_ids),
+        "third_model_label_count": len(adjudications),
         "unresolved_policy": "conservative_duplicate",
     }
     manifest = publish_manifest(

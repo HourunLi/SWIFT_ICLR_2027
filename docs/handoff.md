@@ -308,12 +308,16 @@ ambiguous multiple answers 3。机械筛选在 38 个有合格正确候选的 qu
 按冻结 hash 顺序取前 12 个。自然 item manifest SHA-256 为 `e9017ef3…23a3f`，A/B package SHA-256 分别为
 `e3e2e223…abe59` / `30dcb839…37b66`。
 
-当前状态不是 PASS，而是 `READY_FOR_TWO_BLIND_PATH_AUDITS`：A 包 19 行（12 natural、4 controls、3
-self-repeats），B 包 16 行（12 natural、4 controls）。A 必须用 GPT-5.5-sol/xhigh 的全新上下文执行
-`launch_prompt_a.txt`，B 必须用 Claude Opus 5/high 的全新上下文执行 `launch_prompt_b.txt`。两边不得看
-peer/history/protocol/source/PRIVATE。标完后运行 `consistency-v5-check`；raw gate 为自然 decision 至少
-11/12 一致、每边 review≤1、controls 各 4/4、A repeat 3/3、共同 accept≥8。任何一项失败即停止，不用
-第三模型救活；全过也只允许另发正式扩量协议，不直接训练。
+GPT-5.5-sol/xhigh 与 Claude Opus 5/high 已在两个隔离上下文中完成 A/B 包。冻结检查器终态为
+`PASS_FRESH_MECHANICAL_AUDIT`，所有 raw gates 通过：自然 decision agreement=`12/12`，两边均为 12 accept、
+0 review，controls 各 `4/4`，A self-repeat=`3/3`，理由前缀与 schema 全部合法。A/B label SHA-256 分别为
+`7004f129…b149` / `185f0b15…ca1`，审计报告 SHA-256 为 `e88d389b…196f`。自然集是机械筛出的正 pair，
+因此单类 12/12 accept 符合任务结构，但报告 κ=1 在单类分布下不提供额外的强统计证据；两个含明确错误的
+controls 均被正确 reject，排除了“所有输入都 accept”的简单退化。
+
+这个 PASS 只把下一道门从“能否稳定制作 C pair”推进到“另发正式扩量协议”。v5 自身仍明确
+`eligible_for_training=false`、`third_model_allowed=false`，不发布训练 manifest、不抽 hidden state、不训练，
+也不支持 Consistency 改善 Best-of-N 的结论。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -507,10 +511,9 @@ hallucination_onset = k
 
 1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
    失败作为 pipeline-smoke 诊断。
-2. C prompt-v4 已以 `7/14` 未通过；v5 已在 48 个新 query 上机械找到 16 对并冻结选择 12 对，当前只差
-   两个互盲事实审计。分别执行 v5 的 A/B launch prompt，随后只运行 `consistency-v5-check`。不得打开
-   PRIVATE、互看标签、改机械阈值、补第三模型或把 4 条未选 pair 换进来。若 raw gate 全过，再另发
-   300–500 train /100–200 held-out 的正式 C 扩量协议；若失败则保留诊断并停止本路线。
+2. C prompt-v4 已以 `7/14` 未通过；v5 的机械筛选与双盲事实审计现已全门通过。下一步另行冻结
+   300–500 train /100–200 held-out 的正式 C 扩量协议，继续沿用机械规则，并增加 query-disjoint held-out
+   relation 评估；不得直接把 v5 的 12 对当训练集，也不得因本轮 12/12 accept 就省略正式扩量的质量审计。
    Prior 仍需在新版本中先标显式 dependency edges，再由确定性传递闭包得到 Complete，或预注册等价组容错。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。

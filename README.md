@@ -235,7 +235,7 @@ B 为 `9/5`，理由前缀与反塌缩门全部通过；因此失败不是格式
 一个是是否应因夹带的实质性错误而拒绝。30 条全新确认不再允许，提示词-only 路线按预注册规则停止；
 这些回放仍不训练、不算可靠性证据，也不能由第三模型裁决救活。
 
-## Consistency 机械筛选 v5：新鲜双盲包已就绪
+## Consistency 机械筛选 v5：新鲜双盲审计通过
 
 v4 说明自然语言提示词无法稳定同时处理“数学路径相同”和“表达差异足够大”两个边界。v5 因此按
 [`docs/data_expansion_smoke_protocol_v5.md`](docs/data_expansion_smoke_protocol_v5.md) 把工作拆开：固定程序先检查
@@ -250,13 +250,16 @@ unitization。checker 得到 201 numeric matches、154 parsed mismatches、10 pa
 找到 16 个 query-distinct pairs，超过冻结目标 12；程序只按预先固定的 SHA-256 顺序选择前 12 个，没有
 人工看答案挑题或事后改阈值。
 
-当前状态是 `READY_FOR_TWO_BLIND_PATH_AUDITS`，还不是 smoke 通过。A 包为 19 行（12 natural +4 hidden
-controls +3 self-repeats），B 包为 16 行（12 natural +4 controls）。应分别在全新隔离上下文中把
-[`launch_prompt_a.txt`](configs/data_expansion_smoke_v5/launch_prompt_a.txt) 发给 GPT-5.5-sol/xhigh，把
-[`launch_prompt_b.txt`](configs/data_expansion_smoke_v5/launch_prompt_b.txt) 发给 Claude Opus 5/high。两边完成后
-才运行 `consistency-v5-check`；12 条自然样本至少 11 条 decision 一致、每边 review≤1、控制各 4/4、A
-自重复 3/3 且共同 accept≥8 才通过。失败不调用第三模型补救；通过也只允许另写正式扩量协议，v5 本身
-不训练、不抽 hidden state、不产生 Consistency efficacy 或 Best-of-N 结论。
+GPT-5.5-sol/xhigh 与 Claude Opus 5/high 在两个隔离上下文中完成了 A/B 包。冻结检查器终态为
+`PASS_FRESH_MECHANICAL_AUDIT`，没有失败门：12/12 natural decisions 一致且均为 accept，两边 review=0、
+hidden controls 各 4/4，A self-repeats=3/3，理由前缀和 schema 全部合法。A/B label SHA-256 分别为
+`7004f129…b149` / `185f0b15…ca1`，审计报告 SHA-256 为 `e88d389b…196f`。
+
+自然集本来就是机械预筛后的正 pair，所以 12/12 全 accept 符合任务结构；它也意味着自然集只有一个类别，
+报告中的 κ=1 不应被单独解释为强统计证据。两个明确错误的 hidden controls 均被正确 reject，说明两边并非
+无条件 accept。v5 因此只证明这条“机械筛选 + 双 AI 事实审计”流水线在新鲜样本上可操作，并按预注册规则
+允许另写正式 Consistency 扩量协议。v5 自身仍 `eligible_for_training=false`、禁止第三模型补救，不抽 hidden
+state、不训练，也不产生 Consistency efficacy 或 Best-of-N 结论。
 
 ## 目录
 

@@ -2,11 +2,11 @@
 
 冻结日期：2026-08-25 UTC
 
-状态：`dedup_ab_schema_and_agreement_passed_pending_annotator_provenance`
+状态：`real_proposal_manifests_frozen_pending_c_h_prior_dual_ai_labels`
 
 证据等级：`pipeline smoke`
 
-父代码：`clir-clean-integration@2e7250727cba2681797d9f02ac357b07230df247`
+执行代码基线：`clir-clean-integration@3fda7315feee9de06621130ed3fd320510043e16`
 
 v2 吸收了两份互盲外部 AI 审查。v1 尚未生成、标注或训练任何数据，现标记为
 `superseded_before_execution`，不得继续执行，也不得原地修改成 v2。
@@ -460,9 +460,23 @@ token 轴 unitizer、C/H/P proposal、三类 schema validator、隐藏控制项�
 mismatch，2 个 C proposal、4 个 H/P proposal、一次第三模型裁决及最终 2 positive+2 clean 均闭环。
 真实源也已导出为 7473 条 GSM8K train +1218 条 ASDiv-A，并汇总 1108 个历史 query exclusions；29 对
 near-duplicate 中 2 对因两端均已排除而跳过，冻结送标分母为 27 对。A/B 两份输出已通过 schema/population
-校验，27/27 target 一致，7 duplicate/20 distinct，κ=1.0；第三模型盲包为 0 行。A/B 模型身份与
-temperature provenance 尚待补录，所以 decisions/query manifest 尚未发布。固定 Phi tokenizer 边界回归已
-通过。Phi rollout、C/H/P 双 AI 标注、hidden-state 抽取和训练仍未开始。
+校验，27/27 target 一致，7 duplicate/20 distinct，κ=1.0；第三模型盲包为 0 行。用户报告 A 为 OpenAI
+`gpt-5.5-sol`（xhigh）、B 为 Anthropic `claude-opus-5`（high），满足不同系列且非 Phi；精确 revision 与
+temperature 在产品界面不可见，已在本地 roster 记录为 unknown/unverified。这一偏离不能写成满足本协议
+temperature=`0`，也不能把 agreement 写成 accuracy。
+
+去重决定与题池现已发布：100 个永久 train-only query（60 GSM8K +40 ASDiv-A）与 1108 个历史排除项
+零交集，选中 ID 集合 hash=`08fc850d…df78b`。固定 Phi revision 在单张 L20Z 上以
+`vllm==0.5.3.post1`、TP=1、BF16、`max_num_seqs=32` 完成 800 条 rollout；全部正常 stop、无空输出或
+长度截断，raw ordered hash=`3b47bd39…101f`。checker 统计为 680 numeric match、39 numeric mismatch、
+78 candidate-not-numeric mismatch、3 conflicting-boxed-answer ineligible。799/800 条通过 unitizer；唯一
+失败行的生成 ID 序列不是 visible text 的规范重编码，而且它同时属于 conflicting-boxed-answer，故按 7.1
+保留审计并排除，不替换保存 IDs。
+
+确定性规则已经在双标前冻结 40 个 Consistency proposals（hash=`6a97b2bf…9145`）与 60 个 H/P
+proposals（hash=`36a2b380…80cb`）。H/P 为 GSM8K match/mismatch 各 18、ASDiv-A 各 12；C/H query
+overlap=24，trajectory overlap=0；所有 proposal 的 unit/token contract 通过，H/P material units 最少 5、
+中位数 12。A/B 盲包已生成；正式 C/H/P 双标、triage/finalize、hidden-state 抽取和训练仍未开始。
 
 唯一入口按以下顺序执行（所有产物都在 Git 忽略的 `run_artifacts/`）：
 

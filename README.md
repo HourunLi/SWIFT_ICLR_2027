@@ -100,7 +100,7 @@ MSE、detach、mask 与 shared-gradient 路径，但 clean 的外层 `prior_weig
 [`docs/handoff.md`](docs/handoff.md)。扩大数据后将
 固定 `.25` 重做独立 `off/on` 诊断，而不在当前 dev 上继续调参。
 
-## 2026-08-25 多题源扩量 smoke v2：真实源已导出，等待互盲去重
+## 2026-08-25 多题源扩量 smoke v2：真实 proposal 已冻结，等待 C/H/P 双标
 
 v1 收到两份互盲外部 AI 审查后被共同判为 block，且从未执行，状态是
 `superseded_before_execution`。v1 原文、审查提示词和逐项裁决已从当前分支顶端移出；最后一份
@@ -112,14 +112,27 @@ v1 收到两份互盲外部 AI 审查后被共同判为 block，且从未执行�
 v2、unitizer v2、C/H/P proposal、隐藏控制项、自一致性、第三模型先独立后匿名裁决和 fail-closed
 finalizer 已实现；8-query/64-row 确定性 fixture 已通过。
 
-真实 acquisition 已推进到去重门：本地已按固定 revision 导出 `7473` 条 GSM8K train 和 `1218` 条
-ASDiv-A，共 `8691` 条；从旧 outcome/ranking/mechanism population 汇总并规范化出 `1108` 个不可复用的
-GSM8K query ID。冻结检索器找到 29 对 near-duplicate candidate，其中 2 对的两端都已在历史排除表内，
-无需付费标注；hash 固定后实际送标 `27` 对。两份 A/B 回答均通过完整 population/schema 校验，target
-判断 `27/27` 一致：`7` 对 duplicate、`20` 对 distinct，Cohen κ=`1.0`；`dedup-triage` 输出 0 行，因此
-无需第三模型。当前只差记录并验证 A/B 确实来自两个不同、非 Phi 的模型系列及其调用版本，之后即可冻结
-题池。固定 Phi tokenizer 的小数/货币、缩写、LaTeX/Unicode、空行和 terminal EOS 回归也已通过。真实
-800 条 Phi rollout、正式 C/H/P 双标、hidden-state 抽取和训练仍未开始，因此新增数据还不可用于训练。
+真实 acquisition 与自然 proposal 冻结已经完成。本地按固定 revision 导出 `7473` 条 GSM8K train 和
+`1218` 条 ASDiv-A，共 `8691` 条；从旧 outcome/ranking/mechanism population 汇总并规范化出 `1108` 个
+不可复用的 GSM8K query ID。冻结检索器找到 29 对 near-duplicate candidate，其中 2 对的两端都已在历史
+排除表内；实际送标的 27 对由用户报告的 OpenAI `gpt-5.5-sol`（xhigh）与 Anthropic
+`claude-opus-5`（high）互盲判断。两者是不同、非 Phi 模型系列，target `27/27` 一致：`7` 对
+duplicate、`20` 对 distinct，Cohen κ=`1.0`，无需第三模型。产品界面没有暴露精确 revision 与
+temperature，因此本地 roster 明确记录为 unknown/unverified；这不能冒充预注册的 temperature=`0`。
+
+去重决定随后冻结出 100 个永久 train-only query（60 GSM8K +40 ASDiv-A），与 1108 个历史排除项交集为
+0；选中 query ID 集合 SHA-256 为 `08fc850d…df78b`。在一张 L20Z 上用固定 Phi-3.5 revision、
+`vllm==0.5.3.post1`、TP=1、BF16、`max_num_seqs=32` 完成 100×8=800 条 rollout：800 条均为正常 stop，
+没有空输出或长度截断，原始有序行 hash 为 `3b47bd39…101f`。
+
+真实 checker/unitizer 得到 680 条 numeric match、39 条明确 numeric mismatch、78 条无法解析出数值并按
+冻结语义记为 numeric mismatch，以及 3 条 conflicting-boxed-answer ineligible。799/800 条通过
+exact-token unitization；唯一失败行使用了解码文字相同但 token 切法非规范的生成序列，并且本身就是
+conflicting-boxed-answer，因此按协议保留审计但不进入 proposal。确定性规则最终冻结 40 个 Consistency
+pairs（hash `6a97b2bf…9145`）与 60 条 H/P rows（hash `36a2b380…80cb`）。H/P 分层恰为 GSM8K
+match/mismatch 各 18、ASDiv-A 各 12；C/H 在 query 层重叠 24 个，但 trajectory 重叠为 0。所有 proposal
+均通过 unit/token 契约，H/P 的 material-claim units 最少 5、中位数 12。互盲包现已生成，正式 C/H/P
+双标、triage/finalize、hidden-state 抽取和训练仍未开始，因此新增数据还不可用于训练。
 
 v2 把 train-only query 池扩为 `60 GSM8K +40 ASDiv-A`，每题 8 条 Phi rollout，共 800 raw rows；
 自然标注预算仍只送 40 个 Consistency proposals 和同一批 60 个 H/P proposals。所有 proposal 的机械
@@ -152,8 +165,10 @@ python prepare_clir_smoke.py fixture \
 [`docs/data_expansion_smoke_protocol_v2.md`](docs/data_expansion_smoke_protocol_v2.md#16-2026-08-25-实现状态与唯一执行入口)；
 可复制提示词在
 [`configs/data_expansion_smoke_v2/annotation_prompts.md`](configs/data_expansion_smoke_v2/annotation_prompts.md)。
-当前唯一缺口是补录 A/B 的 provider、准确 model ID/model family、revision/date alias，以及 temperature
-是否可控为 0。独立性记录通过后直接 `resolve-dedup -> freeze`；本轮没有分歧，不能虚构第三模型调用。
+当前执行缺口是完成 C/H/P 的三套互盲双标与后续 triage/finalize；若继续使用不暴露 temperature 的聊天
+产品，必须把它报告成偏离 temperature=`0` 的 pipeline pilot，不能宣称完整通过正式 annotation-quality
+gate。A/B 的分发目录、任务隔离和可复制提示词见
+[`configs/data_expansion_smoke_v2/annotation_prompts.md`](configs/data_expansion_smoke_v2/annotation_prompts.md)。
 
 ## 目录
 
@@ -457,9 +472,9 @@ pytest -q
 
 - 仓库已有 v2 rollout、numeric checker、first-bad-unit/dual-prior Silver 标注包与盲裁管线，但没有人工
   标注或人工复核；它不生成 Gold。
-- 多题源管线通过了 8-query/64-row deterministic fixture；真实 GSM8K/ASDiv source export、历史排除汇总和
-  pinned-tokenizer 边界回归也已完成。800-row Phi rollout、双 AI C/H/P 标注和全部真实硬门尚未执行；
-  不得把 fixture 或源导出当作标签质量、训练效果证据。
+- 多题源管线不仅通过了 8-query/64-row deterministic fixture，也完成了真实 100-query/800-row Phi
+  rollout、checker/unitizer audit 和 40 C/60 H/P proposal 冻结；双 AI C/H/P 标签、triage/finalize 与全部
+  annotation-quality 硬门仍未完成。不得把 rollout 或 proposal yield 当作标签质量、训练效果证据。
 - 默认仍使用预抽取全层 feature，真实数据的磁盘开销很大；没有集成 batch-local online extraction。
 - 当前 objective 是 pointwise correctness BCE 加可用 auxiliary supervision，尚无 pairwise/listwise reward objective。
 - clean integration 已在现有小数据上完成三 seed matched matrix，但没有扩充独立机制标签或 protected test；full 没有优于 correctness-only。

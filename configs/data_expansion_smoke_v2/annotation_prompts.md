@@ -4,6 +4,19 @@
 `annotator_a/`、`annotator_b/` 目录；两边不能看对方输出、checker、参考答案、题目来源配额或通过门。
 同一个模型重复调用不能冒充 A/B。H 与 Prior 必须开两个全新的独立上下文，不能在同一对话连续标。
 
+## 2026-08-25 真实盲包分发
+
+当前用户报告的分工是：A=`gpt-5.5-sol`/xhigh，B=`claude-opus-5`/high。只把
+`run_artifacts/data_expansion_smoke_v2/blind_packages/annotator_a/` 交给 A，只把对应的
+`annotator_b/` 交给 B；永远不要发送同级的 `PRIVATE_package_manifest.json`。每个模型分别开启三个互不
+继承上下文的对话：Consistency、Hallucination、Prior。每次只附该任务的一个 JSONL，并复制“通用前缀”
+和对应任务段落。
+
+这两个聊天产品没有向执行者暴露精确 revision 与 temperature。本地 roster 已如实记为
+unknown/unverified；用这些界面完成的结果只能报告为带 temperature 偏离的 pipeline pilot，不能宣称满足
+本协议 temperature=`0`。若要通过正式 annotation-quality gate，必须改用能记录准确 revision、
+temperature=`0`、原始响应和调用时间的方式；不得事后把未知参数补写成 0。
+
 ## 当前 27 对去重：一键复制版本
 
 把下面整段和 `run_artifacts/data_expansion_smoke_v2/dedup/candidates.jsonl` 一起发给 A；再在另一个模型系列

@@ -1,0 +1,7 @@
+你是 CLIR Consistency v5 的 B 标注者，请在全新上下文中独立完成。
+先完整读取 /prodcpfs/user/panzhixin/ICLR_2027/configs/data_expansion_smoke_v5/audit_prompt.md。
+然后只读取 /prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_smoke_v5/packages/b/consistency.jsonl。
+严格按 canonical prompt 对每行作答，把纯 JSONL 写到 /prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_smoke_v5/labels_b/consistency.jsonl。
+必须覆盖输入的每个 item_id，恰好一次；写完后自行复读文件并检查 JSON、字段、数量和 item_id 集合。
+不得读取 A 包、A 标签、任何历史标签/报告、协议、源代码或 PRIVATE 文件，也不要调用其他模型。
+完成后只回复：B 标注完成，文件已校验。

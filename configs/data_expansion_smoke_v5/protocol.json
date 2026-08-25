@@ -1,0 +1,157 @@
+{
+  "schema_version": "clir-consistency-mechanical-smoke-v5",
+  "status": "FROZEN_BEFORE_FRESH_ROLLOUT",
+  "frozen_at_utc": "2026-08-25",
+  "scope": "consistency_only_pipeline_smoke",
+  "evidence_tier": "pipeline_smoke",
+  "parents": [
+    {
+      "path": "configs/data_expansion_smoke_v3/protocol.json",
+      "file_sha256": "0640e6c82ee497de0b04799528e0ef6624a045efde663eecf445ae138c13848b",
+      "terminal_status": "STOP_RAW_GATE_FAILURE"
+    },
+    {
+      "path": "configs/data_expansion_smoke_v4/protocol.json",
+      "file_sha256": "64157eb895a498865234e80b07b886b58ae837c1bfaea55d646fff7515ce5f82",
+      "terminal_status": "STOP_REPLAY_FAILURE"
+    }
+  ],
+  "fresh_pool": {
+    "source": "math",
+    "allowed_split": "train_only",
+    "acquisition_batch": "reserve",
+    "query_count": 48,
+    "query_manifest_path": "run_artifacts/data_expansion_smoke_v3/frozen/reserve_queries.jsonl",
+    "query_manifest_file_sha256": "60664ee2f8b41016718ef3b0352952198da1343ed94ce2804615c26b1ac9dc41",
+    "query_manifest_ordered_rows_sha256": "318738217fdbe46a97967f1eb56a980e6101cb5edbc9bc56df8b9e1910ff40ef",
+    "ordered_query_ids_sha256": "70e804bdf461d129bcf678a75381c8f8e971c6b8f783592c70fdcf1e9f969658",
+    "v5_authorizes_preselected_reserve_for_c_only": true,
+    "permanent_train_only": true,
+    "mechanism_dev_ranking_or_test_use_allowed": false,
+    "previous_annotation_query_sources": [
+      {
+        "path": "run_artifacts/data_expansion_smoke_v2/proposals/consistency_proposals.jsonl",
+        "file_sha256": "dac7568474f0fa54614729b6341c1364c58b19bbc2c8a3226c325f01a96e9dd3"
+      },
+      {
+        "path": "run_artifacts/data_expansion_smoke_v2/proposals/h_prior_proposals.jsonl",
+        "file_sha256": "7a6e6a2cdbdb6a0a42dc478f60cfcacf02abaefacf53ea42d8d054ef8db91da8"
+      },
+      {
+        "path": "run_artifacts/data_expansion_smoke_v3/proposals/consistency_proposals.jsonl",
+        "file_sha256": "2dd5b3198ff3313fe460bbed93548ed730bf0f7d1a1de434962126d32221a7a2"
+      },
+      {
+        "path": "run_artifacts/data_expansion_smoke_v3/proposals/h_prior_proposals.jsonl",
+        "file_sha256": "807f1e175dd28824666ce83a929c4820790b968fd23ec8471d50256f0583d2f5"
+      }
+    ]
+  },
+  "generation": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "tokenizer_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "backend": "vllm",
+    "backend_version": "0.5.3.post1",
+    "candidate_count": 8,
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "max_new_tokens": 1024,
+    "max_model_length": 4096,
+    "seed": 42,
+    "prompt_template": "Solve the following math problem step-by-step.\nSimplify your answer as much as possible. Present your final answer as \\boxed{Your Answer}.\n<QUESTION>",
+    "saved_ids_are_axis_truth": true,
+    "bit_exact_regeneration_claimed": false
+  },
+  "checker": {
+    "version": "clir_numeric_multisource_v3",
+    "public_target_name": "numeric_value_match",
+    "full_semantic_correctness_claim_allowed": false,
+    "ai_may_override_checker": false
+  },
+  "unitizer": {
+    "version": "clir_material_claim_unitizer_v2",
+    "token_coordinate_system": "zero_based_output_token_ids",
+    "exact_partition_required": true
+  },
+  "mechanical_filter": {
+    "version": "clir_consistency_mechanical_v1",
+    "both_numeric_value_match_required": true,
+    "same_normalized_candidate_answer_required": true,
+    "minimum_material_claim_units_per_view": 4,
+    "token_length_ratio_min": 1.15,
+    "token_length_ratio_max": 3.0,
+    "math_trace_token_count_min_per_view": 6,
+    "math_trace_similarity_min": 0.6,
+    "numeric_trace_token_count_min_per_view": 4,
+    "numeric_trace_similarity_min": 0.75,
+    "surface_bigram_count_min_per_view": 8,
+    "surface_bigram_jaccard_min": 0.1,
+    "surface_bigram_jaccard_max": 0.4,
+    "maximum_pairs_per_query": 1,
+    "within_query_tie_break": "sha256(clir-C-mechanical-pair-v1|query_id|left_candidate_index|right_candidate_index)",
+    "query_order": "sha256(clir-C-mechanical-query-v1|query_id)",
+    "threshold_change_after_fresh_rollout_allowed": false
+  },
+  "development_regression": {
+    "source": "the_14_already_inspected_v4_disputes",
+    "mechanically_admitted": 3,
+    "admitted_rows_were_v4_ab_auto_accept": 3,
+    "eligible_for_training": false,
+    "eligible_as_reliability_or_accuracy_evidence": false
+  },
+  "pilot": {
+    "natural_pair_count": 12,
+    "query_distinct": true,
+    "if_yield_below_target": "STOP_MECHANICAL_YIELD_FAILURE_without_threshold_change",
+    "passing_authorizes": "separate_scaled_consistency_protocol_only"
+  },
+  "annotation": {
+    "task": "substantive_claim_validity_only",
+    "prompt_path": "configs/data_expansion_smoke_v5/audit_prompt.md",
+    "prompt_sha256": "487925eed36917966b213165007dd6bfe00a73fd0d4d486362dd06cf430abfee",
+    "launch_prompt_a_path": "configs/data_expansion_smoke_v5/launch_prompt_a.txt",
+    "launch_prompt_a_sha256": "48acbf60304f9a7bfe83f9cadc93b1daa103cbd16e0a66dfd176991898f97f6f",
+    "launch_prompt_b_path": "configs/data_expansion_smoke_v5/launch_prompt_b.txt",
+    "launch_prompt_b_sha256": "0d724c0e86261ecda99089902acb44061512f638d96d3adfd657bb85afdffe59",
+    "primary_annotators_must_be_different_non_phi_model_families": true,
+    "requested_a": "gpt-5.5-sol/xhigh",
+    "requested_b": "claude-opus-5/high",
+    "fresh_context_per_annotator": true,
+    "peer_and_history_visibility_allowed": false,
+    "decisions": [
+      "accept",
+      "reject",
+      "review"
+    ],
+    "hidden_control_count": 4,
+    "a_self_repeat_count": 3,
+    "third_model_allowed": false
+  },
+  "raw_gates": {
+    "natural_decision_agreement_min_count": 11,
+    "natural_decision_agreement_denominator": 12,
+    "review_count_max_per_annotator": 1,
+    "hidden_controls_required_per_annotator": 4,
+    "a_self_repeat_required": 3,
+    "auto_agree_accept_min_count": 8,
+    "rationale_prefixes_required": true,
+    "raw_failure_may_be_adjudicated": false
+  },
+  "outputs": {
+    "rollouts": "run_artifacts/data_expansion_smoke_v5/rollouts/reserve_raw.jsonl",
+    "materialized": "run_artifacts/data_expansion_smoke_v5/materialized/reserve_rows.jsonl",
+    "proposals_dir": "run_artifacts/data_expansion_smoke_v5/proposals",
+    "packages_dir": "run_artifacts/data_expansion_smoke_v5/packages",
+    "labels_a": "run_artifacts/data_expansion_smoke_v5/labels_a/consistency.jsonl",
+    "labels_b": "run_artifacts/data_expansion_smoke_v5/labels_b/consistency.jsonl",
+    "audit_report": "run_artifacts/data_expansion_smoke_v5/consistency_v5_audit_report.json"
+  },
+  "claim_boundary": {
+    "eligible_for_training": false,
+    "module_efficacy_claim_allowed": false,
+    "best_of_n_claim_allowed": false,
+    "natural_label_accuracy_claim_allowed": false,
+    "passing_means": "fresh mechanical proposal and dual_ai_factual_audit pipeline is operational"
+  }
+}

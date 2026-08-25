@@ -25,6 +25,7 @@ from src.clir_smoke import (
     atomic_write_json,
     build_consistency_proposals,
     build_h_prior_proposals,
+    build_mechanical_consistency_proposals,
     canonical_sha256,
     check_numeric_response,
     cohen_kappa,
@@ -57,6 +58,9 @@ DEFAULT_PROTOCOL = (
 DEFAULT_CONSISTENCY_PROMPT_REPAIR_PROTOCOL = (
     PROJECT_ROOT / "configs" / "data_expansion_smoke_v4" / "protocol.json"
 )
+DEFAULT_CONSISTENCY_MECHANICAL_PROTOCOL = (
+    PROJECT_ROOT / "configs" / "data_expansion_smoke_v5" / "protocol.json"
+)
 
 
 def load_protocol(path: str | Path) -> dict[str, Any]:
@@ -64,8 +68,9 @@ def load_protocol(path: str | Path) -> dict[str, Any]:
     if value.get("schema_version") not in {
         "clir-data-expansion-smoke-v2",
         "clir-data-expansion-smoke-v3",
+        "clir-consistency-mechanical-smoke-v5",
     }:
-        raise ValueError("only CLIR data-expansion smoke v2/v3 is executable")
+        raise ValueError("only CLIR data-expansion smoke v2/v3 or C-v5 is executable")
     return value
 
 
@@ -84,6 +89,16 @@ def _git_head(path: str | Path) -> str:
         text=True,
     )
     return result.stdout.strip()
+
+
+def _git_dirty(path: str | Path) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(path), "status", "--porcelain"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return bool(result.stdout.strip())
 
 
 def _read_id_file(path: str | Path | None) -> list[str]:
@@ -108,6 +123,53 @@ def _read_id_file(path: str | Path | None) -> list[str]:
 def _project_path(path: str | Path) -> Path:
     resolved = Path(path)
     return resolved if resolved.is_absolute() else PROJECT_ROOT / resolved
+
+
+def _load_consistency_v5_protocol(path: str | Path) -> dict[str, Any]:
+    protocol = load_protocol(path)
+    if protocol.get("schema_version") != "clir-consistency-mechanical-smoke-v5":
+        raise ValueError("this command requires the frozen Consistency v5 protocol")
+    for parent in protocol["parents"]:
+        parent_path = _project_path(parent["path"])
+        if file_sha256(parent_path) != parent["file_sha256"]:
+            raise ValueError(f"v5 parent protocol hash mismatch: {parent_path}")
+    return protocol
+
+
+def _validate_v5_fresh_pool(protocol: Mapping[str, Any]) -> list[dict[str, Any]]:
+    fresh = protocol["fresh_pool"]
+    query_path = _project_path(fresh["query_manifest_path"])
+    if file_sha256(query_path) != fresh["query_manifest_file_sha256"]:
+        raise ValueError("v5 fresh query manifest file hash mismatch")
+    queries = read_jsonl(query_path)
+    query_ids = [str(row.get("query_id")) for row in queries]
+    if len(queries) != fresh["query_count"] or len(set(query_ids)) != len(queries):
+        raise ValueError("v5 fresh query manifest population is invalid")
+    if canonical_sha256(queries) != fresh["query_manifest_ordered_rows_sha256"]:
+        raise ValueError("v5 fresh query ordered-row hash mismatch")
+    if canonical_sha256(query_ids) != fresh["ordered_query_ids_sha256"]:
+        raise ValueError("v5 fresh ordered query-ID hash mismatch")
+    if any(
+        row.get("source") != fresh["source"]
+        or row.get("acquisition_batch") != fresh["acquisition_batch"]
+        for row in queries
+    ):
+        raise ValueError("v5 fresh pool source/acquisition batch is invalid")
+
+    previously_annotated: set[str] = set()
+    for source in fresh["previous_annotation_query_sources"]:
+        source_path = _project_path(source["path"])
+        if file_sha256(source_path) != source["file_sha256"]:
+            raise ValueError(f"v5 previous-annotation hash mismatch: {source_path}")
+        previously_annotated.update(
+            str(row["query_id"]) for row in read_jsonl(source_path)
+        )
+    overlap = sorted(set(query_ids) & previously_annotated)
+    if overlap:
+        raise ValueError(
+            f"v5 fresh pool overlaps {len(overlap)} previously annotated queries"
+        )
+    return queries
 
 
 def _prompt_for(question: str, template: str) -> str:
@@ -752,7 +814,11 @@ def command_rollout(args: argparse.Namespace) -> None:
     protocol = load_protocol(args.protocol)
     generation = protocol["generation"]
     queries = read_jsonl(args.queries)
-    if protocol["schema_version"] == "clir-data-expansion-smoke-v3":
+    if protocol["schema_version"] == "clir-consistency-mechanical-smoke-v5":
+        frozen_queries = _validate_v5_fresh_pool(protocol)
+        if canonical_sha256(queries) != canonical_sha256(frozen_queries):
+            raise ValueError("v5 rollout input is not the frozen fresh reserve pool")
+    elif protocol["schema_version"] == "clir-data-expansion-smoke-v3":
         allowed_counts = {
             int(generation["primary_new_query_count"]),
             int(generation["reserve_new_query_count"]),
@@ -818,6 +884,8 @@ def command_rollout(args: argparse.Namespace) -> None:
     provenance = {
         "protocol_sha256": canonical_sha256(protocol),
         "query_manifest_sha256": canonical_sha256(queries),
+        "code_commit": _git_head(PROJECT_ROOT),
+        "code_dirty": _git_dirty(PROJECT_ROOT),
         "model_id": generation["model_id"],
         "model_revision": generation["model_revision"],
         "tokenizer_revision": generation["tokenizer_revision"],
@@ -871,9 +939,13 @@ def command_rollout(args: argparse.Namespace) -> None:
         args.output,
         rows,
         schema_version=(
-            "clir-smoke-raw-rollouts-v3"
-            if protocol["schema_version"] == "clir-data-expansion-smoke-v3"
-            else "clir-smoke-raw-rollouts-v2"
+            "clir-consistency-mechanical-raw-rollouts-v5"
+            if protocol["schema_version"] == "clir-consistency-mechanical-smoke-v5"
+            else (
+                "clir-smoke-raw-rollouts-v3"
+                if protocol["schema_version"] == "clir-data-expansion-smoke-v3"
+                else "clir-smoke-raw-rollouts-v2"
+            )
         ),
         metadata={**provenance, **population},
     )
@@ -1065,6 +1137,11 @@ def command_materialize(args: argparse.Namespace) -> None:
     if not getattr(tokenizer, "is_fast", False):
         raise ValueError("unitizer v2 requires a fast tokenizer with offset mappings")
     raw_rows = read_jsonl(args.rollouts)
+    if protocol["schema_version"] == "clir-consistency-mechanical-smoke-v5":
+        fresh_queries = _validate_v5_fresh_pool(protocol)
+        expected_query_ids = {str(row["query_id"]) for row in fresh_queries}
+        if {str(row.get("query_id")) for row in raw_rows} != expected_query_ids:
+            raise ValueError("v5 rollouts do not cover the frozen fresh query pool")
     processed, report = materialize_rows(
         raw_rows,
         tokenizer,
@@ -1077,9 +1154,13 @@ def command_materialize(args: argparse.Namespace) -> None:
         args.output,
         processed,
         schema_version=(
-            "clir-smoke-materialized-rollouts-v3"
-            if protocol["schema_version"] == "clir-data-expansion-smoke-v3"
-            else "clir-smoke-materialized-rollouts-v2"
+            "clir-consistency-mechanical-materialized-v5"
+            if protocol["schema_version"] == "clir-consistency-mechanical-smoke-v5"
+            else (
+                "clir-smoke-materialized-rollouts-v3"
+                if protocol["schema_version"] == "clir-data-expansion-smoke-v3"
+                else "clir-smoke-materialized-rollouts-v2"
+            )
         ),
         metadata={
             **report,
@@ -2605,6 +2686,432 @@ def command_consistency_prompt_check(args: argparse.Namespace) -> None:
     print(json.dumps(report, indent=2))
 
 
+def command_consistency_v5_propose(args: argparse.Namespace) -> None:
+    protocol_path = Path(args.mechanical_protocol)
+    protocol = _load_consistency_v5_protocol(protocol_path)
+    fresh_queries = _validate_v5_fresh_pool(protocol)
+    rows = read_jsonl(args.processed)
+    generation = protocol["generation"]
+    population = validate_rollout_population(
+        rows, candidate_count=int(generation["candidate_count"])
+    )
+    expected_query_ids = {str(row["query_id"]) for row in fresh_queries}
+    actual_query_ids = {str(row["query_id"]) for row in rows}
+    if actual_query_ids != expected_query_ids:
+        raise ValueError("v5 processed rows do not match the frozen fresh pool")
+
+    mechanical = protocol["mechanical_filter"]
+    admitted, filter_report = build_mechanical_consistency_proposals(
+        rows,
+        source=str(protocol["fresh_pool"]["source"]),
+        min_material_units=int(mechanical["minimum_material_claim_units_per_view"]),
+        min_length_ratio=float(mechanical["token_length_ratio_min"]),
+        max_length_ratio=float(mechanical["token_length_ratio_max"]),
+        min_math_tokens=int(mechanical["math_trace_token_count_min_per_view"]),
+        min_numeric_tokens=int(mechanical["numeric_trace_token_count_min_per_view"]),
+        min_surface_bigrams=int(mechanical["surface_bigram_count_min_per_view"]),
+        min_math_similarity=float(mechanical["math_trace_similarity_min"]),
+        min_numeric_similarity=float(mechanical["numeric_trace_similarity_min"]),
+        min_surface_jaccard=float(mechanical["surface_bigram_jaccard_min"]),
+        max_surface_jaccard=float(mechanical["surface_bigram_jaccard_max"]),
+    )
+    output_dir = Path(args.output_dir)
+    admitted_manifest = publish_manifest(
+        output_dir / "mechanically_admitted_pairs.jsonl",
+        admitted,
+        schema_version="clir-consistency-mechanically-admitted-pairs-v5",
+        metadata={"protocol_sha256": file_sha256(protocol_path)},
+    )
+    target = int(protocol["pilot"]["natural_pair_count"])
+    report = {
+        "schema_version": "clir-consistency-mechanical-filter-report-v5",
+        "status": (
+            "READY_FOR_BLIND_PATH_AUDIT"
+            if len(admitted) >= target
+            else "STOP_MECHANICAL_YIELD_FAILURE"
+        ),
+        "annotation_allowed": len(admitted) >= target,
+        "eligible_for_training": False,
+        "protocol_sha256": file_sha256(protocol_path),
+        "processed_file_sha256": file_sha256(args.processed),
+        "fresh_query_count": len(fresh_queries),
+        "population": population,
+        "criteria": mechanical,
+        "filter": filter_report,
+        "natural_pair_target": target,
+        "mechanically_admitted_manifest": admitted_manifest,
+    }
+    if len(admitted) < target:
+        atomic_write_json(output_dir / "mechanical_filter_report.json", report)
+        print(json.dumps(report, indent=2))
+        raise SystemExit(2)
+
+    selected = admitted[:target]
+    selected_manifest = publish_manifest(
+        output_dir / "consistency_proposals.jsonl",
+        selected,
+        schema_version="clir-consistency-proposals-v5",
+        metadata={"protocol_sha256": file_sha256(protocol_path)},
+    )
+    rows_by_id = {str(row["id"]): row for row in rows}
+    natural_items: list[dict[str, Any]] = []
+    for proposal in selected:
+        item = consistency_item(proposal, rows_by_id)
+        item["audit_scope"] = "substantive_claim_validity_only"
+        natural_items.append(item)
+    natural_manifest = publish_manifest(
+        output_dir / "annotation_consistency_natural.jsonl",
+        natural_items,
+        schema_version="clir-consistency-path-audit-items-v5",
+        metadata={"protocol_sha256": file_sha256(protocol_path)},
+    )
+    report["selected_proposals"] = selected_manifest
+    report["natural_items"] = natural_manifest
+    atomic_write_json(output_dir / "mechanical_filter_report.json", report)
+    print(json.dumps(report, indent=2))
+
+
+def _consistency_v5_controls() -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """Return four hidden scope/factuality controls for the v5 path audit."""
+
+    cases = [
+        {
+            "problem": (
+                "Peyton has 3 children. Each gets one juice box on 5 school "
+                "days per week for 25 weeks. How many juice boxes are needed?"
+            ),
+            "left": (
+                "Each child needs 5 boxes per week and 125 over 25 weeks. "
+                "For 3 children, 125*3=375. The answer is 375."
+            ),
+            "right": (
+                "All three children use 3*5=15 boxes each week. Across 25 "
+                "weeks, 15*25=375, so 375 boxes are needed."
+            ),
+            "decision": "accept",
+        },
+        {
+            "problem": "Mina has 2 apples and receives 3 more. How many apples?",
+            "left": "Mina has 2 apples and gets 3 more. 2+3=5, so she has 5 apples.",
+            "right": "Mina has 2 apples and gets 3 more. 2+3=5, so she has 5 apples.",
+            "decision": "accept",
+        },
+        {
+            "problem": (
+                "There are 5 bags with 4 apples in each bag. How many apples "
+                "are there?"
+            ),
+            "left": "Five bags times four apples gives 5*4=20 apples.",
+            "right": (
+                "Five bags times four gives 5*4=20. Therefore there are 20 "
+                "oranges in the bags."
+            ),
+            "decision": "reject",
+        },
+        {
+            "problem": "A basket has 15 apples and 7 are removed. How many remain?",
+            "left": "Subtract the removed apples: 15-7=8, so 8 apples remain.",
+            "right": ("Subtracting gives 15-7=9 apples. The final answer is 8 apples."),
+            "decision": "reject",
+        },
+    ]
+    controls: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for index, case in enumerate(cases):
+        item_id = stable_priority("clir-consistency-v5-control", index)
+        item = {
+            "item_id": item_id,
+            "query_id": f"control:consistency-v5:{index}",
+            "problem": case["problem"],
+            "audit_scope": "substantive_claim_validity_only",
+            "left": {
+                "id": f"{item_id}:left",
+                "trajectory": case["left"],
+                "units": [],
+            },
+            "right": {
+                "id": f"{item_id}:right",
+                "trajectory": case["right"],
+                "units": [],
+            },
+        }
+        expected = validate_annotation(
+            "consistency",
+            {
+                "item_id": item_id,
+                "decision": case["decision"],
+                "confidence": "high",
+                "rationale": "hidden v5 factuality/scope control",
+            },
+            item,
+        )
+        controls.append((item, expected))
+    return controls
+
+
+def build_consistency_v5_packages(
+    natural_items: Sequence[Mapping[str, Any]], *, repeat_count: int
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    natural = [dict(item) for item in natural_items]
+    natural_ids = [str(item["item_id"]) for item in natural]
+    if len(natural_ids) != len(set(natural_ids)):
+        raise ValueError("v5 natural item IDs are not unique")
+    if not 0 <= repeat_count <= len(natural):
+        raise ValueError("v5 self-repeat count is invalid")
+    controls = _consistency_v5_controls()
+    control_items = [item for item, _ in controls]
+    repeat_sources = sorted(
+        natural,
+        key=lambda item: stable_priority(
+            "clir-consistency-v5-repeat-source", item["item_id"]
+        ),
+    )[:repeat_count]
+    repeats: list[dict[str, Any]] = []
+    repeat_map: list[dict[str, str]] = []
+    for item in repeat_sources:
+        repeated = dict(item)
+        repeat_id = stable_priority("clir-consistency-v5-repeat", item["item_id"])
+        repeated["item_id"] = repeat_id
+        repeats.append(repeated)
+        repeat_map.append(
+            {"original_item_id": str(item["item_id"]), "repeat_item_id": repeat_id}
+        )
+    package_a = [*natural, *control_items, *repeats]
+    package_b = [*natural, *control_items]
+    package_a.sort(
+        key=lambda item: stable_priority(
+            "clir-consistency-v5-package-a", item["item_id"]
+        )
+    )
+    package_b.sort(
+        key=lambda item: stable_priority(
+            "clir-consistency-v5-package-b", item["item_id"]
+        )
+    )
+    private = {
+        "schema_version": "clir-consistency-v5-private-package-manifest",
+        "warning": "PRIVATE: never send this file to annotators",
+        "natural_item_ids": natural_ids,
+        "controls": [
+            {"item_id": item["item_id"], "expected_annotation": expected}
+            for item, expected in controls
+        ],
+        "self_repeats_a": repeat_map,
+        "package_a_ids_sha256": canonical_sha256(
+            [item["item_id"] for item in package_a]
+        ),
+        "package_b_ids_sha256": canonical_sha256(
+            [item["item_id"] for item in package_b]
+        ),
+    }
+    return {"a": package_a, "b": package_b}, private
+
+
+def command_consistency_v5_package(args: argparse.Namespace) -> None:
+    protocol_path = Path(args.mechanical_protocol)
+    protocol = _load_consistency_v5_protocol(protocol_path)
+    prompt_path = _project_path(protocol["annotation"]["prompt_path"])
+    if file_sha256(prompt_path) != protocol["annotation"]["prompt_sha256"]:
+        raise ValueError("v5 annotation prompt SHA-256 mismatch")
+    items_path = Path(args.items)
+    manifest_path = items_path.with_suffix(items_path.suffix + ".manifest.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("file_sha256") != file_sha256(items_path):
+        raise ValueError("v5 natural item manifest/file mismatch")
+    natural = read_jsonl(items_path)
+    expected_count = int(protocol["pilot"]["natural_pair_count"])
+    if len(natural) != expected_count:
+        raise ValueError("v5 natural item count differs from the frozen pilot")
+    packages, private = build_consistency_v5_packages(
+        natural, repeat_count=int(protocol["annotation"]["a_self_repeat_count"])
+    )
+    output_dir = Path(args.output_dir)
+    manifests = {}
+    for slot in ("a", "b"):
+        manifests[slot] = publish_manifest(
+            output_dir / slot / "consistency.jsonl",
+            packages[slot],
+            schema_version=f"clir-consistency-v5-blind-package-{slot}",
+            metadata={"protocol_sha256": file_sha256(protocol_path)},
+        )
+    private["protocol_sha256"] = file_sha256(protocol_path)
+    private["natural_items_file_sha256"] = file_sha256(items_path)
+    atomic_write_json(output_dir / "PRIVATE_manifest.json", private)
+    print(
+        json.dumps(
+            {
+                "status": "READY_FOR_TWO_BLIND_PATH_AUDITS",
+                "natural_items": len(natural),
+                "package_manifests": manifests,
+                "private_manifest": str(
+                    (output_dir / "PRIVATE_manifest.json").resolve()
+                ),
+            },
+            indent=2,
+        )
+    )
+
+
+def evaluate_consistency_v5_audit(
+    *,
+    labels_a: Sequence[Mapping[str, Any]],
+    labels_b: Sequence[Mapping[str, Any]],
+    private: Mapping[str, Any],
+    gates: Mapping[str, Any],
+) -> dict[str, Any]:
+    natural_ids = set(str(value) for value in private["natural_item_ids"])
+    by_a = {str(row["item_id"]): row for row in labels_a}
+    by_b = {str(row["item_id"]): row for row in labels_b}
+    natural_a = [by_a[item_id] for item_id in sorted(natural_ids)]
+    natural_b = [by_b[item_id] for item_id in sorted(natural_ids)]
+    agreement = agreement_report("consistency", natural_a, natural_b)
+    expected_prefixes = {
+        "accept": ("[ACCEPT_VALID]",),
+        "reject": ("[REJECT_ERROR]",),
+        "review": ("[REVIEW]",),
+    }
+    results: list[dict[str, Any]] = []
+
+    def add(name: str, passed: bool, **details: Any) -> None:
+        results.append(
+            {"name": name, "status": "PASS" if passed else "FAIL", **details}
+        )
+
+    add(
+        "natural_decision_agreement_count",
+        agreement["exact_target_agree"]
+        >= int(gates["natural_decision_agreement_min_count"]),
+        value=agreement["exact_target_agree"],
+        threshold=int(gates["natural_decision_agreement_min_count"]),
+        denominator=len(natural_ids),
+    )
+    annotator_reports: dict[str, Any] = {}
+    for slot, labels, natural_labels in (
+        ("a", labels_a, natural_a),
+        ("b", labels_b, natural_b),
+    ):
+        natural_counts = Counter(str(row["decision"]) for row in natural_labels)
+        invalid_prefixes = [
+            str(row["item_id"])
+            for row in labels
+            if not str(row["rationale"]).startswith(
+                expected_prefixes[str(row["decision"])]
+            )
+        ]
+        control_correct = sum(
+            (
+                by_a[str(control["item_id"])]["decision"]
+                == control["expected_annotation"]["decision"]
+                if slot == "a"
+                else by_b[str(control["item_id"])]["decision"]
+                == control["expected_annotation"]["decision"]
+            )
+            for control in private["controls"]
+        )
+        annotator_reports[slot] = {
+            "natural_decision_counts": dict(natural_counts),
+            "control_correct": control_correct,
+            "invalid_rationale_prefix_item_ids": invalid_prefixes,
+        }
+        add(
+            f"natural_review_count_{slot}",
+            natural_counts["review"] <= int(gates["review_count_max_per_annotator"]),
+            value=natural_counts["review"],
+            threshold=int(gates["review_count_max_per_annotator"]),
+        )
+        add(
+            f"hidden_controls_{slot}",
+            control_correct == len(private["controls"]),
+            value=control_correct,
+            threshold=len(private["controls"]),
+        )
+        add(
+            f"rationale_prefixes_{slot}",
+            not invalid_prefixes,
+            invalid_item_ids=invalid_prefixes,
+        )
+
+    repeat_correct = sum(
+        by_a[repeat["original_item_id"]]["decision"]
+        == by_a[repeat["repeat_item_id"]]["decision"]
+        for repeat in private["self_repeats_a"]
+    )
+    add(
+        "a_self_repeat_decisions",
+        repeat_correct == len(private["self_repeats_a"]),
+        value=repeat_correct,
+        threshold=len(private["self_repeats_a"]),
+    )
+    auto_accept_ids = sorted(
+        item_id
+        for item_id in natural_ids
+        if by_a[item_id]["decision"] == by_b[item_id]["decision"] == "accept"
+    )
+    add(
+        "auto_agree_accept_count",
+        len(auto_accept_ids) >= int(gates["auto_agree_accept_min_count"]),
+        value=len(auto_accept_ids),
+        threshold=int(gates["auto_agree_accept_min_count"]),
+    )
+    failed = [row["name"] for row in results if row["status"] == "FAIL"]
+    return {
+        "schema_version": "clir-consistency-mechanical-audit-report-v5",
+        "status": (
+            "PASS_FRESH_MECHANICAL_AUDIT"
+            if not failed
+            else "STOP_FRESH_MECHANICAL_AUDIT_FAILURE"
+        ),
+        "failed_gate_names": failed,
+        "scaled_protocol_allowed": not failed,
+        "eligible_for_training": False,
+        "third_model_allowed": False,
+        "natural_agreement": agreement,
+        "auto_agree_accept_item_ids": auto_accept_ids,
+        "annotators": annotator_reports,
+        "gates": results,
+    }
+
+
+def command_consistency_v5_check(args: argparse.Namespace) -> None:
+    protocol_path = Path(args.mechanical_protocol)
+    protocol = _load_consistency_v5_protocol(protocol_path)
+    package_dir = Path(args.package_dir)
+    private_path = package_dir / "PRIVATE_manifest.json"
+    private = json.loads(private_path.read_text(encoding="utf-8"))
+    if private.get("protocol_sha256") != file_sha256(protocol_path):
+        raise ValueError("v5 private package manifest binds a different protocol")
+    items_a = read_jsonl(package_dir / "a" / "consistency.jsonl")
+    items_b = read_jsonl(package_dir / "b" / "consistency.jsonl")
+    if (
+        canonical_sha256([item["item_id"] for item in items_a])
+        != private["package_a_ids_sha256"]
+    ):
+        raise ValueError("v5 package A item population/hash mismatch")
+    if (
+        canonical_sha256([item["item_id"] for item in items_b])
+        != private["package_b_ids_sha256"]
+    ):
+        raise ValueError("v5 package B item population/hash mismatch")
+    labels_a = _validate_label_file("consistency", args.labels_a, items_a)
+    labels_b = _validate_label_file("consistency", args.labels_b, items_b)
+    report = evaluate_consistency_v5_audit(
+        labels_a=labels_a,
+        labels_b=labels_b,
+        private=private,
+        gates=protocol["raw_gates"],
+    )
+    report["protocol_sha256"] = file_sha256(protocol_path)
+    report["private_manifest_sha256"] = file_sha256(private_path)
+    report["labels_a_sha256"] = file_sha256(args.labels_a)
+    report["labels_b_sha256"] = file_sha256(args.labels_b)
+    output = (
+        Path(args.output)
+        if args.output
+        else _project_path(protocol["outputs"]["audit_report"])
+    )
+    atomic_write_json(output, report)
+    print(json.dumps(report, indent=2))
+
+
 def _load_and_validate_adjudications(
     task: str,
     path: str | Path | None,
@@ -3334,6 +3841,44 @@ def build_parser() -> argparse.ArgumentParser:
     )
     consistency_prompt_check.add_argument("--output")
     consistency_prompt_check.set_defaults(func=command_consistency_prompt_check)
+
+    consistency_v5_propose = commands.add_parser(
+        "consistency-v5-propose",
+        help="apply the frozen mechanical C filter to a fresh v5 pool",
+    )
+    consistency_v5_propose.add_argument(
+        "--mechanical-protocol",
+        default=str(DEFAULT_CONSISTENCY_MECHANICAL_PROTOCOL),
+    )
+    consistency_v5_propose.add_argument("--processed", required=True)
+    consistency_v5_propose.add_argument("--output-dir", required=True)
+    consistency_v5_propose.set_defaults(func=command_consistency_v5_propose)
+
+    consistency_v5_package = commands.add_parser(
+        "consistency-v5-package",
+        help="add v5 factuality controls and A self-repeats to blind packages",
+    )
+    consistency_v5_package.add_argument(
+        "--mechanical-protocol",
+        default=str(DEFAULT_CONSISTENCY_MECHANICAL_PROTOCOL),
+    )
+    consistency_v5_package.add_argument("--items", required=True)
+    consistency_v5_package.add_argument("--output-dir", required=True)
+    consistency_v5_package.set_defaults(func=command_consistency_v5_package)
+
+    consistency_v5_check = commands.add_parser(
+        "consistency-v5-check",
+        help="validate two blind v5 factual-path audits without adjudication",
+    )
+    consistency_v5_check.add_argument(
+        "--mechanical-protocol",
+        default=str(DEFAULT_CONSISTENCY_MECHANICAL_PROTOCOL),
+    )
+    consistency_v5_check.add_argument("--package-dir", required=True)
+    consistency_v5_check.add_argument("--labels-a", required=True)
+    consistency_v5_check.add_argument("--labels-b", required=True)
+    consistency_v5_check.add_argument("--output")
+    consistency_v5_check.set_defaults(func=command_consistency_v5_check)
 
     adjudication_package = commands.add_parser(
         "adjudication-package",

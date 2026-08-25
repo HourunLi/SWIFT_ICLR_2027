@@ -1400,6 +1400,265 @@ def _near_copy(left: str, right: str, threshold: float = 0.92) -> bool:
     return SequenceMatcher(None, left_norm, right_norm).ratio() >= threshold
 
 
+_CONSISTENCY_MATH_REGION = re.compile(r"\$[^$]*\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)")
+_CONSISTENCY_MATH_TOKEN = re.compile(r"[a-z]+|[-+]?\d+(?:\.\d+)?|[=+*/^%()-]")
+_CONSISTENCY_SURFACE_STOPWORDS = frozenset(
+    """
+    a an and answer are as be by calculate can determine final find first for
+    fourth from has have in is it let lets need now of on second so step that
+    the then therefore third this thus to total using we which will with
+    """.split()
+)
+
+
+def _consistency_normalize(text: str) -> str:
+    return unicodedata.normalize("NFKC", text).casefold()
+
+
+def _consistency_math_trace(text: str) -> list[str]:
+    """Extract a conservative ordered math-token trace from equations/TeX."""
+
+    normalized = (
+        _consistency_normalize(text)
+        .replace(r"\times", "*")
+        .replace(r"\cdot", "*")
+        .replace("×", "*")
+        .replace("÷", "/")
+    )
+    tokens: list[str] = []
+    for line in normalized.splitlines():
+        regions = _CONSISTENCY_MATH_REGION.findall(line)
+        if "=" not in line and not regions:
+            continue
+        payload = " ".join(regions) if regions else line
+        payload = re.sub(r"\\(?:boxed|dfrac|frac|left|right|text|tfrac)", " ", payload)
+        tokens.extend(_CONSISTENCY_MATH_TOKEN.findall(payload))
+    return tokens
+
+
+def _consistency_numeric_trace(text: str) -> list[str]:
+    return [
+        re.sub(r"[\s,]", "", literal)
+        for literal in _NUMBER.findall(_consistency_normalize(text))
+    ]
+
+
+def _consistency_surface_tokens(text: str) -> list[str]:
+    normalized = _CONSISTENCY_MATH_REGION.sub(" ", _consistency_normalize(text))
+    normalized = _NUMBER.sub(" ", normalized)
+    normalized = re.sub(r"[^a-z]+", " ", normalized)
+    return [
+        word
+        for word in normalized.split()
+        if len(word) > 1 and word not in _CONSISTENCY_SURFACE_STOPWORDS
+    ]
+
+
+def _sequence_similarity(left: Sequence[str], right: Sequence[str]) -> float:
+    if not left and not right:
+        return 1.0
+    return SequenceMatcher(None, left, right).ratio()
+
+
+def _bigram_jaccard(left: Sequence[str], right: Sequence[str]) -> float:
+    left_bigrams = {
+        (left[index], left[index + 1]) for index in range(max(0, len(left) - 1))
+    }
+    right_bigrams = {
+        (right[index], right[index + 1]) for index in range(max(0, len(right) - 1))
+    }
+    union = left_bigrams | right_bigrams
+    return len(left_bigrams & right_bigrams) / len(union) if union else 1.0
+
+
+def consistency_mechanical_metrics(
+    left_response: str,
+    right_response: str,
+    *,
+    left_token_count: int,
+    right_token_count: int,
+) -> dict[str, Any]:
+    """Return the frozen v5 math/path and non-math surface diagnostics."""
+
+    if min(left_token_count, right_token_count) <= 0:
+        raise ValueError("consistency token counts must be positive")
+    left_math = _consistency_math_trace(left_response)
+    right_math = _consistency_math_trace(right_response)
+    left_numeric = _consistency_numeric_trace(left_response)
+    right_numeric = _consistency_numeric_trace(right_response)
+    left_surface = _consistency_surface_tokens(left_response)
+    right_surface = _consistency_surface_tokens(right_response)
+    return {
+        "metric_version": "clir_consistency_mechanical_v1",
+        "token_length_ratio": max(left_token_count, right_token_count)
+        / min(left_token_count, right_token_count),
+        "math_trace_similarity": _sequence_similarity(left_math, right_math),
+        "numeric_trace_similarity": _sequence_similarity(left_numeric, right_numeric),
+        "surface_bigram_jaccard": _bigram_jaccard(left_surface, right_surface),
+        "left_math_token_count": len(left_math),
+        "right_math_token_count": len(right_math),
+        "left_numeric_token_count": len(left_numeric),
+        "right_numeric_token_count": len(right_numeric),
+        "left_surface_bigram_count": max(0, len(left_surface) - 1),
+        "right_surface_bigram_count": max(0, len(right_surface) - 1),
+    }
+
+
+def build_mechanical_consistency_proposals(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    source: str,
+    min_material_units: int,
+    min_length_ratio: float,
+    max_length_ratio: float,
+    min_math_tokens: int,
+    min_numeric_tokens: int,
+    min_surface_bigrams: int,
+    min_math_similarity: float,
+    min_numeric_similarity: float,
+    min_surface_jaccard: float,
+    max_surface_jaccard: float,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Build one deterministic mechanically admitted C pair per query."""
+
+    if not 0 <= min_surface_jaccard <= max_surface_jaccard <= 1:
+        raise ValueError("surface Jaccard band must lie inside [0, 1]")
+    if not 0 <= min_math_similarity <= 1:
+        raise ValueError("math similarity threshold must lie inside [0, 1]")
+    if not 0 <= min_numeric_similarity <= 1:
+        raise ValueError("numeric similarity threshold must lie inside [0, 1]")
+    if not 1 <= min_length_ratio <= max_length_ratio:
+        raise ValueError("length-ratio band is invalid")
+
+    by_query: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    mechanically_eligible_candidates = 0
+    for row in rows:
+        if row.get("source") != source:
+            continue
+        if not _mechanism_eligible(row, min_material_units=min_material_units):
+            continue
+        if row.get("numeric_value_match") != 1:
+            continue
+        mechanically_eligible_candidates += 1
+        by_query[str(row["query_id"])].append(row)
+
+    rejection_counts: Counter[str] = Counter()
+    admitted_by_query: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    considered_pairs = 0
+    for query_id, query_rows in by_query.items():
+        ordered = sorted(query_rows, key=lambda row: int(row["candidate_index"]))
+        for left_index, left in enumerate(ordered):
+            for right in ordered[left_index + 1 :]:
+                considered_pairs += 1
+                if left.get("normalized_candidate_answer") != right.get(
+                    "normalized_candidate_answer"
+                ):
+                    rejection_counts["normalized_answer_mismatch"] += 1
+                    continue
+                metrics = consistency_mechanical_metrics(
+                    str(left["response"]),
+                    str(right["response"]),
+                    left_token_count=len(left["output_token_ids"]),
+                    right_token_count=len(right["output_token_ids"]),
+                )
+                checks = (
+                    (
+                        metrics["token_length_ratio"] >= min_length_ratio,
+                        "length_ratio_below_min",
+                    ),
+                    (
+                        metrics["token_length_ratio"] <= max_length_ratio,
+                        "length_ratio_above_max",
+                    ),
+                    (
+                        min(
+                            metrics["left_math_token_count"],
+                            metrics["right_math_token_count"],
+                        )
+                        >= min_math_tokens,
+                        "insufficient_math_trace",
+                    ),
+                    (
+                        min(
+                            metrics["left_numeric_token_count"],
+                            metrics["right_numeric_token_count"],
+                        )
+                        >= min_numeric_tokens,
+                        "insufficient_numeric_trace",
+                    ),
+                    (
+                        min(
+                            metrics["left_surface_bigram_count"],
+                            metrics["right_surface_bigram_count"],
+                        )
+                        >= min_surface_bigrams,
+                        "insufficient_surface_trace",
+                    ),
+                    (
+                        metrics["math_trace_similarity"] >= min_math_similarity,
+                        "math_similarity_below_min",
+                    ),
+                    (
+                        metrics["numeric_trace_similarity"] >= min_numeric_similarity,
+                        "numeric_similarity_below_min",
+                    ),
+                    (
+                        metrics["surface_bigram_jaccard"] >= min_surface_jaccard,
+                        "surface_similarity_below_min",
+                    ),
+                    (
+                        metrics["surface_bigram_jaccard"] <= max_surface_jaccard,
+                        "surface_similarity_above_max",
+                    ),
+                )
+                failed_reason = next(
+                    (reason for passed, reason in checks if not passed), None
+                )
+                if failed_reason is not None:
+                    rejection_counts[failed_reason] += 1
+                    continue
+                pair_priority = stable_priority(
+                    "clir-C-mechanical-pair-v1",
+                    query_id,
+                    left["candidate_index"],
+                    right["candidate_index"],
+                )
+                admitted_by_query[query_id].append(
+                    {
+                        "schema_version": "clir-consistency-proposal-v5",
+                        "proposal_id": pair_priority,
+                        "query_id": query_id,
+                        "left_id": str(left["id"]),
+                        "right_id": str(right["id"]),
+                        "left_candidate_index": int(left["candidate_index"]),
+                        "right_candidate_index": int(right["candidate_index"]),
+                        "mechanical_metrics": metrics,
+                        "selection_priority": pair_priority,
+                    }
+                )
+
+    chosen = [
+        min(pairs, key=lambda row: row["selection_priority"])
+        for pairs in admitted_by_query.values()
+    ]
+    chosen.sort(
+        key=lambda row: stable_priority("clir-C-mechanical-query-v1", row["query_id"])
+    )
+    report = {
+        "metric_version": "clir_consistency_mechanical_v1",
+        "input_rows": len(rows),
+        "mechanically_eligible_candidates": mechanically_eligible_candidates,
+        "queries_with_eligible_candidates": len(by_query),
+        "considered_pairs": considered_pairs,
+        "admitted_pairs_before_one_per_query": sum(
+            len(pairs) for pairs in admitted_by_query.values()
+        ),
+        "admitted_query_distinct_pairs": len(chosen),
+        "first_failure_counts": dict(sorted(rejection_counts.items())),
+    }
+    return chosen, report
+
+
 def build_consistency_proposals(
     rows: Sequence[Mapping[str, Any]],
     *,
@@ -2084,12 +2343,14 @@ __all__ = [
     "atomic_write_json",
     "atomic_write_jsonl",
     "boxed_answers",
+    "build_mechanical_consistency_proposals",
     "build_consistency_proposals",
     "build_h_prior_proposals",
     "canonical_json",
     "canonical_sha256",
     "check_numeric_response",
     "cohen_kappa",
+    "consistency_mechanical_metrics",
     "consistency_item",
     "extract_math_numeric_reference",
     "file_sha256",

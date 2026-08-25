@@ -2,7 +2,7 @@
 
 冻结日期：2026-08-25 UTC
 
-状态：`review_integrated_pre_execution`
+状态：`real_source_export_and_tokenizer_audit_complete_pending_blind_dedup`
 
 证据等级：`pipeline smoke`
 
@@ -109,6 +109,8 @@ asdiv-a:<Problem-ID>
 2. 对题目做 Unicode、空白、大小写和标点规范化，完全相同者聚为一簇；
 3. 用数字/实体占位后的模板签名与冻结相似度检索器生成 near-duplicate candidate pairs；AI 只裁候选对，
    不自由浏览题库；
+   两端都已在历史排除表中的 pair 不送标；只有一端被排除的 pair 必须保留，因为 duplicate 决定会把另一端
+   一并移出候选池；
 4. 一簇内保留 `sha256("clir-dedup-v2|" + query_id)` 最小者，其余删除；所有候选对、决定和 cluster ID
    落日志，不使用含糊的“删除后出现者”；
 5. 合格池按 `sha256("clir-smoke-v2|" + query_id)` 排序，分别取 60/40；不按 Phi 正确率、错误率、
@@ -446,3 +448,138 @@ checksum 与 query-sharded completion；不就地覆盖任何历史 payload。
   消费旧 16-row/500-query dev 调权重。
 
 工程闭环、auxiliary target 可学性和 held-out Best-of-N 效果必须继续分开报告。
+
+## 16. 2026-08-25 实现状态与唯一执行入口
+
+v2 文本契约现已落到 [`../prepare_clir_smoke.py`](../prepare_clir_smoke.py) 与
+[`../src/clir_smoke.py`](../src/clir_smoke.py)。实现包含：固定源读取与去重、numeric checker、完整输出
+token 轴 unitizer、C/H/P proposal、三类 schema validator、隐藏控制项、A 自重复、15% 自动一致抽检、
+第三模型先独立后匿名裁决、预注册硬门和最终 token target materialization。
+
+本地确定性 fixture 已跑通 8 queries/64 rows：64/64 exact-token 分区通过，32 条 numeric match、32 条
+mismatch，2 个 C proposal、4 个 H/P proposal、一次第三模型裁决及最终 2 positive+2 clean 均闭环。
+真实源也已导出为 7473 条 GSM8K train +1218 条 ASDiv-A，并汇总 1108 个历史 query exclusions；29 对
+near-duplicate 中 2 对因两端均已排除而跳过，当前冻结送标分母为 27 对。固定 Phi tokenizer 边界回归已
+通过。Phi rollout、C/H/P 双 AI 标注、hidden-state 抽取和训练仍未开始。
+
+唯一入口按以下顺序执行（所有产物都在 Git 忽略的 `run_artifacts/`）：
+
+```bash
+CLIR_ROOT=/prodcpfs/user/panzhixin/ICLR_2027
+SMOKE_ROOT="$CLIR_ROOT/run_artifacts/data_expansion_smoke_v2"
+ASDIV_ROOT="$CLIR_ROOT/run_artifacts/vendor/nlu-asdiv-dataset"
+cd "$CLIR_ROOT"
+
+python prepare_clir_smoke.py fixture \
+  --output-dir "$SMOKE_ROOT/fixture"
+
+git clone https://github.com/chaochun/nlu-asdiv-dataset.git "$ASDIV_ROOT"
+git -C "$ASDIV_ROOT" checkout 883f90a9a65bf00304ba8f37423910fe743abc47
+
+python prepare_clir_smoke.py sources \
+  --asdiv-repository "$ASDIV_ROOT" \
+  --output "$SMOKE_ROOT/sources/all.jsonl"
+python prepare_clir_smoke.py collect-exclusions \
+  --input "$CLIR_ROOT/run_artifacts/stage1_small_scale_v1/train_rollouts.jsonl" \
+  --input "$CLIR_ROOT/run_artifacts/stage1_small_scale_v1/validation_rollouts.jsonl" \
+  --input "$CLIR_ROOT/run_artifacts/stage1b_v1/validation_rollouts.jsonl" \
+  --input "$CLIR_ROOT/run_artifacts/jp_h_blind_validation_v1/acquisition/source_questions_v1.jsonl" \
+  --input "$CLIR_ROOT/run_artifacts/on_policy_pilot0_v1/candidate_build/candidates.jsonl" \
+  --output "$SMOKE_ROOT/sources/prior_exclusions.jsonl"
+python prepare_clir_smoke.py dedup-candidates \
+  --sources "$SMOKE_ROOT/sources/all.jsonl" \
+  --excluded-query-ids "$SMOKE_ROOT/sources/prior_exclusions.jsonl" \
+  --output "$SMOKE_ROOT/dedup/candidates.jsonl"
+```
+
+同一份 `dedup/candidates.jsonl` 要在互不相见的上下文中分别交给 A/B。收到完整 A/B 输出后先生成第三模型
+盲包；它不包含 A/B 的决定：
+
+```bash
+python prepare_clir_smoke.py dedup-triage \
+  --candidates "$SMOKE_ROOT/dedup/candidates.jsonl" \
+  --labels-a "$SMOKE_ROOT/dedup/labels_a.jsonl" \
+  --labels-b "$SMOKE_ROOT/dedup/labels_b.jsonl" \
+  --output "$SMOKE_ROOT/dedup/third_independent_items.jsonl"
+```
+
+第三个不同系列模型独立判断 `third_independent_items.jsonl`，输出中必须记录
+`independent_answer_completed=true`。然后运行：
+
+`annotation/model_roster.json` 必须填写真实调用身份，不得把占位符原样留下：
+
+```json
+{
+  "primary_annotators": [
+    {"provider": "<provider-a>", "model_id": "<model-a>", "model_family": "<family-a>", "revision": "<revision-or-date-a>"},
+    {"provider": "<provider-b>", "model_id": "<model-b>", "model_family": "<family-b>", "revision": "<revision-or-date-b>"}
+  ],
+  "adjudicator": {"provider": "<provider-c>", "model_id": "<model-c>", "model_family": "<family-c>", "revision": "<revision-or-date-c>"}
+}
+```
+
+三种 `model_family` 必须彼此不同且都不是 Phi；实际原始响应和调用时间留在本地审计目录。
+
+```bash
+python prepare_clir_smoke.py resolve-dedup \
+  --candidates "$SMOKE_ROOT/dedup/candidates.jsonl" \
+  --labels-a "$SMOKE_ROOT/dedup/labels_a.jsonl" \
+  --labels-b "$SMOKE_ROOT/dedup/labels_b.jsonl" \
+  --adjudications "$SMOKE_ROOT/dedup/adjudications.jsonl" \
+  --roster "$SMOKE_ROOT/annotation/model_roster.json" \
+  --output "$SMOKE_ROOT/dedup/decisions.jsonl"
+python prepare_clir_smoke.py freeze \
+  --sources "$SMOKE_ROOT/sources/all.jsonl" \
+  --near-duplicate-decisions "$SMOKE_ROOT/dedup/decisions.jsonl" \
+  --excluded-query-ids "$SMOKE_ROOT/sources/prior_exclusions.jsonl" \
+  --output-dir "$SMOKE_ROOT/frozen"
+python prepare_clir_smoke.py rollout \
+  --queries "$SMOKE_ROOT/frozen/query_manifest.jsonl" \
+  --output "$SMOKE_ROOT/rollouts/raw.jsonl"
+python prepare_clir_smoke.py materialize \
+  --rollouts "$SMOKE_ROOT/rollouts/raw.jsonl" \
+  --output "$SMOKE_ROOT/materialized/rows.jsonl"
+python prepare_clir_smoke.py propose \
+  --processed "$SMOKE_ROOT/materialized/rows.jsonl" \
+  --output-dir "$SMOKE_ROOT/proposals"
+python prepare_clir_smoke.py package \
+  --items-dir "$SMOKE_ROOT/proposals" \
+  --output-dir "$SMOKE_ROOT/blind_packages"
+```
+
+A 和 B 分别收到自己的目录，H 与 Prior 各开独立上下文；复制用提示词见
+[`../configs/data_expansion_smoke_v2/annotation_prompts.md`](../configs/data_expansion_smoke_v2/annotation_prompts.md)。
+保存 A/B 全量输出后：
+
+```bash
+python prepare_clir_smoke.py triage \
+  --items-dir "$SMOKE_ROOT/proposals" \
+  --package-dir "$SMOKE_ROOT/blind_packages" \
+  --labels-a-dir "$SMOKE_ROOT/annotation/labels_a" \
+  --labels-b-dir "$SMOKE_ROOT/annotation/labels_b" \
+  --output-dir "$SMOKE_ROOT/third_triage"
+python prepare_clir_smoke.py adjudication-package \
+  --items-dir "$SMOKE_ROOT/proposals" \
+  --package-dir "$SMOKE_ROOT/blind_packages" \
+  --labels-a-dir "$SMOKE_ROOT/annotation/labels_a" \
+  --labels-b-dir "$SMOKE_ROOT/annotation/labels_b" \
+  --triage-dir "$SMOKE_ROOT/third_triage" \
+  --third-independent-labels-dir "$SMOKE_ROOT/annotation/third_independent" \
+  --output-dir "$SMOKE_ROOT/adjudication_packages"
+python prepare_clir_smoke.py finalize \
+  --processed "$SMOKE_ROOT/materialized/rows.jsonl" \
+  --items-dir "$SMOKE_ROOT/proposals" \
+  --package-dir "$SMOKE_ROOT/blind_packages" \
+  --labels-a-dir "$SMOKE_ROOT/annotation/labels_a" \
+  --labels-b-dir "$SMOKE_ROOT/annotation/labels_b" \
+  --triage-dir "$SMOKE_ROOT/third_triage" \
+  --third-independent-labels-dir "$SMOKE_ROOT/annotation/third_independent" \
+  --adjudication-package-dir "$SMOKE_ROOT/adjudication_packages" \
+  --adjudication-dir "$SMOKE_ROOT/annotation/adjudications" \
+  --roster "$SMOKE_ROOT/annotation/model_roster.json" \
+  --output-dir "$SMOKE_ROOT/final"
+```
+
+`finalize` 只有在全部预注册硬门通过时才发布 `pre_extraction.jsonl`；失败只写
+`failed_finalization_report.json`，不得继续抽 hidden states。执行环境固定 `datasets==3.6.0`、
+`vllm==0.5.3.post1` 和 `numpy==1.26.4`，脚本会拒绝不同 vLLM/datasets 版本。

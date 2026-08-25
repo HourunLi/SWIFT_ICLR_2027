@@ -100,7 +100,7 @@ MSE、detach、mask 与 shared-gradient 路径，但 clean 的外层 `prior_weig
 [`docs/handoff.md`](docs/handoff.md)。扩大数据后将
 固定 `.25` 重做独立 `off/on` 诊断，而不在当前 dev 上继续调参。
 
-## 2026-08-25 多题源扩量 smoke v2 已吸收双审查
+## 2026-08-25 多题源扩量 smoke v2：真实源已导出，等待互盲去重
 
 v1 收到两份互盲外部 AI 审查后被共同判为 block，且从未执行，状态是
 `superseded_before_execution`。v1 原文、审查提示词和逐项裁决已从当前分支顶端移出；最后一份
@@ -108,9 +108,16 @@ v1 收到两份互盲外部 AI 审查后被共同判为 block，且从未执行�
 
 修订后的可执行规格是
 [`docs/data_expansion_smoke_protocol_v2.md`](docs/data_expansion_smoke_protocol_v2.md)，机器可读配置为
-[`configs/data_expansion_smoke_v2/protocol.json`](configs/data_expansion_smoke_v2/protocol.json)。当前状态
-`review_integrated_pre_execution`：规则已整合，但 rollout/checker/unitizer/双标流水线仍未实现或运行，
-不能写成新增数据已经可用。
+[`configs/data_expansion_smoke_v2/protocol.json`](configs/data_expansion_smoke_v2/protocol.json)。流水线、checker
+v2、unitizer v2、C/H/P proposal、隐藏控制项、自一致性、第三模型先独立后匿名裁决和 fail-closed
+finalizer 已实现；8-query/64-row 确定性 fixture 已通过。
+
+真实 acquisition 已推进到去重门：本地已按固定 revision 导出 `7473` 条 GSM8K train 和 `1218` 条
+ASDiv-A，共 `8691` 条；从旧 outcome/ranking/mechanism population 汇总并规范化出 `1108` 个不可复用的
+GSM8K query ID。冻结检索器找到 29 对 near-duplicate candidate，其中 2 对的两端都已在历史排除表内，
+无需付费标注；当前 hash 固定、真正需要 A/B 判断的是 `27` 对。固定 Phi tokenizer 的小数/货币、缩写、
+LaTeX/Unicode、空行和 terminal EOS 回归也已通过。真实 800 条 Phi rollout、正式 C/H/P 双标、
+hidden-state 抽取和训练仍未开始，因此新增数据还不可用于训练。
 
 v2 把 train-only query 池扩为 `60 GSM8K +40 ASDiv-A`，每题 8 条 Phi rollout，共 800 raw rows；
 自然标注预算仍只送 40 个 Consistency proposals 和同一批 60 个 H/P proposals。所有 proposal 的机械
@@ -132,6 +139,21 @@ set**；独立来源泛化还需另选 holdout，或以后做密封 seed-family 
 numeric checker、dual-AI Silver、盲裁和 exact-token materialization 流水线达到预注册门，不证明三模块
 提高 Best-of-N。当前 `.25` gate 继续作为默认方法身份保留，但本轮不训练、不调参。
 
+离线验收入口：
+
+```bash
+python prepare_clir_smoke.py fixture \
+  --output-dir run_artifacts/smoke_v2_fixture
+```
+
+正式执行的完整逐步命令及 A/B/第三模型分发顺序在
+[`docs/data_expansion_smoke_protocol_v2.md`](docs/data_expansion_smoke_protocol_v2.md#16-2026-08-25-实现状态与唯一执行入口)；
+可复制提示词在
+[`configs/data_expansion_smoke_v2/annotation_prompts.md`](configs/data_expansion_smoke_v2/annotation_prompts.md)。
+当前唯一外部动作是：把本地 `run_artifacts/data_expansion_smoke_v2/dedup/candidates.jsonl` 分别发给两个
+不同模型系列的 AI，二者不能共享上下文或看到对方答案。A/B 回传完整 27 行后先运行 `dedup-triage`，只把
+分歧/低置信行交给第三个不同系列模型独立判断，再冻结 60/40 query 池并启动 800-row rollout。
+
 ## 目录
 
 ```text
@@ -140,6 +162,8 @@ configs/clean_ablation_v1/            可复现的 C/H/P/full 消融训练配置
 configs/clean_gate_ablation_v1/       P0→PG0 prior-to-gate 冻结消融
 configs/clean_gate_tuning_v2/         gate 工程默认值选择训练配置
 configs/data_expansion_smoke_v2/      双审查后多题源扩量 smoke 的机器可读协议
+prepare_clir_smoke.py                  v2 source→rollout→双标→硬门的唯一入口
+src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约
 src/clir_features.py                  identity/layer-axis 特征编码器
 src/clir_data.py                      JSONL 数据、严格 token 对齐、collate、sampler
 src/consistency_localized_reward.py   reward model、三模块和 loss
@@ -166,7 +190,9 @@ docs/data_expansion_smoke_protocol_v2.md  双审查整合后的 100-query smoke 
 pip install -r requirements.txt
 ```
 
-`torch`、`numpy` 和 `pytest` 是训练与测试依赖；`transformers` 与 `huggingface_hub` 由 exact-ID 抽取脚本使用。训练和打分不会导入 task LLM，也不需要 vLLM、分布式训练框架或旧实验环境。
+`torch`、`numpy` 和 `pytest` 是训练与测试依赖；`transformers` 与 `huggingface_hub` 用于 exact-ID
+materialization/抽取。v2 source export 固定 `datasets==3.6.0`，rollout 固定
+`vllm==0.5.3.post1` 与 `numpy==1.26.4`；训练和打分本身仍不会导入 task LLM 或 vLLM。
 
 ## 唯一默认配置
 
@@ -428,10 +454,11 @@ pytest -q
 
 ## 当前限制
 
-- 仓库没有 rollout、rewrite、hallucination onset 或 dual-prior target 的生成/人工标注系统。
-- 多题源与双 AI smoke 只有经双审查修订的 v2 协议，尚未实现 `clir_numeric_multisource_v2`、
-  `clir_material_claim_unitizer_v2`、proposal builders、双标/self-agreement/control validator 或第三模型
-  盲裁 runner；不得把协议文件当作已跑通的 acquisition pipeline。
+- 仓库已有 v2 rollout、numeric checker、first-bad-unit/dual-prior Silver 标注包与盲裁管线，但没有人工
+  标注或人工复核；它不生成 Gold。
+- 多题源管线通过了 8-query/64-row deterministic fixture；真实 GSM8K/ASDiv source export、历史排除汇总和
+  pinned-tokenizer 边界回归也已完成。800-row Phi rollout、双 AI C/H/P 标注和全部真实硬门尚未执行；
+  不得把 fixture 或源导出当作标签质量、训练效果证据。
 - 默认仍使用预抽取全层 feature，真实数据的磁盘开销很大；没有集成 batch-local online extraction。
 - 当前 objective 是 pointwise correctness BCE 加可用 auxiliary supervision，尚无 pairwise/listwise reward objective。
 - clean integration 已在现有小数据上完成三 seed matched matrix，但没有扩充独立机制标签或 protected test；full 没有优于 correctness-only。

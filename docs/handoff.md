@@ -136,8 +136,16 @@ v1 经两份互盲外部 AI 审查后共同判为 block，且没有生成、标�
 [`data_expansion_smoke_protocol_v2.md`](data_expansion_smoke_protocol_v2.md)，机器配置为
 [`../configs/data_expansion_smoke_v2/protocol.json`](../configs/data_expansion_smoke_v2/protocol.json)。
 
-v2 当前状态是 `review_integrated_pre_execution`。规格已经吸收审查，但 clean 仍没有实际 acquisition/
-annotation pipeline，绝不能写成 v2 已跑通。冻结规模与预算为：
+v2 pipeline 已实现，并用 8-query/64-row 确定性 fixture 验证 source freeze、checker、exact-token
+unitizer、C/H/P proposal、隐藏控制项、自一致性、第三模型先独立后匿名裁决和 final materialization。
+真实源导出也已完成：7473 条 GSM8K train +1218 条 ASDiv-A =8691 条；旧
+outcome/ranking/mechanism population 共形成 1108 个唯一 GSM8K query exclusions。固定 Phi tokenizer 的
+小数/货币、缩写、LaTeX/Unicode、空行和 terminal EOS 回归均通过。
+
+近重复检索共发现 29 对，其中 2 对两端都已经被历史排除，送标没有意义；剩余 27 对已按 hash 冻结在
+本地忽略目录，等待两个不同模型系列互盲判断。恰有一端被历史排除的 4 对仍保留，因为一旦判 duplicate，
+另一端也必须随整簇排除。800-row Phi rollout、正式 C/H/P 双 AI 标注和 hidden-state 抽取仍为 pending，
+绝不能写成真实 v2 已跑通或已经得到训练数据。冻结规模与预算为：
 
 - outcome：60 GSM8K train +40 ASDiv-A queries，每题 8 条 Phi rollout，共 800 raw trajectories；
 - Consistency：标 40 个 GSM8K natural proposals，按冻结顺序留下前 30 个最终 accept；
@@ -174,6 +182,20 @@ SVAMP 的角色已纠正：论文明确由 100 个 ASDiv-A seeds 生成变化题
 
 本轮仍是 `pipeline smoke`，不训练 CLIR，不给模块 efficacy、Best-of-N 或 gate 权重结论。`.25` gate
 作为方法身份默认值保留，但本轮不使用它选样、训练或调参。
+
+实现入口是 [`../prepare_clir_smoke.py`](../prepare_clir_smoke.py)，核心契约在
+[`../src/clir_smoke.py`](../src/clir_smoke.py)，回归测试为
+[`../tests/test_clir_smoke_v2_pipeline.py`](../tests/test_clir_smoke_v2_pipeline.py)。fixture 实测 64/64
+token partition 通过、32 numeric match/32 mismatch、2 个 C 与4 个 H/P proposal 闭环。A/B 的盲包会
+混入未公开 control 和仅 A 可见的 self-repeat；A/B 完成后，`triage` 才生成第三模型的独立 audit/dispute
+包，第三模型独立输出落盘后，`adjudication-package` 才暴露匿名 Option 1/2。`finalize` 任一预注册门失败
+就只写失败报告，不发布 `pre_extraction.jsonl`。
+
+当前下一步不是立即跑 Phi，而是把
+`run_artifacts/data_expansion_smoke_v2/dedup/candidates.jsonl` 分别交给 A/B。两份完整 27 行输出落盘后，
+运行 `dedup-triage` 生成不含 A/B 答案的第三模型盲包；第三模型只处理该包并带
+`independent_answer_completed=true` 回传。随后 `resolve-dedup -> freeze -> rollout`。源数据、候选、模型
+输出与其他大 artifact 都留在 `run_artifacts/`，不推远端。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -214,7 +236,7 @@ SVAMP 的角色已纠正：论文明确由 100 个 ASDiv-A seeds 生成变化题
 | sparse-span hallucination | 不迁移到当前核心 | 点估计小门通过，但 onset、blind transfer 和联合门失败；且用户指定回 main |
 | online batch-local extraction | 暂不迁移 | 只有小样本等价性，没有大规模吞吐结论；会显著扩大 trainer |
 | Strict / Encoded baseline model variants | 不迁移 | 保持 clean 主干单一模型；后续 matched ablation 在独立分支或最小 baseline 中重建，不把多 variant 类塞回核心 |
-| annotation/adjudication/protocol/versioned scripts | 不迁移 | 研究档案留在旧分支，不应成为核心运行依赖 |
+| annotation/adjudication/protocol/versioned scripts | 只新增单一 smoke-v2 入口 | 不迁移旧分支的大量历史 runner；当前仅保留经双审查冻结的 source/checker/unitizer/proposal/双标/盲裁硬门链路 |
 
 不要整文件复制 `panzhixin` 的模型文件：那会覆盖 `main` 后续增加的 condition bottleneck。当前正确组合是：
 
@@ -345,7 +367,9 @@ hallucination_onset = k
 
 ## 已知限制
 
-- 没有 rollout generator、answer checker、rewrite verifier 或机制标注系统；extractor 假设 exact IDs 已由上游可靠保存。
+- 已有 smoke-v2 的 Phi rollout、numeric checker 和双 AI 机制标注入口；没有人工/专家复核，也没有通用
+  rewrite verifier。真实 acquisition 只完成到 source export/去重候选冻结，rollout 和机制标签尚未执行；
+  extractor 仍只接受上游已经可靠保存并通过 v2 硬门的 exact IDs。
 - extractor 现在会把 `--revision` 传给模型加载器，并写 model/revision/dtype 与 feature checksum；但本地模型若无 config commit 且未显式传 revision，`feature_revision` 仍可为 null。resume data contract 会使用 checksum 字段，不会每次重新 hash 巨大 feature 来验证 manifest 中的声明。
 - extraction 虽原子发布单个 tensor 和最终 manifest，`--overwrite` 中途失败仍可在旧 manifest 下留下部分新 feature；正式运行应使用新目录而不是就地覆盖。
 - 只支持预抽取 feature 训练，全层 payload 存储昂贵；online extraction 尚未进入 clean trainer。
@@ -353,7 +377,7 @@ hallucination_onset = k
 - clean 已在历史 3968-row 数据上完成 7-cell 主矩阵和 CH0 二因子补测、三 seed matched evaluation；它没有扩大独立机制样本，也没有使 `best_current` 成为 efficacy winner。
 - consistency 证据只有 27 对且没有 held-out relations。
 - H 证据来自很少的 Silver trajectory，首错边界一致性弱；clean onset ±5 仍为 0，恢复的 main gold-tail 再次未通过 locality/ranking 门。
-- dual prior 只有很少的 adjudicated Gold trajectory；clean direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
+- dual prior 只有 48 条历史 Key/Complete 标注 trajectory；clean direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -363,11 +387,11 @@ hallucination_onset = k
 
 ## 下一步
 
-1. 先实现并验证 smoke v2 需要的 source freezer/template-cluster dedup、`clir_numeric_multisource_v2`、
-   `clir_material_claim_unitizer_v2`、C/H/P deterministic proposal builders、三类 strict schema validator、
-   hidden controls/self-agreement report 和 third-model blind audit/adjudication runner；不得先发正式标注包再补规则。
-2. 先用 toy/tiny fixtures 证明 decimal/abbreviation/LaTeX/terminal-token unit ranges、multiple-box checker、
-   truncation排除、proposal hash 固定分母和格式重试都 fail closed，再运行 100-query rollout。
+1. 代码、tiny fixture、真实源导出、历史排除汇总和 pinned-tokenizer 边界回归已完成；下一步只把冻结的
+   27 个 near-duplicate candidates 分别送给 A/B，再由第三模型独立解决 `dedup-triage` 输出的分歧。
+2. 去重决定落盘后发布 60/40 query、cluster 和永久排除 manifests；再在固定 `datasets==3.6.0`、
+   `vllm==0.5.3.post1`、NumPy 1.26 环境运行 100-query×8 rollout，并对实际 rollout 重过截断、多 boxed、
+   checker 与 exact-token unit audit。预先通过的 tokenizer 边界回归不能替代真实 rollout 门。
 3. 发布 40 C 与 60 H/P natural proposal manifests/hash 后，才分别发送 A/B；H 与 prior 都标完整 60 条，
    原始门失败即停止，裁决不得挽救 failed agreement。
 4. v2 全门通过后，先按 800 条实际 prompt/output token 数估算存储，再在全新目录抽取 `33×3072` BF16

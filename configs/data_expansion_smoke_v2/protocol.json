@@ -1,6 +1,6 @@
 {
   "schema_version": "clir-data-expansion-smoke-v2",
-  "status": "review_integrated_pre_execution",
+  "status": "real_source_export_and_tokenizer_audit_complete_pending_blind_dedup",
   "frozen_at_utc": "2026-08-25",
   "evidence_tier": "pipeline_smoke",
   "supersedes": {
@@ -62,6 +62,8 @@
     "exclude_previous_train_ranking_mechanism_queries": true,
     "exclude_official_tests": true,
     "normalized_exact_duplicates_allowed": 0,
+    "near_duplicate_pair_with_both_endpoints_preexcluded_requires_ai": false,
+    "near_duplicate_pair_with_one_endpoint_preexcluded_requires_ai": true,
     "publish_query_cluster_and_exclusion_manifests_before_rollout": true,
     "all_candidates_and_views_stay_with_query": true
   },
@@ -70,6 +72,8 @@
     "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
     "tokenizer_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
     "backend": "vllm",
+    "backend_version": "0.5.3.post1",
+    "datasets_version": "3.6.0",
     "backend_runtime_fields_required": [
       "vllm_version",
       "tensor_parallel_size",
@@ -97,7 +101,7 @@
   },
   "checker": {
     "version": "clir_numeric_multisource_v2",
-    "implementation_status": "required_before_execution",
+    "implementation_status": "implemented_and_deterministic_fixture_passed_real_rollout_pending",
     "gsm8k_semantics": "clir_gsm8k_numeric_v5",
     "public_target_name": "numeric_value_match",
     "training_compatibility_field": "correctness",
@@ -112,7 +116,7 @@
   },
   "unitizer": {
     "version": "clir_material_claim_unitizer_v2",
-    "implementation_status": "required_before_execution",
+    "implementation_status": "implemented_fixture_and_pinned_tokenizer_regressions_passed_real_rollout_audit_pending",
     "token_coordinate_system": "zero_based_output_token_ids",
     "interval_semantics": "left_closed_right_open",
     "token_ranges_partition_full_output_axis": true,
@@ -269,6 +273,21 @@
     "expected_per_layer_dim": 3072,
     "bytes_per_bfloat16_feature_token": 202752,
     "storage_dtype": "bfloat16"
+  },
+  "pipeline_implementation": {
+    "entrypoint": "prepare_clir_smoke.py",
+    "core_contracts": "src/clir_smoke.py",
+    "tests": "tests/test_clir_smoke_v2_pipeline.py",
+    "annotation_prompts": "configs/data_expansion_smoke_v2/annotation_prompts.md",
+    "deterministic_fixture_command": "python prepare_clir_smoke.py fixture --output-dir run_artifacts/smoke_v2_fixture",
+    "deterministic_fixture_status": "pass_8_queries_64_rows",
+    "real_source_export_status": "completed_local_7473_gsm8k_plus_1218_asdiv_a",
+    "prior_query_exclusions_status": "completed_local_1108_unique_gsm8k_train_queries",
+    "near_duplicate_status": "27_actionable_pairs_hash_frozen_pending_blind_a_b",
+    "pinned_phi_tokenizer_regression_status": "pass_decimal_currency_abbreviation_latex_unicode_blank_line_terminal_eos",
+    "real_rollout_status": "pending",
+    "real_dual_ai_annotation_status": "pending",
+    "hidden_state_extraction_status": "blocked_until_all_real_smoke_gates_pass"
   },
   "canonical_document": "docs/data_expansion_smoke_protocol_v2.md",
   "review_provenance": {

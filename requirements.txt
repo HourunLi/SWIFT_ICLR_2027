@@ -1,6 +1,7 @@
 # Core training, scoring, evaluation, and tests.
 torch==2.3.1
-numpy==2.2.6
+# vLLM 0.5.3.post1 requires the 1.26 NumPy ABI; 2.x is not a valid rollout env.
+numpy==1.26.4
 pytest==8.3.3
 
 # Required only by extract_hidden_states.py. Kept explicit because exact-token,
@@ -8,3 +9,8 @@ pytest==8.3.3
 # the lightweight model/tests.
 transformers==4.51.2
 huggingface_hub==0.30.2
+datasets==3.6.0
+
+# Required only for the pinned smoke-v2 rollout command. Install it in the
+# matching CUDA environment; the CPU-only tests never import it.
+vllm==0.5.3.post1

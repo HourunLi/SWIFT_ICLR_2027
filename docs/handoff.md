@@ -1,6 +1,6 @@
 # CLIR clean integration 交接说明
 
-本分支从 `main` 的十余文件结构重新出发，只整合 `panzhixin` 分支中可复用的工程进展和通过相应门的模块部分。它不是对 `panzhixin` 的压缩复制，也没有继承其大量标注流水账、版本化 runner 或失败实现。当前远端顶端只保留训练/打分/评测代码、测试、可运行配置、README、本 handoff、核心方法说明和当前 canonical smoke v3；阶段报告、PDF、v1 协议及审查过程材料的最后完整快照是提交 `596a5e4`，需要时可从 Git 历史恢复。
+本分支从 `main` 的十余文件结构重新出发，只整合 `panzhixin` 分支中可复用的工程进展和通过相应门的模块部分。它不是对 `panzhixin` 的压缩复制，也没有继承其大量标注流水账、版本化 runner 或失败实现。当前远端顶端只保留训练/打分/评测代码、测试、可运行配置、README、本 handoff、核心方法说明和当前关键 smoke 协议；阶段报告、PDF、v1 协议及审查过程材料的最后完整快照是提交 `596a5e4`，需要时可从 Git 历史恢复。Consistency-v5 的 rollout、双盲包和标签继续只留在被忽略的 `run_artifacts/`。
 
 当前唯一运行配置是 `configs/best_current.json`。这里的 “best current” 指当前最清晰、最可维护的**整合方案**；历史上最高的单次联合矩阵 BoN@16 是 correctness-only J0 `.920`，不是三模块联合成功。
 
@@ -293,6 +293,28 @@ development：同一提示词先做数学路径判断，再做表达差异判断
 跨模型稳定规则。按预注册决定，不制作 30 条新确认，不调用第三模型，不训练，也不把回放当可靠性证据；
 prompt-only 修复路线到此关闭。
 
+v5 随后按用户同意的简单方案把困难边界机械化，规范见
+[`data_expansion_smoke_protocol_v5.md`](data_expansion_smoke_protocol_v5.md)，机器契约与两个启动提示词在
+[`../configs/data_expansion_smoke_v5`](../configs/data_expansion_smoke_v5)。程序先要求两边 numeric match 和
+规范化答案相同、至少 4 个 material claims、token 长度比 `[1.15,3]`、数学 trace 相似度≥`.60`、数字
+trace 相似度≥`.75`，并把非数学 word-bigram Jaccard 固定在 `[.10,.40]`；AI 不再判断方法/风格/近抄，
+只判断是否夹带实质错误。v4 的 14 条已看争议只作开发回归：机械规则放行 3 条，三条均为旧 A/B 共同
+accept，不作为训练、准确率或可靠性证据。
+
+实现和协议先冻结在干净提交 `a60b2cb`。随后消费此前完全未 rollout/未标注的 48 个 MATH reserve
+queries，得到 384 条候选，生成 provenance 绑定 `a60b2cb` 且 `code_dirty=false`。384/384 exact-token
+unitization 成功；checker 分布为 numeric match 201、parsed mismatch 154、parse failure 10、truncated 16、
+ambiguous multiple answers 3。机械筛选在 38 个有合格正确候选的 query 中找到 16 个 query-distinct pairs，
+按冻结 hash 顺序取前 12 个。自然 item manifest SHA-256 为 `e9017ef3…23a3f`，A/B package SHA-256 分别为
+`e3e2e223…abe59` / `30dcb839…37b66`。
+
+当前状态不是 PASS，而是 `READY_FOR_TWO_BLIND_PATH_AUDITS`：A 包 19 行（12 natural、4 controls、3
+self-repeats），B 包 16 行（12 natural、4 controls）。A 必须用 GPT-5.5-sol/xhigh 的全新上下文执行
+`launch_prompt_a.txt`，B 必须用 Claude Opus 5/high 的全新上下文执行 `launch_prompt_b.txt`。两边不得看
+peer/history/protocol/source/PRIVATE。标完后运行 `consistency-v5-check`；raw gate 为自然 decision 至少
+11/12 一致、每边 review≤1、controls 各 4/4、A repeat 3/3、共同 accept≥8。任何一项失败即停止，不用
+第三模型救活；全过也只允许另发正式扩量协议，不直接训练。
+
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
 | 维度 | 结论 | 边界 |
@@ -485,9 +507,10 @@ hallucination_onset = k
 
 1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
    失败作为 pipeline-smoke 诊断。
-2. C prompt-v4 已以 `7/14` 未通过，30 条全新确认被禁止，提示词-only 路线已经停止。下一版若保留 C，
-   应先把 pair 构造机械化：显式固定“同一路径”的中间量/依赖等价规则，并用简单的非数学文本重合区间
-   排除近抄与差异过大的 pair；或者暂缓 C 扩量。不得降低门、重标 v3 或用第三模型把失败裁成通过。
+2. C prompt-v4 已以 `7/14` 未通过；v5 已在 48 个新 query 上机械找到 16 对并冻结选择 12 对，当前只差
+   两个互盲事实审计。分别执行 v5 的 A/B launch prompt，随后只运行 `consistency-v5-check`。不得打开
+   PRIVATE、互看标签、改机械阈值、补第三模型或把 4 条未选 pair 换进来。若 raw gate 全过，再另发
+   300–500 train /100–200 held-out 的正式 C 扩量协议；若失败则保留诊断并停止本路线。
    Prior 仍需在新版本中先标显式 dependency edges，再由确定性传递闭包得到 Complete，或预注册等价组容错。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。

@@ -235,6 +235,29 @@ B 为 `9/5`，理由前缀与反塌缩门全部通过；因此失败不是格式
 一个是是否应因夹带的实质性错误而拒绝。30 条全新确认不再允许，提示词-only 路线按预注册规则停止；
 这些回放仍不训练、不算可靠性证据，也不能由第三模型裁决救活。
 
+## Consistency 机械筛选 v5：新鲜双盲包已就绪
+
+v4 说明自然语言提示词无法稳定同时处理“数学路径相同”和“表达差异足够大”两个边界。v5 因此按
+[`docs/data_expansion_smoke_protocol_v5.md`](docs/data_expansion_smoke_protocol_v5.md) 把工作拆开：固定程序先检查
+最终数值、数学/数字序列、长度和非数学文字重合区间；两位 AI 只审查两条解答有没有实质性的算术、代数、
+单位、实体或内部矛盾错误。14 条已检查的 v4 争议只用于开发回归：程序仅放行 3 条，且三条都是 v4 的
+A/B 共同 accept；它们不进入 v5 自然样本，也不算准确率证据。
+
+规则先在干净提交 `a60b2cb` 冻结，再使用 v3 从未 rollout、从未标注的 48 个 MATH-train reserve queries。
+Phi-3.5-mini-instruct 生成 `48×8=384` 条候选，provenance 记录 `code_dirty=false`；384/384 通过 exact-token
+unitization。checker 得到 201 numeric matches、154 parsed mismatches、10 parse failures、16 truncations 和
+3 ambiguous-multiple-answer rows，后 29 条不会被冒充正确候选。机械规则在 38 个具有正确候选的 query 中
+找到 16 个 query-distinct pairs，超过冻结目标 12；程序只按预先固定的 SHA-256 顺序选择前 12 个，没有
+人工看答案挑题或事后改阈值。
+
+当前状态是 `READY_FOR_TWO_BLIND_PATH_AUDITS`，还不是 smoke 通过。A 包为 19 行（12 natural +4 hidden
+controls +3 self-repeats），B 包为 16 行（12 natural +4 controls）。应分别在全新隔离上下文中把
+[`launch_prompt_a.txt`](configs/data_expansion_smoke_v5/launch_prompt_a.txt) 发给 GPT-5.5-sol/xhigh，把
+[`launch_prompt_b.txt`](configs/data_expansion_smoke_v5/launch_prompt_b.txt) 发给 Claude Opus 5/high。两边完成后
+才运行 `consistency-v5-check`；12 条自然样本至少 11 条 decision 一致、每边 review≤1、控制各 4/4、A
+自重复 3/3 且共同 accept≥8 才通过。失败不调用第三模型补救；通过也只允许另写正式扩量协议，v5 本身
+不训练、不抽 hidden state、不产生 Consistency efficacy 或 Best-of-N 结论。
+
 ## 目录
 
 ```text
@@ -245,7 +268,8 @@ configs/clean_gate_tuning_v2/         gate 工程默认值选择训练配置
 configs/data_expansion_smoke_v2/      双审查后多题源扩量 smoke 的机器可读协议
 configs/data_expansion_smoke_v3/      当前 MATH 扩量 smoke 的机器协议与标注语义
 configs/data_expansion_smoke_v4/      Consistency 提示词修复、14-ID 回放清单与机器门
-prepare_clir_smoke.py                  v2/v3 数据管线与 v4 Consistency prompt gate 入口
+configs/data_expansion_smoke_v5/      Consistency 机械筛选与双 AI 事实审计协议/启动提示词
+prepare_clir_smoke.py                  v2/v3 数据管线与 v4/v5 Consistency gate 入口
 src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约
 src/clir_features.py                  identity/layer-axis 特征编码器
 src/clir_data.py                      JSONL 数据、严格 token 对齐、collate、sampler
@@ -263,6 +287,7 @@ docs/handoff.md                       迁移裁决、历史证据和下一步
 docs/data_expansion_smoke_protocol_v2.md  双审查整合后的 100-query smoke 协议
 docs/data_expansion_smoke_protocol_v3.md  当前 160-query primary acquisition 与双标协议
 docs/data_expansion_smoke_protocol_v4.md  Consistency 提示词修复与新样本确认门
+docs/data_expansion_smoke_protocol_v5.md  Consistency 机械筛选与新鲜双盲事实审计
 ```
 
 当前分支顶端只保留训练/打分/评测代码、测试、可运行配置、README、handoff、核心方法说明和
@@ -276,7 +301,7 @@ pip install -r requirements.txt
 ```
 
 `torch`、`numpy` 和 `pytest` 是训练与测试依赖；`transformers`、`huggingface_hub` 与 `pyarrow` 用于
-exact-ID materialization、MATH train parquet 和抽取。v2/v3 source export 固定 `datasets==3.6.0`，rollout 固定
+exact-ID materialization、MATH train parquet 和抽取。v2/v3/v5 source export 固定 `datasets==3.6.0`，rollout 固定
 `vllm==0.5.3.post1` 与 `numpy==1.26.4`；训练和打分本身仍不会导入 task LLM 或 vLLM。
 
 ## 唯一默认配置

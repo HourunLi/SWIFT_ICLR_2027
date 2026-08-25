@@ -1,0 +1,275 @@
+{
+  "schema_version": "clir-data-expansion-smoke-v2",
+  "status": "review_integrated_pre_execution",
+  "frozen_at_utc": "2026-08-25",
+  "evidence_tier": "pipeline_smoke",
+  "supersedes": {
+    "schema_version": "clir-data-expansion-smoke-v1",
+    "status": "superseded_before_execution",
+    "reason": "two_blind_external_reviews_found_blocking_specification_gaps"
+  },
+  "parent_code": {
+    "branch": "clir-clean-integration",
+    "commit": "2e7250727cba2681797d9f02ac357b07230df247"
+  },
+  "claim_boundary": {
+    "module_efficacy_claim_allowed": false,
+    "best_of_n_claim_allowed": false,
+    "natural_label_accuracy_claim_allowed": false,
+    "hyperparameter_selection_allowed": false,
+    "gate_prior_weight": 0.25,
+    "gate_status": "keep_enabled_dev_tuned_engineering_default_but_do_not_train_or_tune_in_smoke"
+  },
+  "failure_classes": [
+    "FAIL_PIPELINE",
+    "FAIL_YIELD",
+    "FAIL_DIVERSITY"
+  ],
+  "sources": {
+    "gsm8k": {
+      "dataset_id": "openai/gsm8k",
+      "revision": "740312add88f781978c0658806c59bc2815b9866",
+      "allowed_split": "train_only",
+      "license": "MIT",
+      "query_count": 60
+    },
+    "asdiv_a": {
+      "repository": "https://github.com/chaochun/nlu-asdiv-dataset",
+      "commit": "883f90a9a65bf00304ba8f37423910fe743abc47",
+      "xml_sha256": "ef8904068482919ac48c8eeaaf6df344b8a308ba66d048c2d4d87eab82dc4929",
+      "arithmetic_subset_size": 1218,
+      "license": "CC-BY-NC-4.0",
+      "usage": "noncommercial_research",
+      "query_count": 40
+    },
+    "svamp": {
+      "repository": "https://github.com/arkilpatel/SVAMP",
+      "commit": "689d7ccac74b9983a2ac7cc3b264f441b99e7c53",
+      "size": 1000,
+      "role": "protected_asdiv_derived_contrast_challenge_evaluation",
+      "training_or_tuning_use_allowed": false,
+      "independent_source_holdout_claim_allowed": false,
+      "direct_rows_used_in_smoke": 0,
+      "future_upgrade_requires_sealed_seed_family_filter": true
+    }
+  },
+  "selection": {
+    "selection_key": "sha256(clir-smoke-v2|query_id)",
+    "dedup_survivor_key": "min_sha256(clir-dedup-v2|query_id)",
+    "split_unit": "original_query_and_near_duplicate_cluster_before_generation",
+    "membership": "train_only_smoke_v2",
+    "permanent_exclusion_from_mechanism_dev_ranking_and_test": true,
+    "exclude_previous_train_ranking_mechanism_queries": true,
+    "exclude_official_tests": true,
+    "normalized_exact_duplicates_allowed": 0,
+    "publish_query_cluster_and_exclusion_manifests_before_rollout": true,
+    "all_candidates_and_views_stay_with_query": true
+  },
+  "generation": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "tokenizer_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "backend": "vllm",
+    "backend_runtime_fields_required": [
+      "vllm_version",
+      "tensor_parallel_size",
+      "dtype",
+      "gpu_model",
+      "max_num_seqs"
+    ],
+    "candidate_count": 8,
+    "single_request_contains_all_candidates_for_query": true,
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "max_new_tokens": 1024,
+    "max_model_length": 4096,
+    "seed": 42,
+    "terminal_token_policy": "as_returned",
+    "prompt_template": "Solve the following math problem step-by-step.\nSimplify your answer as much as possible. Present your final answer as \\boxed{Your Answer}.\n<QUESTION>",
+    "query_count": 100,
+    "raw_trajectory_count": 800,
+    "saved_ids_are_axis_truth": true,
+    "bit_exact_regeneration_claimed": false,
+    "excluded_finish_reasons_from_all_training_and_mechanism_labels": [
+      "length"
+    ],
+    "maximum_truncated_empty_or_illegal_fraction": 0.02
+  },
+  "checker": {
+    "version": "clir_numeric_multisource_v2",
+    "implementation_status": "required_before_execution",
+    "gsm8k_semantics": "clir_gsm8k_numeric_v5",
+    "public_target_name": "numeric_value_match",
+    "training_compatibility_field": "correctness",
+    "training_compatibility_semantics": "numeric_value_match_v2",
+    "full_semantic_correctness_claim_allowed": false,
+    "missing_unit_affects_numeric_value_match": false,
+    "explicit_unit_status_is_diagnostic": true,
+    "conflicting_multiple_boxed_answers_are_ineligible": true,
+    "ai_may_override_checker": false,
+    "checker_dispute_is_diagnostic_only": true,
+    "checker_change_requires_proposal_rebuild_and_reannotation": true
+  },
+  "unitizer": {
+    "version": "clir_material_claim_unitizer_v2",
+    "implementation_status": "required_before_execution",
+    "token_coordinate_system": "zero_based_output_token_ids",
+    "interval_semantics": "left_closed_right_open",
+    "token_ranges_partition_full_output_axis": true,
+    "visible_nonwhitespace_characters_covered": true,
+    "terminal_and_control_tokens_must_be_covered_as_non_claim": true,
+    "retokenization_may_only_map_after_exact_visible_id_equality": true,
+    "material_claims_must_be_atomic": true,
+    "minimum_material_claim_units_for_h_and_prior_proposal": 4,
+    "minimum_final_h_prior_median_material_units": 5,
+    "required_regression_cases": [
+      "decimal_0.5",
+      "currency_1.50_sentence_end",
+      "abbreviation_e.g.",
+      "title_Mr.",
+      "latex_fraction_and_equation",
+      "list_numbering",
+      "boxed_answer",
+      "consecutive_newlines",
+      "unicode_math",
+      "terminal_control_token"
+    ]
+  },
+  "proposal_manifests": {
+    "must_be_ordered_hashed_and_published_before_annotation": true,
+    "natural_rows_are_metric_denominator": true,
+    "controls_are_separate_and_never_train": true,
+    "consistency": {
+      "source": "gsm8k",
+      "natural_proposals": 40,
+      "final_accepts": 30,
+      "distinct_queries": true,
+      "maximum_pairs_per_query": 1,
+      "minimum_material_claim_units_per_view": 4,
+      "minimum_token_length_ratio": 1.25,
+      "maximum_token_length_ratio": 3.0,
+      "same_numeric_value_match_required": true,
+      "same_normalized_final_numeric_value_required": true,
+      "pair_tiebreak": "min_sha256(clir-C-proposal-v2|query_id|min_candidate_index|max_candidate_index)",
+      "final_selection": "first_30_final_accepts_in_frozen_order"
+    },
+    "hallucination_and_prior": {
+      "natural_proposals": 60,
+      "distinct_queries": true,
+      "maximum_trajectories_per_query": 1,
+      "trajectory_overlap_with_consistency_views_allowed": false,
+      "source_numeric_strata": {
+        "gsm8k_numeric_match": 18,
+        "gsm8k_numeric_mismatch": 18,
+        "asdiv_a_numeric_match": 12,
+        "asdiv_a_numeric_mismatch": 12
+      },
+      "both_tasks_label_all_natural_proposals": true,
+      "hallucination_and_prior_are_separate_blind_passes": true,
+      "final_positive_onset": 20,
+      "final_explicit_clean": 20,
+      "minimum_each_source_per_class": 5,
+      "final_rows_require_joint_h_and_prior_usability": true,
+      "final_selection_may_not_use_confidence_f1_adjudication_source_or_onset_position": true
+    }
+  },
+  "label_semantics": {
+    "hallucination_target_name": "first_bad_unit",
+    "compatibility_token_name": "first_bad_unit_start_token",
+    "explicit_clean_value": -1,
+    "unknown_must_be_missing": true,
+    "wrong_explicit_unit_or_entity_is_bad_claim": true,
+    "omitted_routine_expansion_is_not_missing_premise": true,
+    "multiple_errors_choose_earliest_unit": true,
+    "fused_claim_unit_is_insufficient_unitization": true,
+    "prior_minimum_set_tiebreak": "minimum_cardinality_then_lexicographically_smallest_sorted_unit_index_array",
+    "wrong_trajectory_key": "earliest_or_most_causally_decisive_error_or_unsupported_inference",
+    "key_must_be_subset_of_complete": true,
+    "nested_constraint_is_structural_not_quality_evidence": true
+  },
+  "annotation": {
+    "label_tier": "silver_dual_ai_v2",
+    "human_review": false,
+    "independent_primary_annotators": 2,
+    "different_model_families_required": true,
+    "annotator_family_may_equal_generator_or_backbone_family": false,
+    "same_model_independent_calls_allowed_for_formal_quality_gate": false,
+    "temperature": 0,
+    "model_provider_revision_prompt_hash_and_raw_response_required": true,
+    "blind_to_checker_reference_peer_history_thresholds_and_strata": true,
+    "fixed_unit_indices_only": true,
+    "separate_clean_contexts_for_h_and_prior": true,
+    "maximum_format_repair_attempts": 2,
+    "all_attempts_retained": true,
+    "failed_rows_remain_in_metric_denominator": true,
+    "auto_agree_requires_identical_target_and_no_low_confidence": true,
+    "adjudicator_must_be_third_non_phi_non_a_non_b_model_family": true,
+    "missing_eligible_third_model_means_disagreement_rows_drop": true,
+    "adjudicator_first_answers_independently_before_viewing_anonymous_proposals": true,
+    "unresolved_rows_are_dropped": true,
+    "label_source_values": [
+      "auto_agree",
+      "adjudicated"
+    ],
+    "gold_claim_allowed": false
+  },
+  "controls_and_reliability": {
+    "hidden_protocol_control_fraction_approximately": 0.1,
+    "controls_are_synthetic_and_not_natural_accuracy_ground_truth": true,
+    "annotator_a_self_repeat_fraction": 0.2,
+    "auto_agree_independent_third_model_audit_fraction": 0.15,
+    "third_model_audit_estimates_stability_not_accuracy": true,
+    "report_metrics_by_label_source_dataset_numeric_stratum_and_unit_count_bin": true
+  },
+  "preregistered_gates": {
+    "data_and_exact_token_contract_pass_rate": 1.0,
+    "hidden_control_accuracy_per_annotator_per_task": 1.0,
+    "consistency_decision_agreement_min": 0.9,
+    "consistency_adjudication_fraction_max": 0.2,
+    "consistency_final_accepts_min": 30,
+    "consistency_kappa_min_when_each_class_has_at_least_five_calls": 0.6,
+    "hallucination_path_agreement_min": 0.85,
+    "hallucination_positive_specific_agreement_min": 0.8,
+    "hallucination_clean_specific_agreement_min": 0.8,
+    "hallucination_positive_rate_absolute_gap_max": 0.1,
+    "hallucination_kappa_min_when_both_classes_have_support": 0.6,
+    "hallucination_common_positive_count_min": 15,
+    "hallucination_exact_onset_unit_agreement_min_on_five_plus_unit_rows": 0.7,
+    "hallucination_plus_minus_one_unit_agreement_min": 0.85,
+    "hallucination_adjudication_fraction_max": 0.35,
+    "first_or_last_material_unit_onset_fraction_max": 0.7,
+    "prior_eligibility_agreement_min": 0.95,
+    "prior_joint_usable_overlap_min": 45,
+    "key_macro_unit_f1_min": 0.65,
+    "complete_macro_unit_f1_min": 0.82,
+    "complete_equals_all_material_units_fraction_max_per_annotator": 0.5,
+    "prior_adjudication_fraction_max": 0.4,
+    "annotator_a_decision_self_agreement_min": 0.9,
+    "final_positive_onset": 20,
+    "final_explicit_clean": 20,
+    "minimum_each_source_per_final_h_class": 5,
+    "final_consistency_accepts": 30
+  },
+  "reporting": {
+    "always_report_numerator_and_denominator": true,
+    "report_raw_agreement_before_adjudication": true,
+    "report_bootstrap_or_wilson_intervals_descriptively": true,
+    "adjudicated_unity_may_be_called_inter_annotator_agreement": false,
+    "report_auto_agree_and_adjudicated_separately": true,
+    "report_onset_position_and_unit_count_histograms": true,
+    "report_complete_selected_fraction": true,
+    "report_query_and_trajectory_overlap_between_tasks": true
+  },
+  "feature_extraction": {
+    "defer_until_all_text_checker_unitizer_annotation_gates_pass": true,
+    "use_new_output_directory": true,
+    "estimate_storage_from_actual_prompt_and_output_token_counts_first": true,
+    "saved_prompt_and_output_ids_are_only_token_truth": true,
+    "expected_num_layers": 33,
+    "expected_per_layer_dim": 3072,
+    "bytes_per_bfloat16_feature_token": 202752,
+    "storage_dtype": "bfloat16"
+  },
+  "canonical_document": "docs/data_expansion_smoke_protocol_v2.md",
+  "review_resolution": "docs/data_expansion_smoke_review_resolution_20260825.md"
+}

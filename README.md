@@ -106,12 +106,46 @@ MSE、detach、mask 与 shared-gradient 路径，但 clean 的外层 `prior_weig
 [`docs/clean_gate_tuning_v2_results.md`](docs/clean_gate_tuning_v2_results.md)。扩大数据后将
 固定 `.25` 重做独立 `off/on` 诊断，而不在当前 dev 上继续调参。
 
+## 2026-08-25 多题源扩量 smoke v2 已吸收双审查
+
+v1 收到两份互盲外部 AI 审查后被共同判为 block，且从未执行。它现仅作为历史输入保留，状态是
+`superseded_before_execution`。两份意见的逐项裁决见
+[`docs/data_expansion_smoke_review_resolution_20260825.md`](docs/data_expansion_smoke_review_resolution_20260825.md)。
+
+修订后的可执行规格是
+[`docs/data_expansion_smoke_protocol_v2.md`](docs/data_expansion_smoke_protocol_v2.md)，机器可读配置为
+[`configs/data_expansion_smoke_v2/protocol.json`](configs/data_expansion_smoke_v2/protocol.json)。当前状态
+`review_integrated_pre_execution`：规则已整合，但 rollout/checker/unitizer/双标流水线仍未实现或运行，
+不能写成新增数据已经可用。
+
+v2 把 train-only query 池扩为 `60 GSM8K +40 ASDiv-A`，每题 8 条 Phi rollout，共 800 raw rows；
+自然标注预算仍只送 40 个 Consistency proposals 和同一批 60 个 H/P proposals。所有 proposal 的机械
+过滤、每 query 上限、source/numeric strata、hash tie-break、固定分母与 joint H/P 入选顺序都必须在
+A/B 看标签前发布。最终目标仍是 30 个 C accepts，以及同一批 prior-usable 的
+`20 first-bad-unit positive +20 explicit clean`。
+
+两个主标注者现在必须来自不同模型系列，且都不得与 Phi generator/backbone 同系列；分歧只能交给第三个
+不同系列模型先独立判断再匿名盲裁，没有合格第三模型就丢弃分歧行。unitizer v2 必须在保存的
+`output_token_ids` 上给出连续、无重叠、完整覆盖的半开 token ranges；H 的兼容 onset 字段只表示
+`first-bad-unit start token`，不再冒充精确首错 token。所有自然比例都以预先 hash 的 proposal manifest
+为分母，格式失败、low 或 uncertain 不能静默移除。
+
+SVAMP 原论文由 100 个 ASDiv-A seed 生成变化题，因此 v2 不再把它称为与 ASDiv 训练来源独立的外部
+holdout。它继续保持不训练、不调参的 protected 状态，但准确角色是 **ASDiv-derived contrast/challenge
+set**；独立来源泛化还需另选 holdout，或以后做密封 seed-family 排除。
+
+无人类复核的最终标签统一叫 `silver_dual_ai_v2`，不能叫 Gold。smoke 通过只证明多题源生成、
+numeric checker、dual-AI Silver、盲裁和 exact-token materialization 流水线达到预注册门，不证明三模块
+提高 Best-of-N。当前 `.25` gate 继续作为默认方法身份保留，但本轮不训练、不调参。
+
 ## 目录
 
 ```text
 configs/best_current.json             唯一默认模型与训练配置
 configs/clean_gate_ablation_v1/       P0→PG0 prior-to-gate 冻结消融
 configs/clean_gate_tuning_v2/         六权重工程默认值选择与结构化结果
+configs/data_expansion_smoke_v1/      已被双审查阻塞、从未执行的历史协议
+configs/data_expansion_smoke_v2/      双审查后多题源扩量 smoke 的机器可读协议
 src/clir_features.py                  identity/layer-axis 特征编码器
 src/clir_data.py                      JSONL 数据、严格 token 对齐、collate、sampler
 src/consistency_localized_reward.py   reward model、三模块和 loss
@@ -132,6 +166,10 @@ docs/three_module_stage_report_20260824.md  三模块实现、数据与效果阶
 docs/clir_three_module_stage_report_20260824.pdf  阶段报告 PDF 版
 docs/clir_plain_language_stage_report_20260824.md  大白话图解报告源文本
 docs/clir_plain_language_stage_report_20260824.pdf  18 页大白话图解 PDF
+docs/data_expansion_smoke_protocol_v1.md  已 supersede、未执行的历史 smoke 协议
+docs/data_expansion_smoke_protocol_v2.md  双审查整合后的 100-query smoke 协议
+docs/data_expansion_smoke_review_resolution_20260825.md  两份审查的采纳/修正/拒绝裁决
+docs/prompts/data_expansion_smoke_review_prompt_v1.md  可复制给外部 AI 的协议审查提示词
 ```
 
 ## 环境
@@ -403,6 +441,9 @@ pytest -q
 ## 当前限制
 
 - 仓库没有 rollout、rewrite、hallucination onset 或 dual-prior target 的生成/人工标注系统。
+- 多题源与双 AI smoke 只有经双审查修订的 v2 协议，尚未实现 `clir_numeric_multisource_v2`、
+  `clir_material_claim_unitizer_v2`、proposal builders、双标/self-agreement/control validator 或第三模型
+  盲裁 runner；不得把协议文件当作已跑通的 acquisition pipeline。
 - 默认仍使用预抽取全层 feature，真实数据的磁盘开销很大；没有集成 batch-local online extraction。
 - 当前 objective 是 pointwise correctness BCE 加可用 auxiliary supervision，尚无 pairwise/listwise reward objective。
 - clean integration 已在现有小数据上完成三 seed matched matrix，但没有扩充独立机制标签或 protected test；full 没有优于 correctness-only。

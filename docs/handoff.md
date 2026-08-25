@@ -127,6 +127,54 @@ clean 外层 `prior_weight=1`，故绝对 coupling 系数 `.25`，是原 main �
 `.25` 做 off/on 复测，不再消费当前 dev 调参。完整结果见
 [`clean_gate_tuning_v2_results.md`](clean_gate_tuning_v2_results.md)。
 
+## 2026-08-25 多题源扩量 smoke v2
+
+v1 经两份互盲外部 AI 审查后共同判为 block，且没有生成、标注或训练任何数据；现状态为
+`superseded_before_execution`。逐项裁决见
+[`data_expansion_smoke_review_resolution_20260825.md`](data_expansion_smoke_review_resolution_20260825.md)。
+修订后的 canonical 协议为
+[`data_expansion_smoke_protocol_v2.md`](data_expansion_smoke_protocol_v2.md)，机器配置为
+[`../configs/data_expansion_smoke_v2/protocol.json`](../configs/data_expansion_smoke_v2/protocol.json)。
+
+v2 当前状态是 `review_integrated_pre_execution`。规格已经吸收审查，但 clean 仍没有实际 acquisition/
+annotation pipeline，绝不能写成 v2 已跑通。冻结规模与预算为：
+
+- outcome：60 GSM8K train +40 ASDiv-A queries，每题 8 条 Phi rollout，共 800 raw trajectories；
+- Consistency：标 40 个 GSM8K natural proposals，按冻结顺序留下前 30 个最终 accept；
+- H/P：对 60 条 distinct-query trajectories 完整、独立地做 H 和 prior 两套双标；
+- final：只从 joint H+prior usable 交集中按冻结 source/hash 规则取 20 first-bad-unit positive +20 clean，
+  每类每来源至少 5；
+- 100 个 query 永久 train-only，不得进入 mechanism dev、ranking validation 或 test；C/H 可 query 重叠，
+  但同一 trajectory 不可复用，所有 overlap 必须报告。
+
+v2 解决了 v1 最危险的隐式筛选：C/H/P proposal 的枚举、机械过滤、source/numeric strata、每 query 上限、
+hash tie-break、有序 manifest 和 metric 分母都必须在 A/B 看到任何标签前冻结；格式失败、low、uncertain
+和 ineligible 不得从原始分母消失。H 与 prior 要先在全部 60 条上分别双标，再做 joint selection，不能先
+拿到容易的 H 行后只把它们送 prior。
+
+标注独立性也从偏好升级为硬门：A/B 必须是两个不同模型系列，且都不得与 Phi generator/backbone 同族；
+同模型两次调用只可 debug。分歧需要第三个不同系列模型先独立作答，再查看匿名随机顺序方案；没有合格
+第三模型就 drop，不复用 A/B 投票。最终标签只能叫 `silver_dual_ai_v2`，并保留
+`label_source=auto_agree/adjudicated`。
+
+H 不再宣称精确首错 token。`clir_material_claim_unitizer_v2` 必须把完整 `output_token_ids` 切成连续、
+无重叠、左闭右开的 ranges，包括空白/标题/final wrapper/terminal control token；一个 material unit 只能有
+一个可判断 claim。AI 选择 `first_bad_unit_index`，训练兼容 onset 只是该 unit 的 `token_start`。
+`panzhixin` 的 deterministic 行/句 segmenter、fixed-unit F1、role-blind adjudication 可作为实现参考，但旧
+unitizer 只保证可见字符覆盖，没有完整 v2 token-partition 与原子 claim 契约，不能原样搬来即宣布通过。
+
+checker 升为 `clir_numeric_multisource_v2`。公开语义准确叫 `numeric_value_match`；兼容字段
+`correctness` 必须声明同一语义，不能冒充完整单位/实体正确性。截断/空输出/非法 ID 保留审计但不进任何
+训练或机制 proposal。文本/checker/unitizer/dual-AI gates 全过后才估算实际 token 数并抽 `33×3072`
+BF16 feature。
+
+SVAMP 的角色已纠正：论文明确由 100 个 ASDiv-A seeds 生成变化题。继续使用 ASDiv 训练时，SVAMP
+只能是 protected **ASDiv-derived contrast/challenge set**，不能支持独立来源泛化；它仍不用于本轮训练/
+调参。独立泛化需另选 holdout，或以后发布密封 seed-family 排除协议。
+
+本轮仍是 `pipeline smoke`，不训练 CLIR，不给模块 efficacy、Best-of-N 或 gate 权重结论。`.25` gate
+作为方法身份默认值保留，但本轮不使用它选样、训练或调参。
+
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
 | 维度 | 结论 | 边界 |
@@ -315,11 +363,20 @@ hallucination_onset = k
 
 ## 下一步
 
-1. 保持完整测试、toy resume 和真实 feature contract gate；如重新抽取，在新目录做 extraction smoke 并绑定 model revision/checksum，不就地覆盖历史 payload。
-2. 先扩大并 query-disjoint 划分 consistency relations 与可靠 H onset labels：C train 至少 300–500 个语义组、held-out 100–200 组；H train 至少 200 个正 onset + 200 个显式 clean，H dev 至少 100+100。当前 16-row mechanism dev 已用于筛选，不再用它选择 threshold、weight 或 epoch。
-3. 用新数据预注册并完整重跑 `C0/C1/H0/CH0` 2×2；主检验仍是各单模块增量和 `CH0-C1-H0+C0` 交互。当前负交互只用于决定复测设计，不能直接写成普遍结论。
-4. 统一 train/ranking checker 为 v5，并把 ranking validation 扩到约 1500–2000 个独立 query ×16；若预算允许，outcome train 扩到约 1500–2000 queries ×8。锁验证结论后再开 protected test。
-5. H 先单独通过 token/path calibration 与 onset boundary，再设计新的 localized reward coupling；当前 gold-tail、MIL 和 pseudo-tail 都不进入下一轮 full。
-6. prior 先扩到约 300–500 条独立 train trajectory 与 100–200 条 query-disjoint dev，复核 direct target 的跨样本/跨域 learnability；在新 ranking population 上固定 `.25` 比较 gate off/on，不再调权重。若提出 KL/gradient-balanced/head-only/runtime-fusion 等新 coupling，必须作为新假设预注册。若要归因 encoder，最小重建 strict/encoded SWIFT 等预算 baseline。
+1. 先实现并验证 smoke v2 需要的 source freezer/template-cluster dedup、`clir_numeric_multisource_v2`、
+   `clir_material_claim_unitizer_v2`、C/H/P deterministic proposal builders、三类 strict schema validator、
+   hidden controls/self-agreement report 和 third-model blind audit/adjudication runner；不得先发正式标注包再补规则。
+2. 先用 toy/tiny fixtures 证明 decimal/abbreviation/LaTeX/terminal-token unit ranges、multiple-box checker、
+   truncation排除、proposal hash 固定分母和格式重试都 fail closed，再运行 100-query rollout。
+3. 发布 40 C 与 60 H/P natural proposal manifests/hash 后，才分别发送 A/B；H 与 prior 都标完整 60 条，
+   原始门失败即停止，裁决不得挽救 failed agreement。
+4. v2 全门通过后，先按 800 条实际 prompt/output token 数估算存储，再在全新目录抽取 `33×3072` BF16
+   feature；截断/非法/ambiguous-answer rows 不进训练，不就地覆盖历史 payload。
+5. 根据 source/numeric/unit-count 分层 yield、裁决成本和 ASDiv 许可另发正式扩量协议；目标仍是 C train
+   300–500/held-out 100–200、H train 200+200/dev 100+100、prior train 300–500/dev 100–200，以及统一
+   checker 的 1500–2000 independent queries ×16 ranking validation。
+6. 用新数据完整重跑 `C0/C1/H0/CH0`；H 先过 boundary/calibration，当前 gold-tail、MIL、pseudo-tail 不进
+   核心矩阵。prior 先复核 direct target，再在新 ranking population 上固定 `.25` 做 gate off/on，不再调权重。
+   若要归因 encoder，补 strict/encoded SWIFT 等预算 baseline。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

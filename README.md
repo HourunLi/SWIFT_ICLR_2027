@@ -47,8 +47,8 @@ token value 推到约 `-.62`。direct priors 在 16-row dev 上可学，但 mutu
 
 3→5 epoch 的预注册扩展门未通过：多个 auxiliary cell 的 train loss 下降时 mechanism-dev
 反而恶化，继续训练只会重复 27 个 consistency pair、17 个正 onset + 31 个 clean 和 48
-条 prior trajectory。完整协议、置信区间、机制指标和裁决见
-[`docs/clean_ablation_v1_results.md`](docs/clean_ablation_v1_results.md)。这组结果仍是
+条 prior trajectory。关键数字、置信区间和裁决已收敛在本 README 与
+[`docs/handoff.md`](docs/handoff.md)；完整历史结果可从归档提交 `596a5e4` 恢复。这组结果仍是
 `small-scale real screening`；不能声称三模块联合有效。
 
 ### CH0：consistency 与 onset BCE 的二因子交互补测
@@ -66,16 +66,10 @@ seed+query hierarchical interval 仍为 `[-2.73,+.47]` points，不能升级为�
 只有 6+10 条，ranking 只有 500 queries。下一轮应扩数据后按同一 `C0/C1/H0/CH0` 2×2
 矩阵复测，而不是直接把本轮写成最终论文结论；`best_current` 也不因这次筛选而更换。
 
-三个模块的实现路径、最终分数耦合、历史数据生产流程、单模块效果和组合现象已整理为
-[`docs/three_module_stage_report_20260824.md`](docs/three_module_stage_report_20260824.md)，另有
-便于阅读和分享的
-[`PDF 版（含 gate v2 当前状态补充页）`](docs/clir_three_module_stage_report_20260824.pdf)。
-针对不熟悉 Gold、onset、tail、Key/Complete 和 gate 等术语的读者，新增了
-[`docs/clir_plain_language_stage_report_20260824.md`](docs/clir_plain_language_stage_report_20260824.md)
-与推荐优先阅读的
-[`18 页大白话图解 PDF`](docs/clir_plain_language_stage_report_20260824.pdf)：它使用真实训练 row
-举例，单独区分 Gold/Silver/Pseudo、clean/未标/pseudo onset，并用接线图说明三模块
-如何影响最终选择以及 gate `.25` 的证据边界。
+三个模块的实现路径、最终分数耦合、历史数据生产流程、单模块效果和组合现象已合并到本
+README 与 [`docs/handoff.md`](docs/handoff.md)。为保持远端分支精简，阶段报告、图解版和 PDF
+不再放在当前分支顶端；需要追溯时可从提交 `596a5e4` 读取原文件。Gold/Silver/Pseudo、
+clean/未标/pseudo onset、Key/Complete 和 gate `.25` 的含义与证据边界仍由 handoff 保留。
 
 ### Prior→reward gate 独立消融
 
@@ -88,8 +82,8 @@ squared-L2 从 `.01195` 恶化到 `.01335`，只有 1/3 seed 改善；BoN@16 从
 变为 `.9167`，paired delta `-.13` points，fixed-seed query interval
 `[-.87,+.60]` points，seed+query interval `[-1.20,+1.00]` points。gate 虽使
 `53%–76%` 的 query 更换最终候选，但三 seed 合计净少选对 2/1500 次。这仍是 `.0625`
-这个单点的有效反证；完整历史结果见
-[`docs/clean_gate_ablation_v1_results.md`](docs/clean_gate_ablation_v1_results.md)。
+这个单点的有效反证；关键历史结果保留在 [`docs/handoff.md`](docs/handoff.md)，完整旧文档可从
+提交 `596a5e4` 恢复。
 
 用户随后明确将“保留 `main` 原始 shared-gradient coupling 且默认开启”定为方法身份约束，
 并允许在当前开发 population 上选择一个保守强度。为此在查看新结果前冻结
@@ -102,15 +96,15 @@ near-tie 边界 `.002`，因此按“近似时选更小权重”规则固定 `.2
 MSE、detach、mask 与 shared-gradient 路径，但 clean 的外层 `prior_weight=1`，所以总 loss
 中的绝对 coupling 系数是 `.25`。`.25−P0` 的 BoN@16 只有 `+.07` point，两个配对区间都
 跨 0；这是使用同一 dev 选出的 **dev-tuned engineering default**，不是 gate efficacy
-结论。完整结果见
-[`docs/clean_gate_tuning_v2_results.md`](docs/clean_gate_tuning_v2_results.md)。扩大数据后将
+结论。选择规则、结果摘要和证据边界保留在对应训练配置与
+[`docs/handoff.md`](docs/handoff.md)。扩大数据后将
 固定 `.25` 重做独立 `off/on` 诊断，而不在当前 dev 上继续调参。
 
 ## 2026-08-25 多题源扩量 smoke v2 已吸收双审查
 
-v1 收到两份互盲外部 AI 审查后被共同判为 block，且从未执行。它现仅作为历史输入保留，状态是
-`superseded_before_execution`。两份意见的逐项裁决见
-[`docs/data_expansion_smoke_review_resolution_20260825.md`](docs/data_expansion_smoke_review_resolution_20260825.md)。
+v1 收到两份互盲外部 AI 审查后被共同判为 block，且从未执行，状态是
+`superseded_before_execution`。v1 原文、审查提示词和逐项裁决已从当前分支顶端移出；最后一份
+完整快照是提交 `596a5e4`。当前执行只认 v2，不应再从 v1 衍生实现。
 
 修订后的可执行规格是
 [`docs/data_expansion_smoke_protocol_v2.md`](docs/data_expansion_smoke_protocol_v2.md)，机器可读配置为
@@ -142,9 +136,9 @@ numeric checker、dual-AI Silver、盲裁和 exact-token materialization 流水�
 
 ```text
 configs/best_current.json             唯一默认模型与训练配置
+configs/clean_ablation_v1/            可复现的 C/H/P/full 消融训练配置
 configs/clean_gate_ablation_v1/       P0→PG0 prior-to-gate 冻结消融
-configs/clean_gate_tuning_v2/         六权重工程默认值选择与结构化结果
-configs/data_expansion_smoke_v1/      已被双审查阻塞、从未执行的历史协议
+configs/clean_gate_tuning_v2/         gate 工程默认值选择训练配置
 configs/data_expansion_smoke_v2/      双审查后多题源扩量 smoke 的机器可读协议
 src/clir_features.py                  identity/layer-axis 特征编码器
 src/clir_data.py                      JSONL 数据、严格 token 对齐、collate、sampler
@@ -159,18 +153,12 @@ examples/create_toy_clir_data.py      仅供管线 smoke test 的合成数据
 tests/                                模型、数据、续训与评估测试
 docs/proposal.md                      与当前实现一致的方法说明
 docs/handoff.md                       迁移裁决、历史证据和下一步
-docs/clean_ablation_v1_results.md     7-cell 主矩阵与 CH0 交互补测结果
-docs/clean_gate_ablation_v1_results.md  prior→reward gate 三 seed 结果
-docs/clean_gate_tuning_v2_results.md    gate 权重选择、机制门与证据边界
-docs/three_module_stage_report_20260824.md  三模块实现、数据与效果阶段报告
-docs/clir_three_module_stage_report_20260824.pdf  阶段报告 PDF 版
-docs/clir_plain_language_stage_report_20260824.md  大白话图解报告源文本
-docs/clir_plain_language_stage_report_20260824.pdf  18 页大白话图解 PDF
-docs/data_expansion_smoke_protocol_v1.md  已 supersede、未执行的历史 smoke 协议
 docs/data_expansion_smoke_protocol_v2.md  双审查整合后的 100-query smoke 协议
-docs/data_expansion_smoke_review_resolution_20260825.md  两份审查的采纳/修正/拒绝裁决
-docs/prompts/data_expansion_smoke_review_prompt_v1.md  可复制给外部 AI 的协议审查提示词
 ```
+
+当前分支顶端只保留训练/打分/评测代码、测试、可运行配置、README、handoff、核心方法说明和
+唯一 canonical 扩量协议。历史报告与被 supersede 的协议仍可从 Git 历史恢复，但不再占用当前
+远端目录视图。
 
 ## 环境
 
@@ -398,8 +386,8 @@ python evaluate_clir_mechanisms.py \
 matched 多 seed 比较使用 `summarize_clir_ablation.py`。它要求目录为
 `seed_<seed>/<cell>/validation_{scored,metrics}.*`，逐行核对所有 run 的候选身份、顺序、
 correctness、scored-input hash 和 checkpoint hash，再对同 query outcome 做 paired
-bootstrap；具体调用和预声明 contrasts 见
-[`docs/clean_ablation_v1_results.md`](docs/clean_ablation_v1_results.md)。
+bootstrap；预声明 cells 见 `configs/clean_ablation_v1/`，已完成结果和结论见
+[`docs/handoff.md`](docs/handoff.md)。
 
 ## Toy smoke test
 

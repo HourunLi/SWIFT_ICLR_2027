@@ -1,6 +1,6 @@
 # CLIR clean integration 交接说明
 
-本分支从 `main` 的十余文件结构重新出发，只整合 `panzhixin` 分支中可复用的工程进展和通过相应门的模块部分。它不是对 `panzhixin` 的压缩复制，也没有继承其大量冻结协议、标注流水线、版本化 runner、历史结果文件或失败诊断类。从 tracked file 数量看，origin/main 约 10 个，`panzhixin` 为 429 个（configs 201 / scripts 104 / tests 46 / docs 45 / src 24），clean integration 约 18 个；结构仍是 `main` 的扁平十余文件骨架。
+本分支从 `main` 的十余文件结构重新出发，只整合 `panzhixin` 分支中可复用的工程进展和通过相应门的模块部分。它不是对 `panzhixin` 的压缩复制，也没有继承其大量标注流水账、版本化 runner 或失败实现。当前远端顶端只保留训练/打分/评测代码、测试、可运行配置、README、本 handoff、核心方法说明和 canonical smoke v2；阶段报告、PDF、v1 协议及审查过程材料的最后完整快照是提交 `596a5e4`，需要时可从 Git 历史恢复。
 
 当前唯一运行配置是 `configs/best_current.json`。这里的 “best current” 指当前最清晰、最可维护的**整合方案**；历史上最高的单次联合矩阵 BoN@16 是 correctness-only J0 `.920`，不是三模块联合成功。
 
@@ -42,8 +42,8 @@ BoN@16 mean ± sample SD：C0 `.9173 ± .0061`、C1 `.9220 ± .0040`、H0
 direct priors 在 16-row dev 上可学（P0 key/complete AUROC `.663/.869`），但 mutual
 没有增量机制或 ranking 收益；H0/H1 有弱 token/path 排序信号，onset ±5 仍为 0；
 consistency 没有 held-out relation set。多个 auxiliary cell 的 mechanism-dev 随 epoch
-恶化，故统一 3→5 epoch 门失败，没有继续训练。完整数字、区间与裁决见
-[`clean_ablation_v1_results.md`](clean_ablation_v1_results.md)。正确状态是：工程矩阵闭环
+恶化，故统一 3→5 epoch 门失败，没有继续训练。完整历史文档可用
+`git show 596a5e4:docs/clean_ablation_v1_results.md` 查看；本 handoff 保留当前裁决。正确状态是：工程矩阵闭环
 通过，部分 auxiliary target 在小 dev 上可学，任何模块的 held-out ranking efficacy 和
 full integration 增益都尚未建立。
 
@@ -101,7 +101,7 @@ gate 确实影响了 score：各 seed 有 `53.2%/75.6%/57.6%` query 更换最终
 多数 correctness 不变，错→对与对→错合计为 `18 vs 20`，净少 2/1500。准确裁决是：
 工程 direct coupling 闭环，但 main-scale objective 没建立 alignment learnability 或
 ranking efficacy。该实验当时支持保持默认 0；它作为 `.0625` 单点的历史结果保留，完整
-证据见 [`clean_gate_ablation_v1_results.md`](clean_gate_ablation_v1_results.md)。
+旧文档可用 `git show 596a5e4:docs/clean_gate_ablation_v1_results.md` 查看。
 
 ### Prior→reward gate 工程默认值选择 v2
 
@@ -124,14 +124,14 @@ squared-L2、shared mask 与 shared-encoder gradient 路径；没有引入新的
 clean 外层 `prior_weight=1`，故绝对 coupling 系数 `.25`，是原 main 总有效系数 `.0625`
 的 4 倍。这个值的证据标签只能是 `dev-tuned engineering default`：同一 500-query dev
 参与了选择，而且选中点没有改善 held-out gate L2。扩大独立 prior/ranking 数据后应固定
-`.25` 做 off/on 复测，不再消费当前 dev 调参。完整结果见
-[`clean_gate_tuning_v2_results.md`](clean_gate_tuning_v2_results.md)。
+`.25` 做 off/on 复测，不再消费当前 dev 调参。完整旧文档可用
+`git show 596a5e4:docs/clean_gate_tuning_v2_results.md` 查看。
 
 ## 2026-08-25 多题源扩量 smoke v2
 
 v1 经两份互盲外部 AI 审查后共同判为 block，且没有生成、标注或训练任何数据；现状态为
-`superseded_before_execution`。逐项裁决见
-[`data_expansion_smoke_review_resolution_20260825.md`](data_expansion_smoke_review_resolution_20260825.md)。
+`superseded_before_execution`。v1 与逐项审查材料已归档出分支顶端，最后完整快照为
+`596a5e4`；当前执行只认下述 v2。
 修订后的 canonical 协议为
 [`data_expansion_smoke_protocol_v2.md`](data_expansion_smoke_protocol_v2.md)，机器配置为
 [`../configs/data_expansion_smoke_v2/protocol.json`](../configs/data_expansion_smoke_v2/protocol.json)。

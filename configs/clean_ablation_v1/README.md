@@ -60,8 +60,9 @@ The full seven-cell matrix completed at seeds 42, 43, and 44 for three epochs.
 All run/candidate parity gates passed. The uniform five-epoch extension gate did
 not pass because several auxiliary mechanism-dev curves deteriorated while
 training loss decreased. Do not resume a result-selected subset. Ranking,
-mechanism, uncertainty, and component decisions are frozen in
-[`docs/clean_ablation_v1_results.md`](../../docs/clean_ablation_v1_results.md).
+mechanism, uncertainty, and component decisions are summarized in
+[`docs/handoff.md`](../../docs/handoff.md); the former full result document is
+recoverable from Git commit `596a5e4`.
 
 ## Pre-registered CH0 interaction extension
 
@@ -97,5 +98,6 @@ seed+query interval `[-.0340,+.00133]` crossed zero.
 This is a negative-interaction screening signal, not a final incompatibility
 claim. Do not add epochs on the same sparse supervision. Replicate the complete
 `C0/C1/H0/CH0` matrix after expanding independent C/H mechanism data and ranking
-queries. Full results and interpretation are in
-[`docs/clean_ablation_v1_results.md`](../../docs/clean_ablation_v1_results.md).
+queries. Results and interpretation are summarized in
+[`docs/handoff.md`](../../docs/handoff.md); the former full result document is
+recoverable from Git commit `596a5e4`.

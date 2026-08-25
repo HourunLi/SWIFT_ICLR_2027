@@ -21,8 +21,8 @@ __pycache__/
 !/configs/clean_ablation_v1/**
 !/configs/clean_gate_ablation_v1/
 !/configs/clean_gate_ablation_v1/**
-!/configs/data_expansion_smoke_v1/
-!/configs/data_expansion_smoke_v1/**
+!/configs/clean_gate_tuning_v2/
+!/configs/clean_gate_tuning_v2/**
 !/configs/data_expansion_smoke_v2/
 !/configs/data_expansion_smoke_v2/**
 

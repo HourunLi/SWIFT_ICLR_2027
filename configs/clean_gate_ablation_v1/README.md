@@ -102,7 +102,9 @@ intervals both crossed zero. The gate changed the selected candidate for 53–76
 of queries, yet most changes preserved correctness and the three-seed net was
 two fewer correct selections over 1500 seed-query units.
 
-The decision is to keep gate alignment disabled, avoid a post-result scale or
-epoch sweep on the same 16-row dev, and expand independent prior supervision
-before testing a newly pre-registered coupling. Full results are in
-[`docs/clean_gate_ablation_v1_results.md`](../../docs/clean_gate_ablation_v1_results.md).
+The historical decision was to keep gate alignment disabled, avoid a post-result
+scale or epoch sweep on the same 16-row dev, and expand independent prior
+supervision before testing a newly pre-registered coupling. The later user-
+authorized v2 selection superseded the default-off engineering decision; see
+[`docs/handoff.md`](../../docs/handoff.md). The former full result document is
+recoverable from Git commit `596a5e4`.

@@ -85,5 +85,5 @@ only `+.00067`, with both paired intervals crossing zero, so the result is
 labeled `dev-tuned engineering default`, not a performance gain.
 
 See [`selection.json`](selection.json) for the machine-readable decision and
-[`docs/clean_gate_tuning_v2_results.md`](../../docs/clean_gate_tuning_v2_results.md)
-for the full interpretation.
+[`docs/handoff.md`](../../docs/handoff.md) for the retained interpretation. The
+former standalone result document is recoverable from Git commit `596a5e4`.

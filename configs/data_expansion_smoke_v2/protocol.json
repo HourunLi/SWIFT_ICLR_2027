@@ -271,5 +271,9 @@
     "storage_dtype": "bfloat16"
   },
   "canonical_document": "docs/data_expansion_smoke_protocol_v2.md",
-  "review_resolution": "docs/data_expansion_smoke_review_resolution_20260825.md"
+  "review_provenance": {
+    "status": "archived_from_branch_tip",
+    "last_complete_snapshot_commit": "596a5e43eab8ac6b2233e863cbb182a0c30e61fe",
+    "resolution_path_at_snapshot": "docs/data_expansion_smoke_review_resolution_20260825.md"
+  }
 }

@@ -7,6 +7,8 @@ from types import SimpleNamespace
 import pytest
 
 from prepare_clir_smoke import (
+    _consistency_kappa_applicable,
+    _hp_quotas_from_strata,
     _ordered_vllm_candidates,
     build_annotation_packages,
     command_adjudication_package,
@@ -23,17 +25,48 @@ from src.clir_smoke import (
     atomic_write_jsonl,
     canonical_sha256,
     check_numeric_response,
+    extract_math_numeric_reference,
     freeze_query_pool,
     load_asdiv_a_repository,
     material_claim_char_spans,
     near_duplicate_candidates,
     normalize_question,
     read_jsonl,
+    select_joint_h_prior_rows,
     stable_priority,
     template_signature,
+    tokenize_visible_response,
     unitize_exact_tokens,
     validate_annotation,
 )
+
+
+@pytest.mark.parametrize(
+    ("solution", "expected"),
+    [
+        (r"Therefore the answer is \boxed{17}.", "17"),
+        (r"Thus \boxed{\frac{-33}{2}}.", r"\frac{-33}{2}"),
+        (r"Thus \boxed{45\text{ seconds}}.", "45"),
+        (r"Thus \boxed{x=5}.", "5"),
+        (r"Thus \boxed{(3,-1)}.", None),
+        (r"Thus \boxed{[0,3]}.", None),
+        (r"Thus \boxed{3\sqrt{2}}.", None),
+        (r"Thus \boxed{3 \text{ or } x}.", None),
+    ],
+)
+def test_math_reference_filter_admits_only_single_scalar_numeric(solution, expected):
+    assert extract_math_numeric_reference(solution) == expected
+
+
+def test_numeric_checker_supports_frozen_math_scalar_reference():
+    checked = check_numeric_response(
+        response=r"After simplifying, the answer is \boxed{\frac{2}{3}}.",
+        raw_reference=r"\frac{2}{3}",
+        source="math",
+    )
+
+    assert checked["numeric_value_match"] == 1
+    assert checked["checker_status"] == "numeric_match"
 
 
 def test_prior_agreement_report_scores_disjoint_sets_as_zero():
@@ -62,6 +95,33 @@ def test_prior_agreement_report_scores_disjoint_sets_as_zero():
 
     assert report["key_macro_f1"] == 0.0
     assert report["complete_macro_f1"] == 0.0
+
+
+def test_consistency_kappa_gate_requires_both_classes_from_both_annotators():
+    single_class = {
+        "a_decisions": {"accept": 40},
+        "b_decisions": {"accept": 40},
+    }
+    balanced = {
+        "a_decisions": {"accept": 35, "reject": 5},
+        "b_decisions": {"accept": 34, "reject": 6},
+    }
+
+    assert _consistency_kappa_applicable(single_class) is False
+    assert _consistency_kappa_applicable(balanced) is True
+
+
+def test_h_prior_quota_parser_rejects_unknown_stratum_names():
+    assert _hp_quotas_from_strata(
+        {
+            "gsm8k_numeric_match": 10,
+            "asdiv_a_numeric_mismatch": 8,
+            "math_numeric_mismatch": 22,
+        }
+    ) == {("gsm8k", 1): 10, ("asdiv-a", 0): 8, ("math", 0): 22}
+
+    with pytest.raises(ValueError, match="invalid H/P source stratum"):
+        _hp_quotas_from_strata({"math_parse_failed": 4})
 
 
 def _char_tokenization(response: str) -> dict:
@@ -186,6 +246,37 @@ def test_unitizer_rejects_one_token_that_fuses_two_claims():
         )
 
 
+def test_visible_token_mapping_falls_back_to_exact_frozen_prefix_axis():
+    class AmbiguousTokenizer:
+        def __call__(self, text, **kwargs):
+            assert text == "BBB."
+            return {
+                "input_ids": [10, 11],
+                "offset_mapping": [(0, 3), (3, 4)],
+            }
+
+        def decode(self, token_ids, **kwargs):
+            lookup = {
+                (): "",
+                (20,): "B",
+                (22,): ".",
+                (20, 21): "BBB",
+                (20, 21, 22): "BBB.",
+                (20, 21, 22, 99): "BBB.",
+                (99,): "",
+            }
+            return lookup[tuple(token_ids)]
+
+    mapping = tokenize_visible_response(AmbiguousTokenizer(), "BBB.", [20, 21, 22, 99])
+
+    assert mapping == {
+        "encoded_token_ids": [20, 21, 22],
+        "offsets": [(0, 1), (1, 3), (3, 4)],
+        "trailing_token_decodes_to_empty": [True],
+        "mapping_mode": "frozen_prefix_decode_fallback",
+    }
+
+
 def test_asdiv_loader_uses_official_fold_membership_and_parses_unit(tmp_path: Path):
     dataset = tmp_path / "dataset"
     folds = dataset / "nfolds" / "asdiv-a"
@@ -225,9 +316,9 @@ def test_freeze_requires_decisions_and_is_hash_deterministic():
     rows = [
         {
             "source": "gsm8k" if index < 2 else "asdiv-a",
-            "query_id": f"gsm8k:train:{index:05d}"
-            if index < 2
-            else f"asdiv-a:q{index}",
+            "query_id": (
+                f"gsm8k:train:{index:05d}" if index < 2 else f"asdiv-a:q{index}"
+            ),
             "question": f"A distinct fixture question number {index} asks for a total.",
             "reference_answer": str(index + 1),
         }
@@ -251,6 +342,57 @@ def test_freeze_requires_decisions_and_is_hash_deterministic():
         first_report["selected_query_ids_sha256"]
         == second_report["selected_query_ids_sha256"]
     )
+
+
+def test_v3_freeze_keeps_incumbent_and_balances_math_strata():
+    rows = [
+        {
+            "source": "gsm8k",
+            "query_id": "gsm8k:train:00000",
+            "question": "Mina has two apples. How many apples does Mina have?",
+            "reference_answer": "#### 2",
+        },
+        {
+            "source": "math",
+            "query_id": "math:train:algebra:00000",
+            "question": "Mina has two apples. How many apples does Mina have?",
+            "reference_answer": "2",
+            "selection_stratum": "algebra|level_3",
+        },
+        {
+            "source": "math",
+            "query_id": "math:train:algebra:00001",
+            "question": "Evaluate the integer obtained by adding four and five.",
+            "reference_answer": "9",
+            "selection_stratum": "algebra|level_3",
+        },
+        {
+            "source": "math",
+            "query_id": "math:train:prealgebra:00000",
+            "question": "Evaluate the integer obtained by multiplying six and seven.",
+            "reference_answer": "42",
+            "selection_stratum": "prealgebra|level_4",
+        },
+    ]
+    selected, report = freeze_query_pool(
+        rows,
+        source_counts={"gsm8k": 1, "math": 2},
+        required_query_ids=["gsm8k:train:00000"],
+        source_stratum_counts={
+            ("math", "algebra|level_3"): 1,
+            ("math", "prealgebra|level_4"): 1,
+        },
+        membership="train_only_smoke_v3",
+        selection_namespace="clir-smoke-v3",
+    )
+
+    selected_ids = {row["query_id"] for row in selected}
+    assert "gsm8k:train:00000" in selected_ids
+    assert "math:train:algebra:00000" not in selected_ids
+    assert report["selected_stratum_counts"] == {
+        "math|algebra|level_3": 1,
+        "math|prealgebra|level_4": 1,
+    }
 
 
 def test_prior_exclusion_removes_the_entire_duplicate_cluster():
@@ -636,9 +778,7 @@ def test_blind_packages_hide_controls_and_measure_self_repeat():
 def test_prior_controls_are_versioned_and_v3_exercises_a_multistep_chain():
     natural = _natural_items()
     _, private_v2 = build_annotation_packages(natural, control_version="v2")
-    packages_v3, private_v3 = build_annotation_packages(
-        natural, control_version="v3"
-    )
+    packages_v3, private_v3 = build_annotation_packages(natural, control_version="v3")
 
     expected_v2 = next(
         row["expected_annotation"]
@@ -661,6 +801,58 @@ def test_prior_controls_are_versioned_and_v3_exercises_a_multistep_chain():
     assert expected_v3["key_unit_indices"] == [3]
     assert expected_v3["complete_unit_indices"] == [2, 3]
     assert "gives 1 apple away" in v3_item["problem"]
+
+
+def test_v3_joint_selection_uses_class_specific_source_minima():
+    layout = [
+        ("hallucinated", "gsm8k"),
+        ("hallucinated", "math"),
+        ("hallucinated", "math"),
+        ("clean", "asdiv-a"),
+        ("clean", "gsm8k"),
+        ("clean", "math"),
+    ]
+    proposals = []
+    h_labels = []
+    prior_labels = []
+    for index, (status, source) in enumerate(layout):
+        item_id = f"item-{index}"
+        proposals.append(
+            {
+                "id": item_id,
+                "source": source,
+                "selection_priority": f"{index:02d}",
+            }
+        )
+        h_labels.append({"item_id": item_id, "status": status})
+        prior_labels.append({"item_id": item_id, "eligibility": "usable"})
+
+    selected = select_joint_h_prior_rows(
+        proposals=proposals,
+        h_labels=h_labels,
+        prior_labels=prior_labels,
+        per_class=3,
+        minimum_source_by_class={
+            "hallucinated": {"gsm8k": 1, "math": 1},
+            "clean": {"asdiv-a": 1, "gsm8k": 1},
+        },
+    )
+
+    assert len(selected) == 6
+    assert (
+        sum(
+            row["h_status"] == "hallucinated" and row["source"] == "gsm8k"
+            for row in selected
+        )
+        == 1
+    )
+    assert (
+        sum(
+            row["h_status"] == "clean" and row["source"] == "asdiv-a"
+            for row in selected
+        )
+        == 1
+    )
 
 
 def test_vllm_outputs_are_restored_by_completion_index():
@@ -801,9 +993,9 @@ def test_third_model_is_independent_before_anonymous_adjudication(
     assert triage_private["tasks"]["consistency"]["dispute_item_ids"] == ["natural-0"]
     assert raw_report["tasks"]["consistency"]["agreement"]["items"] == 10
     assert (
-        raw_report["tasks"]["consistency"]["package_reliability"][
-            "hidden_controls"
-        ]["a"]["accuracy"]
+        raw_report["tasks"]["consistency"]["package_reliability"]["hidden_controls"][
+            "a"
+        ]["accuracy"]
         == 1.0
     )
     public_packet = read_jsonl(adjudication_dir / "adjudicator" / "consistency.jsonl")

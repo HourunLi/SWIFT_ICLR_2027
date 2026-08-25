@@ -10,7 +10,8 @@ pytest==8.3.3
 transformers==4.51.2
 huggingface_hub==0.30.2
 datasets==3.6.0
+pyarrow==25.0.1
 
-# Required only for the pinned smoke-v2 rollout command. Install it in the
+# Required only for the pinned smoke-v2/v3 rollout command. Install it in the
 # matching CUDA environment; the CPU-only tests never import it.
 vllm==0.5.3.post1

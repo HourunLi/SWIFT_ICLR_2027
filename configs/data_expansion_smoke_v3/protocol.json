@@ -1,0 +1,321 @@
+{
+  "schema_version": "clir-data-expansion-smoke-v3",
+  "status": "frozen_before_new_rollout_or_annotation",
+  "frozen_at_utc": "2026-08-25",
+  "evidence_tier": "pipeline_smoke",
+  "annotation_protocol_version": "v3",
+  "parent_code": {
+    "branch": "clir-clean-integration",
+    "commit": "ac136864d92c616f8ea3af4ad20ac26444b1dc2c"
+  },
+  "supersedes": {
+    "schema_version": "clir-data-expansion-smoke-v2",
+    "terminal_status": "FAIL_PIPELINE_CHECKER_AND_YIELD",
+    "labels_reusable_for_v3": false,
+    "raw_rollouts_reusable_after_v3_rematerialization": true
+  },
+  "claim_boundary": {
+    "module_efficacy_claim_allowed": false,
+    "best_of_n_claim_allowed": false,
+    "natural_label_accuracy_claim_allowed": false,
+    "hyperparameter_selection_allowed": false,
+    "gate_prior_weight": 0.25,
+    "gate_status": "kept_as_dev_tuned_method_identity_default_but_not_trained_or_tuned_in_smoke"
+  },
+  "failure_classes": [
+    "FAIL_PIPELINE",
+    "FAIL_YIELD",
+    "FAIL_DIVERSITY"
+  ],
+  "sources": {
+    "gsm8k": {
+      "dataset_id": "openai/gsm8k",
+      "revision": "740312add88f781978c0658806c59bc2815b9866",
+      "allowed_split": "train_only",
+      "license": "MIT",
+      "query_count": 60,
+      "role": "reuse_frozen_v2_incumbents"
+    },
+    "asdiv_a": {
+      "repository": "https://github.com/chaochun/nlu-asdiv-dataset",
+      "commit": "883f90a9a65bf00304ba8f37423910fe743abc47",
+      "xml_sha256": "ef8904068482919ac48c8eeaaf6df344b8a308ba66d048c2d4d87eab82dc4929",
+      "arithmetic_subset_size": 1218,
+      "license": "CC-BY-NC-4.0",
+      "usage": "noncommercial_research",
+      "query_count": 40,
+      "role": "reuse_frozen_v2_incumbents_and_supply_clean_prior_rows"
+    },
+    "math": {
+      "canonical_paper": "https://arxiv.org/abs/2103.03874",
+      "dataset_id": "EleutherAI/hendrycks_math",
+      "revision": "21a5633873b6a120296cce3e2df9d5550074f4a3",
+      "source_relation": "split_preserving_mirror_of_hendrycks_math",
+      "allowed_split": "train_only",
+      "test_split_use_allowed": false,
+      "license": "MIT",
+      "allowed_levels": [3, 4, 5],
+      "minimum_official_solution_words": 45,
+      "exclude_asymptote": true,
+      "reference_filter": "final_boxed_single_scalar_numeric_v1",
+      "subjects": [
+        "algebra",
+        "counting_and_probability",
+        "number_theory",
+        "prealgebra"
+      ],
+      "train_files": {
+        "algebra": {
+          "path": "algebra/train-00000-of-00001.parquet",
+          "row_count": 1744,
+          "sha256": "73347f5b55869f21ff094361025dbd12d291e971aa4d72142eacee10438e449f"
+        },
+        "counting_and_probability": {
+          "path": "counting_and_probability/train-00000-of-00001.parquet",
+          "row_count": 771,
+          "sha256": "d37ae017930df41678edee50dcde18c17fb06afaff9eb505c1b95f1002bfcb31"
+        },
+        "number_theory": {
+          "path": "number_theory/train-00000-of-00001.parquet",
+          "row_count": 869,
+          "sha256": "81c08649149b39811f2d1d7ddf5dfccf6c4c8044a2e169cfb24db09160c941f4"
+        },
+        "prealgebra": {
+          "path": "prealgebra/train-00000-of-00001.parquet",
+          "row_count": 1205,
+          "sha256": "765b526fb5c0b8385cb7be2c16bf4f6f28cf71f2bc15c826abfbb5fa7f8616cc"
+        }
+      },
+      "primary_per_subject_level_stratum": 5,
+      "reserve_per_subject_level_stratum": 4,
+      "dedup_candidate_pool_per_subject_level_stratum": 12,
+      "primary_query_count": 60,
+      "reserve_query_count": 48
+    },
+    "svamp": {
+      "role": "protected_asdiv_derived_contrast_challenge_evaluation",
+      "training_or_tuning_use_allowed": false,
+      "independent_source_holdout_claim_allowed": false
+    },
+    "math_test": {
+      "role": "protected_unused_source_split",
+      "download_read_selection_or_tuning_allowed": false
+    }
+  },
+  "selection": {
+    "incumbent_v2_query_count": 100,
+    "incumbent_v2_query_ids_sha256": "08fc850ddec346424566e7e520f7c9e74b15b046388e505d4f75a1d7162df78b",
+    "incumbent_v2_query_manifest_ordered_rows_sha256": "677f04f4f3efa47a2a94f2205f40f4b8bb992d0aca43fa8ee72a2e5f36792d5f",
+    "incumbent_v2_raw_rollout_ordered_rows_sha256": "3b47bd398023793d944f369856bb6c5d8018056fbbe8d0c498ccbb64a4ae101f",
+    "required_incumbents_may_not_be_replaced": true,
+    "math_selection_key": "sha256(clir-smoke-v3|query_id)",
+    "math_balance": "four_subjects_x_three_levels",
+    "split_unit": "original_query_and_near_duplicate_cluster_before_generation",
+    "membership": "train_only_smoke_v3",
+    "permanent_exclusion_from_mechanism_dev_ranking_and_test": true,
+    "exclude_previous_train_ranking_mechanism_queries": true,
+    "exclude_official_tests": true,
+    "all_candidates_and_views_stay_with_query": true,
+    "dedup_policy": "carry_v2_decisions;new_math_math_near_pairs_conservatively_duplicate;new_cross_source_pairs_require_blind_dual_ai;incumbent_wins_duplicate_cluster",
+    "publish_query_cluster_and_exclusion_manifests_before_rollout": true
+  },
+  "generation": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "tokenizer_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "backend": "vllm",
+    "backend_version": "0.5.3.post1",
+    "datasets_version": "3.6.0",
+    "candidate_count": 8,
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "max_new_tokens": 1024,
+    "max_model_length": 4096,
+    "seed": 42,
+    "prompt_template": "Solve the following math problem step-by-step.\nSimplify your answer as much as possible. Present your final answer as \\boxed{Your Answer}.\n<QUESTION>",
+    "reuse_v2_query_count": 100,
+    "primary_new_query_count": 60,
+    "reserve_new_query_count": 48,
+    "primary_combined_query_count": 160,
+    "maximum_combined_query_count": 208,
+    "primary_combined_raw_trajectory_count": 1280,
+    "maximum_combined_raw_trajectory_count": 1664,
+    "saved_ids_are_axis_truth": true,
+    "bit_exact_regeneration_claimed": false,
+    "excluded_finish_reasons_from_all_training_and_mechanism_labels": ["length"],
+    "maximum_truncated_empty_or_illegal_fraction": 0.02
+  },
+  "acquisition_ladder": {
+    "run_primary_math_first": true,
+    "primary_readiness_requires_all_proposal_strata": true,
+    "combined_mechanism_eligible_mismatch_query_count_min": 30,
+    "reserve_trigger": "primary_readiness_or_mismatch_query_gate_fails",
+    "reserve_is_preselected_before_primary_rollout": true,
+    "after_reserve_failure_action": "stop_FAIL_YIELD_without_annotation_or_definition_change",
+    "parse_failed_candidate_counts_as_positive_yield": false,
+    "only_checker_status_numeric_mismatch_counts_as_positive_yield": true
+  },
+  "checker": {
+    "version": "clir_numeric_multisource_v3",
+    "public_target_name": "numeric_value_match",
+    "training_compatibility_field": "correctness",
+    "training_compatibility_semantics": "numeric_value_match_v2",
+    "full_semantic_correctness_claim_allowed": false,
+    "math_semantics": "strict_scalar_numeric_subset_only",
+    "conflicting_multiple_boxed_answers_are_ineligible": true,
+    "candidate_parse_failure_is_audit_only_not_h_enrichment": true,
+    "ai_may_override_checker": false,
+    "checker_change_requires_proposal_rebuild_and_reannotation": true
+  },
+  "unitizer": {
+    "version": "clir_material_claim_unitizer_v2",
+    "token_coordinate_system": "zero_based_output_token_ids",
+    "interval_semantics": "left_closed_right_open",
+    "token_ranges_partition_full_output_axis": true,
+    "material_claims_must_be_atomic": true,
+    "minimum_material_claim_units_for_h_and_prior_proposal": 4,
+    "minimum_final_h_prior_median_material_units": 5
+  },
+  "proposal_manifests": {
+    "must_be_ordered_hashed_and_published_before_annotation": true,
+    "natural_rows_are_metric_denominator": true,
+    "controls_are_separate_and_never_train": true,
+    "consistency": {
+      "source": "gsm8k",
+      "natural_proposals": 40,
+      "final_accepts": 30,
+      "distinct_queries": true,
+      "maximum_pairs_per_query": 1,
+      "minimum_material_claim_units_per_view": 4,
+      "minimum_token_length_ratio": 1.25,
+      "maximum_token_length_ratio": 3.0,
+      "same_numeric_value_match_required": true,
+      "same_normalized_final_numeric_value_required": true,
+      "fresh_v3_labels_required": true
+    },
+    "hallucination_and_prior": {
+      "natural_proposals": 60,
+      "distinct_queries": true,
+      "maximum_trajectories_per_query": 1,
+      "trajectory_overlap_with_consistency_views_allowed": false,
+      "source_numeric_strata": {
+        "gsm8k_numeric_match": 10,
+        "gsm8k_numeric_mismatch": 8,
+        "asdiv_a_numeric_match": 12,
+        "math_numeric_match": 8,
+        "math_numeric_mismatch": 22
+      },
+      "candidate_parse_failure_allowed": false,
+      "both_tasks_label_all_natural_proposals": true,
+      "hallucination_and_prior_are_separate_blind_passes": true,
+      "final_positive_onset": 20,
+      "final_explicit_clean": 20,
+      "minimum_source_by_class": {
+        "hallucinated": {"gsm8k": 5, "math": 5},
+        "clean": {"asdiv-a": 5, "gsm8k": 5}
+      },
+      "final_rows_require_joint_h_and_prior_usability": true,
+      "final_selection_may_not_use_confidence_f1_adjudication_source_or_onset_position": true
+    }
+  },
+  "label_semantics": {
+    "hallucination_target_name": "first_bad_unit",
+    "compatibility_token_name": "first_bad_unit_start_token",
+    "explicit_clean_value": -1,
+    "unknown_must_be_missing": true,
+    "wrong_explicit_unit_or_entity_is_bad_claim": true,
+    "omitted_routine_expansion_is_not_missing_premise": true,
+    "multiple_errors_choose_earliest_unit": true,
+    "fused_claim_unit_is_insufficient_unitization": true,
+    "complete_definition": "all_unique_nonredundant_intermediate_transformations_or_results_actually_used_by_the_candidate_dependency_chain",
+    "complete_excludes": [
+      "unchanged_problem_restatement",
+      "plan_or_meta_commentary",
+      "duplicate_equivalent_step",
+      "duplicate_final_wrapper"
+    ],
+    "complete_must_not_be_compressed_to_recomputable_shortest_proof": true,
+    "key_definition": "smallest_complete_subset_most_directly_deciding_the_claimed_conclusion_or_earliest_causal_flaw",
+    "multiple_equivalent_set_tiebreak": "minimum_cardinality_then_lexicographically_smallest_sorted_unit_index_array",
+    "key_must_be_subset_of_complete": true,
+    "nested_constraint_is_structural_not_quality_evidence": true
+  },
+  "annotation": {
+    "label_tier": "silver_dual_ai_v3",
+    "human_review": false,
+    "independent_primary_annotators": 2,
+    "different_model_families_required": true,
+    "annotator_family_may_equal_generator_or_backbone_family": false,
+    "temperature": 0,
+    "model_provider_revision_prompt_hash_and_raw_response_required": true,
+    "blind_to_checker_reference_peer_history_thresholds_and_strata": true,
+    "separate_clean_contexts_for_h_and_prior": true,
+    "maximum_format_repair_attempts": 2,
+    "failed_rows_remain_in_metric_denominator": true,
+    "auto_agree_requires_identical_target_and_no_low_confidence": true,
+    "adjudicator_must_be_third_non_phi_non_a_non_b_model_family": true,
+    "adjudicator_first_answers_independently_before_viewing_anonymous_proposals": true,
+    "unresolved_rows_are_dropped": true,
+    "gold_claim_allowed": false
+  },
+  "controls_and_reliability": {
+    "hidden_protocol_control_fraction_approximately": 0.1,
+    "controls_are_synthetic_and_not_natural_accuracy_ground_truth": true,
+    "annotator_a_self_repeat_fraction": 0.2,
+    "auto_agree_independent_third_model_audit_fraction": 0.15,
+    "third_model_audit_estimates_stability_not_accuracy": true
+  },
+  "preregistered_gates": {
+    "data_and_exact_token_contract_pass_rate": 1.0,
+    "hidden_control_accuracy_per_annotator_per_task": 1.0,
+    "consistency_decision_agreement_min": 0.9,
+    "consistency_adjudication_fraction_max": 0.2,
+    "consistency_final_accepts_min": 30,
+    "consistency_kappa_min_when_each_class_has_at_least_five_calls": 0.6,
+    "hallucination_path_agreement_min": 0.85,
+    "hallucination_positive_specific_agreement_min": 0.8,
+    "hallucination_clean_specific_agreement_min": 0.8,
+    "hallucination_positive_rate_absolute_gap_max": 0.1,
+    "hallucination_kappa_min_when_both_classes_have_support": 0.6,
+    "hallucination_common_positive_count_min": 15,
+    "hallucination_exact_onset_unit_agreement_min_on_five_plus_unit_rows": 0.7,
+    "hallucination_plus_minus_one_unit_agreement_min": 0.85,
+    "hallucination_adjudication_fraction_max": 0.35,
+    "first_or_last_material_unit_onset_fraction_max": 0.7,
+    "prior_eligibility_agreement_min": 0.95,
+    "prior_joint_usable_overlap_min": 45,
+    "key_macro_unit_f1_min": 0.65,
+    "complete_macro_unit_f1_min": 0.82,
+    "complete_equals_all_material_units_fraction_max_per_annotator": 0.5,
+    "prior_adjudication_fraction_max": 0.4,
+    "annotator_a_decision_self_agreement_min": 0.9,
+    "final_positive_onset": 20,
+    "final_explicit_clean": 20,
+    "final_consistency_accepts": 30
+  },
+  "reporting": {
+    "always_report_numerator_and_denominator": true,
+    "report_raw_agreement_before_adjudication": true,
+    "report_auto_agree_and_adjudicated_separately": true,
+    "report_by_source_numeric_stratum_and_unit_count": true,
+    "adjudicated_unity_may_be_called_inter_annotator_agreement": false
+  },
+  "feature_extraction": {
+    "defer_until_all_smoke_gates_pass": true,
+    "use_new_output_directory": true,
+    "estimate_storage_from_actual_token_counts_first": true,
+    "saved_prompt_and_output_ids_are_only_token_truth": true,
+    "expected_num_layers": 33,
+    "expected_per_layer_dim": 3072,
+    "storage_dtype": "bfloat16"
+  },
+  "pipeline_implementation": {
+    "entrypoint": "prepare_clir_smoke.py",
+    "core_contracts": "src/clir_smoke.py",
+    "tests": "tests/test_clir_smoke_v2_pipeline.py",
+    "annotation_prompts": "configs/data_expansion_smoke_v3/annotation_prompts.md",
+    "deterministic_fixture_command": "python prepare_clir_smoke.py fixture --output-dir run_artifacts/smoke_v3_fixture",
+    "hidden_state_extraction_status": "blocked_until_all_real_v3_smoke_gates_pass"
+  },
+  "canonical_document": "docs/data_expansion_smoke_protocol_v3.md"
+}

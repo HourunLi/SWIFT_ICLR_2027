@@ -25,6 +25,8 @@ __pycache__/
 !/configs/clean_gate_tuning_v2/**
 !/configs/data_expansion_smoke_v2/
 !/configs/data_expansion_smoke_v2/**
+!/configs/data_expansion_smoke_v3/
+!/configs/data_expansion_smoke_v3/**
 
 # The clean integration branch tracks only explicitly added runtime scripts.
 /scripts/*

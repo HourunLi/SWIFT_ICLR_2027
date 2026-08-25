@@ -1,4 +1,4 @@
-"""Deterministic data contracts for the CLIR multi-source smoke-v2 pipeline.
+"""Deterministic data contracts for the CLIR multi-source smoke pipeline.
 
 This module deliberately contains no model-provider client.  It freezes source
 queries, checks numeric outcomes, materializes exact-token reasoning units,
@@ -214,14 +214,18 @@ class _UnionFind:
 
 def validate_source_row(row: Mapping[str, Any]) -> dict[str, Any]:
     source = row.get("source")
-    if source not in {"gsm8k", "asdiv-a"}:
-        raise ValueError("source must be gsm8k or asdiv-a")
+    if source not in {"gsm8k", "asdiv-a", "math"}:
+        raise ValueError("source must be gsm8k, asdiv-a, or math")
     query_id = row.get("query_id")
     question = row.get("question")
     reference = row.get("reference_answer")
     if not isinstance(query_id, str) or not query_id:
         raise ValueError("query_id must be a non-empty string")
-    expected_prefix = "gsm8k:train:" if source == "gsm8k" else "asdiv-a:"
+    expected_prefix = {
+        "gsm8k": "gsm8k:train:",
+        "asdiv-a": "asdiv-a:",
+        "math": "math:train:",
+    }[str(source)]
     if not query_id.startswith(expected_prefix):
         raise ValueError(f"{query_id}: query_id does not match source namespace")
     if not isinstance(question, str) or not question.strip():
@@ -393,8 +397,12 @@ def freeze_query_pool(
     *,
     source_counts: Mapping[str, int],
     excluded_query_ids: Iterable[str] = (),
+    required_query_ids: Iterable[str] = (),
     near_duplicate_decisions: Sequence[Mapping[str, Any]] = (),
     jaccard_threshold: float = 0.82,
+    selection_namespace: str = "clir-smoke-v2",
+    membership: str = "train_only_smoke_v2",
+    source_stratum_counts: Mapping[tuple[str, str], int] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Freeze exact/near-duplicate clusters and select source quotas by hash."""
 
@@ -403,10 +411,18 @@ def freeze_query_pool(
     if len(by_id) != len(normalized):
         raise ValueError("source rows contain duplicate query_id values")
     excluded = set(excluded_query_ids)
+    required = set(required_query_ids)
     unknown_exclusions = excluded - set(by_id)
     # Historical exclusions may refer to queries not present in this source slice.
     if any(not isinstance(value, str) or not value for value in excluded):
         raise ValueError("excluded_query_ids must contain non-empty strings")
+    unknown_required = required - set(by_id)
+    if unknown_required:
+        raise ValueError(
+            f"required_query_ids contain {len(unknown_required)} unknown values"
+        )
+    if required & excluded:
+        raise ValueError("a required query is also excluded")
 
     all_candidates = near_duplicate_candidates(
         normalized, jaccard_threshold=jaccard_threshold
@@ -462,9 +478,17 @@ def freeze_query_pool(
     cluster_rows: list[dict[str, Any]] = []
     excluded_clusters = 0
     for members in clusters.values():
+        required_members = sorted(set(members) & required)
+        if len(required_members) > 1:
+            raise ValueError(
+                "a duplicate cluster contains multiple required incumbent queries"
+            )
         ordered = sorted(
             members,
-            key=lambda query_id: stable_priority("clir-dedup-v2", query_id),
+            key=lambda query_id: (
+                query_id not in required,
+                stable_priority("clir-dedup-v2", query_id),
+            ),
         )
         survivor = ordered[0]
         cluster_id = stable_priority("clir-cluster-v2", *sorted(members))
@@ -483,14 +507,15 @@ def freeze_query_pool(
         else:
             row = dict(by_id[survivor])
             row["cluster_id"] = cluster_id
-            row["membership"] = "train_only_smoke_v2"
-            row["selection_priority"] = stable_priority("clir-smoke-v2", survivor)
+            row["membership"] = membership
+            row["selection_priority"] = stable_priority(selection_namespace, survivor)
             survivors.append(row)
 
     selected: list[dict[str, Any]] = []
     available_counts: dict[str, int] = {}
+    stratum_counts = dict(source_stratum_counts or {})
     for source, requested in source_counts.items():
-        if source not in {"gsm8k", "asdiv-a"} or requested < 0:
+        if source not in {"gsm8k", "asdiv-a", "math"} or requested < 0:
             raise ValueError("source_counts contains an invalid source/count")
         pool = sorted(
             (row for row in survivors if row["source"] == source),
@@ -502,13 +527,52 @@ def freeze_query_pool(
                 f"Not enough {source} rows after exclusions/dedup: "
                 f"need {requested}, found {len(pool)}"
             )
-        selected.extend(pool[:requested])
+        source_strata = {
+            stratum: count
+            for (stratum_source, stratum), count in stratum_counts.items()
+            if stratum_source == source
+        }
+        if source_strata:
+            if sum(source_strata.values()) != requested:
+                raise ValueError(
+                    f"source {source} stratum quotas do not sum to source quota"
+                )
+            for stratum, stratum_requested in sorted(source_strata.items()):
+                stratum_pool = [
+                    row for row in pool if row.get("selection_stratum") == stratum
+                ]
+                if len(stratum_pool) < stratum_requested:
+                    raise ValueError(
+                        f"Not enough {source}/{stratum} rows after exclusions/dedup: "
+                        f"need {stratum_requested}, found {len(stratum_pool)}"
+                    )
+                incumbent = [row for row in stratum_pool if row["query_id"] in required]
+                if len(incumbent) > stratum_requested:
+                    raise ValueError(
+                        f"source {source}/{stratum} has too many required queries"
+                    )
+                fill = [row for row in stratum_pool if row["query_id"] not in required]
+                selected.extend(
+                    [*incumbent, *fill[: stratum_requested - len(incumbent)]]
+                )
+        else:
+            incumbent = [row for row in pool if row["query_id"] in required]
+            if len(incumbent) > requested:
+                raise ValueError(
+                    f"source {source} has more required queries than its frozen quota"
+                )
+            fill = [row for row in pool if row["query_id"] not in required]
+            selected.extend([*incumbent, *fill[: requested - len(incumbent)]])
+    missing_required = required - {row["query_id"] for row in selected}
+    if missing_required:
+        raise ValueError(f"{len(missing_required)} required queries were not selected")
     selected.sort(key=lambda row: (row["source"], row["selection_priority"]))
     report = {
         "schema_version": "clir-smoke-source-freeze-v2",
         "input_rows": len(normalized),
         "excluded_present": len(excluded & set(by_id)),
         "excluded_not_in_input": len(unknown_exclusions),
+        "required_query_count": len(required),
         "excluded_clusters": excluded_clusters,
         "exact_duplicate_clusters": sum(
             len(group) > 1 for group in exact_groups.values()
@@ -520,6 +584,15 @@ def freeze_query_pool(
         "clusters": sorted(cluster_rows, key=lambda row: row["cluster_id"]),
         "available_after_dedup": available_counts,
         "selected_counts": dict(Counter(row["source"] for row in selected)),
+        "selected_stratum_counts": dict(
+            sorted(
+                Counter(
+                    f"{row['source']}|{row.get('selection_stratum')}"
+                    for row in selected
+                    if row.get("selection_stratum") is not None
+                ).items()
+            )
+        ),
         "selected_query_ids_sha256": canonical_sha256(
             [row["query_id"] for row in selected]
         ),
@@ -694,6 +767,76 @@ def _governed_numeric_expression(text: str) -> str | None:
     return selected[2]
 
 
+_MATH_NONSCALAR_WORDS = {
+    "and",
+    "infinity",
+    "infty",
+    "or",
+    "pi",
+    "pm",
+    "sqrt",
+    "to",
+}
+
+
+def extract_math_numeric_reference(solution: str) -> str | None:
+    """Extract a deliberately strict scalar numeric target from a MATH solution.
+
+    MATH contains tuples, intervals, symbolic expressions, radicals, and other
+    answers that the CLIR numeric checker does not claim to understand.  The
+    v3 smoke admits only the final boxed answer when its right-hand side has
+    exactly one rational/decimal/percentage literal plus optional prose units.
+    This is a source-admission filter, not a general MATH equivalence checker.
+    """
+
+    if not isinstance(solution, str) or not solution.strip():
+        return None
+    boxes = [
+        value for value in boxed_answers(solution) if not _boxed_placeholder(value)
+    ]
+    if not boxes:
+        return None
+    value = boxes[-1].strip()
+    if "=" in value:
+        value = value.rsplit("=", 1)[1].strip()
+    # These markers can make a single visible numeral denote a symbolic,
+    # vector/set, interval, factorial, exponent, or compound answer.
+    if re.search(
+        r"(?:\\(?:sqrt|pi|pm|infty|cup|cap|mod|pmod)\b|\^|[\[\](),;<>|!])",
+        value,
+        flags=re.IGNORECASE,
+    ):
+        return None
+    normalized = value.replace(r"\$", "$").replace(r"\%", "%")
+    # Make ordinary unit prose auditable while leaving mathematical commands
+    # such as fractions intact for the numeric parser.
+    previous = None
+    while previous != normalized:
+        previous = normalized
+        normalized = re.sub(
+            r"\\(?:text|mathrm|mbox)\s*\{([^{}]*)\}",
+            r" \1 ",
+            normalized,
+        )
+    expressions = _numeric_expressions(normalized)
+    if len(expressions) != 1:
+        return None
+    start, end, literal = expressions[0]
+    if not numeric_options(literal):
+        return None
+    remainder = normalized[:start] + " " + normalized[end:]
+    remainder = re.sub(r"\\(?:,|;|!|quad|qquad)", " ", remainder)
+    remainder = remainder.replace("$", " ").strip().rstrip(".")
+    if re.search(r"[\\{}:+*/-]", remainder):
+        return None
+    words = [word.casefold() for word in re.findall(r"[A-Za-z]+", remainder)]
+    if any(word in _MATH_NONSCALAR_WORDS or len(word) == 1 for word in words):
+        return None
+    if re.sub(r"[A-Za-z.\s°]+", "", remainder):
+        return None
+    return literal
+
+
 def _extract_candidate_literals(
     response: str, *, normalize_boxed_prose: bool
 ) -> tuple[list[str], str, int]:
@@ -734,6 +877,10 @@ def _reference_literal(source: str, raw_reference: str) -> str:
     if source == "asdiv-a":
         expressions = _numeric_expressions(raw_reference)
         return (expressions[0][2] if expressions else raw_reference).strip()
+    if source == "math":
+        # Source export already freezes the strict literal.  Re-run the basic
+        # numeric parse here so a malformed edited manifest fails closed.
+        return raw_reference.strip() if numeric_options(raw_reference) else ""
     raise ValueError(f"unsupported source {source!r}")
 
 
@@ -1104,7 +1251,13 @@ def unitize_exact_tokens(
 def tokenize_visible_response(
     tokenizer: Any, response: str, output_token_ids: Sequence[int]
 ) -> dict[str, Any]:
-    """Build a v2 mapping audit from a frozen fast tokenizer without replacing IDs."""
+    """Map visible characters onto the frozen IDs without replacing those IDs.
+
+    Fast-tokenizer offsets are preferred.  A decoded string can, however, have
+    more than one valid tokenization (for example ``BBB`` or punctuation next
+    to LaTeX).  In that case canonical re-tokenization is not the generated
+    token axis, so fall back to audited prefix decoding of the frozen IDs.
+    """
 
     encoded = tokenizer(
         response,
@@ -1126,10 +1279,48 @@ def tokenize_visible_response(
         == ""
         for token_id in trailing
     ]
+    if frozen[: len(encoded_ids)] == encoded_ids and all(trailing_empty):
+        return {
+            "encoded_token_ids": encoded_ids,
+            "offsets": offsets,
+            "trailing_token_decodes_to_empty": trailing_empty,
+            "mapping_mode": "canonical_fast_offsets",
+        }
+
+    def decode(token_ids: Sequence[int]) -> str:
+        return tokenizer.decode(
+            list(token_ids),
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )
+
+    visible_end = len(frozen)
+    while visible_end > 0 and decode([frozen[visible_end - 1]]) == "":
+        visible_end -= 1
+    visible_ids = frozen[:visible_end]
+    trailing_ids = frozen[visible_end:]
+    if decode(frozen) != response:
+        raise ValueError("frozen IDs do not decode to the saved visible response")
+
+    prefix_offsets: list[tuple[int, int]] = []
+    previous = ""
+    for token_end in range(1, visible_end + 1):
+        current = decode(visible_ids[:token_end])
+        if not current.startswith(previous) or not response.startswith(current):
+            raise ValueError("frozen token prefixes do not map monotonically to text")
+        if len(current) == len(previous):
+            raise ValueError("an internal frozen token decodes to no visible content")
+        prefix_offsets.append((len(previous), len(current)))
+        previous = current
+    if previous != response:
+        raise ValueError("frozen visible token prefixes do not cover the response")
     return {
-        "encoded_token_ids": encoded_ids,
-        "offsets": offsets,
-        "trailing_token_decodes_to_empty": trailing_empty,
+        "encoded_token_ids": visible_ids,
+        "offsets": prefix_offsets,
+        "trailing_token_decodes_to_empty": [
+            decode([token_id]) == "" for token_id in trailing_ids
+        ],
+        "mapping_mode": "frozen_prefix_decode_fallback",
     }
 
 
@@ -1277,6 +1468,7 @@ def build_h_prior_proposals(
     *,
     quotas: Mapping[tuple[str, int], int],
     consistency_proposals: Sequence[Mapping[str, Any]],
+    numeric_mismatch_status_only: bool = False,
 ) -> list[dict[str, Any]]:
     c_view_ids = {
         str(proposal[field])
@@ -1291,6 +1483,12 @@ def build_h_prior_proposals(
             continue
         match = row.get("numeric_value_match")
         if match not in {0, 1}:
+            continue
+        if (
+            numeric_mismatch_status_only
+            and match == 0
+            and row.get("checker_status") != "numeric_mismatch"
+        ):
             continue
         key = (str(row.get("source")), int(match))
         by_stratum[key][str(row["query_id"])].append(row)
@@ -1598,9 +1796,9 @@ def agreement_report(
         report.update(
             {
                 "raw_path_agree": sum(path_agree),
-                "raw_path_agreement": sum(path_agree) / len(item_ids)
-                if item_ids
-                else None,
+                "raw_path_agreement": (
+                    sum(path_agree) / len(item_ids) if item_ids else None
+                ),
                 "path_kappa": cohen_kappa(left, right),
                 "common_positive": len(common_positive),
                 "common_clean": len(common_clean),
@@ -1608,16 +1806,15 @@ def agreement_report(
                 / max(1, a_positive, b_positive),
                 "clean_specific_agreement": len(common_clean)
                 / max(1, a_clean, b_clean),
-                "positive_rate_absolute_gap": abs(a_positive - b_positive)
-                / len(item_ids)
-                if item_ids
-                else None,
-                "exact_onset_agreement": exact_onset / len(common_positive)
-                if common_positive
-                else None,
-                "plus_minus_one_onset_agreement": plus_one / len(common_positive)
-                if common_positive
-                else None,
+                "positive_rate_absolute_gap": (
+                    abs(a_positive - b_positive) / len(item_ids) if item_ids else None
+                ),
+                "exact_onset_agreement": (
+                    exact_onset / len(common_positive) if common_positive else None
+                ),
+                "plus_minus_one_onset_agreement": (
+                    plus_one / len(common_positive) if common_positive else None
+                ),
                 "a_statuses": dict(Counter(left)),
                 "b_statuses": dict(Counter(right)),
             }
@@ -1635,30 +1832,34 @@ def agreement_report(
         report.update(
             {
                 "eligibility_agree": eligibility_agree,
-                "eligibility_agreement": eligibility_agree / len(item_ids)
-                if item_ids
-                else None,
+                "eligibility_agreement": (
+                    eligibility_agree / len(item_ids) if item_ids else None
+                ),
                 "usable_overlap": len(usable),
-                "key_macro_f1": sum(
-                    _set_f1(
-                        by_a[item_id]["key_unit_indices"],
-                        by_b[item_id]["key_unit_indices"],
+                "key_macro_f1": (
+                    sum(
+                        _set_f1(
+                            by_a[item_id]["key_unit_indices"],
+                            by_b[item_id]["key_unit_indices"],
+                        )
+                        for item_id in usable
                     )
-                    for item_id in usable
-                )
-                / len(usable)
-                if usable
-                else None,
-                "complete_macro_f1": sum(
-                    _set_f1(
-                        by_a[item_id]["complete_unit_indices"],
-                        by_b[item_id]["complete_unit_indices"],
+                    / len(usable)
+                    if usable
+                    else None
+                ),
+                "complete_macro_f1": (
+                    sum(
+                        _set_f1(
+                            by_a[item_id]["complete_unit_indices"],
+                            by_b[item_id]["complete_unit_indices"],
+                        )
+                        for item_id in usable
                     )
-                    for item_id in usable
-                )
-                / len(usable)
-                if usable
-                else None,
+                    / len(usable)
+                    if usable
+                    else None
+                ),
             }
         )
     return report
@@ -1670,6 +1871,7 @@ def resolve_blind_labels(
     labels_a: Sequence[Mapping[str, Any]],
     labels_b: Sequence[Mapping[str, Any]],
     adjudications: Sequence[Mapping[str, Any]] = (),
+    label_tier: str = LABEL_TIER,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     by_a = {str(row["item_id"]): dict(row) for row in labels_a}
     by_b = {str(row["item_id"]): dict(row) for row in labels_b}
@@ -1712,7 +1914,7 @@ def resolve_blind_labels(
             final["label_source"] = "adjudicated"
             final["adjudication_resolution"] = resolution
             adjudication_resolutions[str(resolution)] += 1
-        final["label_tier"] = LABEL_TIER
+        final["label_tier"] = label_tier
         resolved.append(final)
         source_counts[final["label_source"]] += 1
     return resolved, {
@@ -1723,15 +1925,19 @@ def resolve_blind_labels(
         "unresolved_item_ids": unresolved,
         "label_sources": dict(source_counts),
         "adjudication_resolutions": dict(adjudication_resolutions),
-        "adjudication_fraction": (source_counts["adjudicated"] + len(unresolved))
-        / len(by_a)
-        if by_a
-        else None,
+        "adjudication_fraction": (
+            (source_counts["adjudicated"] + len(unresolved)) / len(by_a)
+            if by_a
+            else None
+        ),
     }
 
 
 def materialize_h_label(
-    label: Mapping[str, Any], row: Mapping[str, Any]
+    label: Mapping[str, Any],
+    row: Mapping[str, Any],
+    *,
+    label_tier: str = LABEL_TIER,
 ) -> dict[str, Any]:
     status = label.get("status")
     if status not in FINAL_H_VALUES:
@@ -1741,7 +1947,7 @@ def materialize_h_label(
         "hallucination_target_name": "first_bad_unit",
         "hallucination_compatibility_token_name": "first_bad_unit_start_token",
         "hallucination_label_source": label["label_source"],
-        "hallucination_label_tier": LABEL_TIER,
+        "hallucination_label_tier": label_tier,
     }
     if status == "clean":
         output["hallucination_onset"] = -1
@@ -1760,7 +1966,10 @@ def materialize_h_label(
 
 
 def materialize_prior_label(
-    label: Mapping[str, Any], row: Mapping[str, Any]
+    label: Mapping[str, Any],
+    row: Mapping[str, Any],
+    *,
+    label_tier: str = LABEL_TIER,
 ) -> dict[str, Any]:
     if label.get("eligibility") != "usable":
         raise ValueError("only usable prior labels can be materialized")
@@ -1786,7 +1995,7 @@ def materialize_prior_label(
         "key_unit_indices": list(label["key_unit_indices"]),
         "complete_unit_indices": list(label["complete_unit_indices"]),
         "prior_label_source": label["label_source"],
-        "prior_label_tier": LABEL_TIER,
+        "prior_label_tier": label_tier,
     }
 
 
@@ -1796,7 +2005,8 @@ def select_joint_h_prior_rows(
     h_labels: Sequence[Mapping[str, Any]],
     prior_labels: Sequence[Mapping[str, Any]],
     per_class: int,
-    minimum_each_source_per_class: int,
+    minimum_each_source_per_class: int | None = None,
+    minimum_source_by_class: Mapping[str, Mapping[str, int]] | None = None,
 ) -> list[dict[str, Any]]:
     by_h = {str(row["item_id"]): row for row in h_labels}
     by_prior = {str(row["item_id"]): row for row in prior_labels}
@@ -1817,20 +2027,32 @@ def select_joint_h_prior_rows(
         eligible[str(h["status"])].append(row)
 
     selected: list[dict[str, Any]] = []
+    if minimum_source_by_class is None:
+        if minimum_each_source_per_class is None:
+            raise ValueError("a final source-quota rule is required")
+        minimum_source_by_class = {
+            status: {
+                "gsm8k": int(minimum_each_source_per_class),
+                "asdiv-a": int(minimum_each_source_per_class),
+            }
+            for status in ("hallucinated", "clean")
+        }
     for status in ("hallucinated", "clean"):
         pool = eligible[status]
         status_selected: list[dict[str, Any]] = []
         used: set[str] = set()
-        for source in ("gsm8k", "asdiv-a"):
+        source_minima = minimum_source_by_class.get(status, {})
+        for source, minimum in sorted(source_minima.items()):
+            minimum = int(minimum)
             source_rows = sorted(
                 (row for row in pool if row["source"] == source),
                 key=lambda row: row["selection_priority"],
             )
-            if len(source_rows) < minimum_each_source_per_class:
+            if len(source_rows) < minimum:
                 raise ValueError(
                     f"FAIL_YIELD: {status}/{source} lacks required joint usable rows"
                 )
-            for row in source_rows[:minimum_each_source_per_class]:
+            for row in source_rows[:minimum]:
                 status_selected.append(row)
                 used.add(str(row["id"]))
         remainder = sorted(
@@ -1869,6 +2091,7 @@ __all__ = [
     "check_numeric_response",
     "cohen_kappa",
     "consistency_item",
+    "extract_math_numeric_reference",
     "file_sha256",
     "freeze_query_pool",
     "load_asdiv_a_repository",

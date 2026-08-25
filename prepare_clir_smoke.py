@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Prepare and validate the frozen CLIR multi-source smoke-v2 data pipeline.
+"""Prepare and validate the frozen CLIR multi-source smoke data pipeline.
 
 The command intentionally stops before hidden-state extraction.  Its outputs
 are query/rollout/proposal/annotation manifests under a caller-provided
@@ -20,7 +20,6 @@ import subprocess
 from typing import Any, Mapping, Sequence
 
 from src.clir_smoke import (
-    LABEL_TIER,
     agreement_report,
     annotation_signature,
     atomic_write_json,
@@ -30,6 +29,8 @@ from src.clir_smoke import (
     check_numeric_response,
     cohen_kappa,
     consistency_item,
+    extract_math_numeric_reference,
+    file_sha256,
     freeze_query_pool,
     load_asdiv_a_repository,
     materialize_h_label,
@@ -51,14 +52,17 @@ from src.clir_smoke import (
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_PROTOCOL = (
-    PROJECT_ROOT / "configs" / "data_expansion_smoke_v2" / "protocol.json"
+    PROJECT_ROOT / "configs" / "data_expansion_smoke_v3" / "protocol.json"
 )
 
 
 def load_protocol(path: str | Path) -> dict[str, Any]:
     value = json.loads(Path(path).read_text(encoding="utf-8"))
-    if value.get("schema_version") != "clir-data-expansion-smoke-v2":
-        raise ValueError("only clir-data-expansion-smoke-v2 is executable")
+    if value.get("schema_version") not in {
+        "clir-data-expansion-smoke-v2",
+        "clir-data-expansion-smoke-v3",
+    }:
+        raise ValueError("only CLIR data-expansion smoke v2/v3 is executable")
     return value
 
 
@@ -121,6 +125,93 @@ def _ordered_vllm_candidates(request_output: Any, expected_count: int) -> list[A
     return sorted(candidates, key=lambda candidate: int(candidate.index))
 
 
+def _load_math_train_rows(
+    math_cfg: Mapping[str, Any], *, cache_dir: str | None
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Read only pinned train parquet files from the split-preserving mirror."""
+
+    try:
+        from huggingface_hub import hf_hub_download
+        import pyarrow.parquet as parquet
+    except ImportError as exc:
+        raise SystemExit(
+            "MATH source export requires huggingface_hub and pyarrow"
+        ) from exc
+    allowed_levels = {int(value) for value in math_cfg["allowed_levels"]}
+    min_solution_words = int(math_cfg["minimum_official_solution_words"])
+    rows: list[dict[str, Any]] = []
+    rejected: Counter[str] = Counter()
+    strata: Counter[str] = Counter()
+    file_hashes: dict[str, str] = {}
+    raw_train_rows = 0
+    for subject, file_cfg in sorted(math_cfg["train_files"].items()):
+        path = Path(
+            hf_hub_download(
+                repo_id=math_cfg["dataset_id"],
+                repo_type="dataset",
+                filename=file_cfg["path"],
+                revision=math_cfg["revision"],
+                cache_dir=cache_dir,
+            )
+        )
+        actual_hash = file_sha256(path)
+        if actual_hash != file_cfg["sha256"]:
+            raise ValueError(
+                f"MATH {subject} train parquet hash mismatch: "
+                f"expected {file_cfg['sha256']}, found {actual_hash}"
+            )
+        source_rows = parquet.read_table(path).to_pylist()
+        if len(source_rows) != int(file_cfg["row_count"]):
+            raise ValueError(
+                f"MATH {subject} train row count mismatch: "
+                f"expected {file_cfg['row_count']}, found {len(source_rows)}"
+            )
+        file_hashes[subject] = actual_hash
+        raw_train_rows += len(source_rows)
+        for index, raw in enumerate(source_rows):
+            problem = str(raw["problem"]).strip()
+            solution = str(raw["solution"]).strip()
+            level_match = re.search(r"(\d+)", str(raw["level"]))
+            if level_match is None or int(level_match.group(1)) not in allowed_levels:
+                rejected["level"] += 1
+                continue
+            level = int(level_match.group(1))
+            if "[asy]" in problem or "begin{asy}" in problem:
+                rejected["asymptote"] += 1
+                continue
+            if len(solution.split()) < min_solution_words:
+                rejected["short_official_solution"] += 1
+                continue
+            reference = extract_math_numeric_reference(solution)
+            if reference is None:
+                rejected["non_scalar_or_unsupported_reference"] += 1
+                continue
+            stratum = f"{subject}|level_{level}"
+            rows.append(
+                {
+                    "source": "math",
+                    "query_id": f"math:train:{subject}:{index:05d}",
+                    "source_record_id": f"{subject}/train/{index}",
+                    "question": problem,
+                    "reference_answer": reference,
+                    "source_solution": solution,
+                    "source_level": level,
+                    "source_subject": subject,
+                    "selection_stratum": stratum,
+                    "source_license": "MIT",
+                }
+            )
+            strata[stratum] += 1
+    return rows, {
+        "raw_train_rows": raw_train_rows,
+        "strict_numeric_rows": len(rows),
+        "rejected": dict(sorted(rejected.items())),
+        "file_sha256": file_hashes,
+        "strata": dict(sorted(strata.items())),
+        "test_files_downloaded_or_read": False,
+    }
+
+
 def command_sources(args: argparse.Namespace) -> None:
     protocol = load_protocol(args.protocol)
     source_cfg = protocol["sources"]
@@ -168,22 +259,67 @@ def command_sources(args: argparse.Namespace) -> None:
         }
         for index, row in enumerate(dataset)
     ]
+    math_rows: list[dict[str, Any]] = []
+    math_report: dict[str, Any] | None = None
+    if "math" in source_cfg:
+        math_rows, math_report = _load_math_train_rows(
+            source_cfg["math"], cache_dir=args.cache_dir
+        )
     output = Path(args.output)
     report = publish_manifest(
         output,
-        [*gsm_rows, *asdiv_rows],
-        schema_version="clir-smoke-source-corpus-v2",
+        [*gsm_rows, *asdiv_rows, *math_rows],
+        schema_version=(
+            "clir-smoke-source-corpus-v3"
+            if "math" in source_cfg
+            else "clir-smoke-source-corpus-v2"
+        ),
         metadata={
             "gsm8k_revision": gsm_cfg["revision"],
             "asdiv_commit": actual_commit,
-            "counts": {"gsm8k": len(gsm_rows), "asdiv-a": len(asdiv_rows)},
+            "counts": {
+                "gsm8k": len(gsm_rows),
+                "asdiv-a": len(asdiv_rows),
+                "math": len(math_rows),
+            },
+            "math": math_report,
         },
     )
     print(json.dumps(report, indent=2))
 
 
+def _v3_dedup_scope(
+    rows: Sequence[Mapping[str, Any]], protocol: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    """Limit MATH dedup review to a frozen selection pool with backups."""
+
+    if protocol["schema_version"] != "clir-data-expansion-smoke-v3":
+        return [dict(row) for row in rows]
+    per_stratum = int(
+        protocol["sources"]["math"]["dedup_candidate_pool_per_subject_level_stratum"]
+    )
+    by_stratum: dict[str, list[Mapping[str, Any]]] = {}
+    retained = [dict(row) for row in rows if row.get("source") != "math"]
+    for row in rows:
+        if row.get("source") == "math":
+            by_stratum.setdefault(str(row["selection_stratum"]), []).append(row)
+    for stratum, candidates in sorted(by_stratum.items()):
+        ordered = sorted(
+            candidates,
+            key=lambda row: stable_priority("clir-smoke-v3", row["query_id"]),
+        )
+        if len(ordered) < per_stratum:
+            raise ValueError(
+                f"MATH dedup pool {stratum} needs {per_stratum}, found {len(ordered)}"
+            )
+        retained.extend(dict(row) for row in ordered[:per_stratum])
+    return retained
+
+
 def command_dedup_candidates(args: argparse.Namespace) -> None:
-    rows = read_jsonl(args.sources)
+    protocol = load_protocol(args.protocol)
+    source_rows = read_jsonl(args.sources)
+    rows = _v3_dedup_scope(source_rows, protocol)
     excluded = set(_read_id_file(args.excluded_query_ids))
     all_candidates = near_duplicate_candidates(rows, jaccard_threshold=args.threshold)
     candidates = [
@@ -197,13 +333,80 @@ def command_dedup_candidates(args: argparse.Namespace) -> None:
         schema_version="clir-near-duplicate-candidates-v2",
         metadata={
             "threshold": args.threshold,
-            "source_rows_sha256": canonical_sha256(rows),
+            "source_rows_sha256": canonical_sha256(source_rows),
+            "dedup_scope_rows": len(rows),
+            "dedup_scope_rows_sha256": canonical_sha256(rows),
             "excluded_query_ids_sha256": canonical_sha256(sorted(excluded)),
             "all_candidate_count": len(all_candidates),
             "skipped_both_excluded_count": len(all_candidates) - len(candidates),
         },
     )
     print(json.dumps(report, indent=2))
+
+
+def command_seed_v3_dedup(args: argparse.Namespace) -> None:
+    """Carry v2 decisions and conservatively collapse new MATH/MATH near pairs."""
+
+    protocol = load_protocol(args.protocol)
+    if protocol["schema_version"] != "clir-data-expansion-smoke-v3":
+        raise ValueError("seed-v3-dedup is defined only for smoke v3")
+    candidates = read_jsonl(args.candidates)
+    prior = {str(row["pair_id"]): row for row in read_jsonl(args.prior_decisions)}
+    decisions: list[dict[str, Any]] = []
+    unresolved: list[dict[str, Any]] = []
+    source_counts: Counter[str] = Counter()
+    for candidate in candidates:
+        pair_id = str(candidate["pair_id"])
+        if pair_id in prior:
+            decision = str(prior[pair_id]["decision"])
+            label_source = "carry_forward_v2_dedup"
+        elif {
+            str(candidate.get("left_source")),
+            str(candidate.get("right_source")),
+        } == {"math"}:
+            decision = "duplicate"
+            label_source = "conservative_math_near_duplicate"
+        else:
+            unresolved.append(dict(candidate))
+            continue
+        decisions.append(
+            {
+                "pair_id": pair_id,
+                "decision": decision,
+                "label_source": label_source,
+            }
+        )
+        source_counts[label_source] += 1
+    output_dir = Path(args.output_dir)
+    decision_manifest = publish_manifest(
+        output_dir / "decisions.jsonl",
+        decisions,
+        schema_version="clir-near-duplicate-decisions-v3",
+        metadata={"label_sources": dict(source_counts)},
+    )
+    unresolved_manifest = publish_manifest(
+        output_dir / "unresolved_cross_source.jsonl",
+        unresolved,
+        schema_version="clir-near-duplicate-unresolved-cross-source-v3",
+    )
+    report = {
+        "status": "READY_TO_FREEZE" if not unresolved else "NEEDS_DUAL_AI_DEDUP",
+        "candidates": len(candidates),
+        "decisions": len(decisions),
+        "unresolved_cross_source": len(unresolved),
+        "label_sources": dict(source_counts),
+    }
+    atomic_write_json(output_dir / "seed_report.json", report)
+    print(
+        json.dumps(
+            {
+                "report": report,
+                "decisions": decision_manifest,
+                "unresolved": unresolved_manifest,
+            },
+            indent=2,
+        )
+    )
 
 
 def _validate_dedup_labels(
@@ -348,9 +551,9 @@ def command_resolve_dedup(args: argparse.Namespace) -> None:
     report = {
         "candidates": len(candidates),
         "raw_agree": sum(a == b for a, b in zip(left, right)),
-        "raw_agreement": sum(a == b for a, b in zip(left, right)) / len(left)
-        if left
-        else None,
+        "raw_agreement": (
+            sum(a == b for a, b in zip(left, right)) / len(left) if left else None
+        ),
         "kappa": cohen_kappa(left, right),
         "decision_counts": dict(Counter(row["decision"] for row in decisions)),
         "label_sources": dict(sources),
@@ -410,47 +613,149 @@ def command_collect_exclusions(args: argparse.Namespace) -> None:
 
 def command_freeze(args: argparse.Namespace) -> None:
     protocol = load_protocol(args.protocol)
-    rows = read_jsonl(args.sources)
+    rows = _v3_dedup_scope(read_jsonl(args.sources), protocol)
     decisions = (
         read_jsonl(args.near_duplicate_decisions)
         if args.near_duplicate_decisions
         else []
     )
     source_cfg = protocol["sources"]
+    is_v3 = protocol["schema_version"] == "clir-data-expansion-smoke-v3"
+    required_ids = _read_id_file(args.required_query_ids)
+    source_counts = {
+        "gsm8k": int(source_cfg["gsm8k"]["query_count"]),
+        "asdiv-a": int(source_cfg["asdiv_a"]["query_count"]),
+    }
+    source_strata: dict[tuple[str, str], int] = {}
+    if is_v3:
+        math_cfg = source_cfg["math"]
+        source_counts["math"] = int(math_cfg["primary_query_count"]) + int(
+            math_cfg["reserve_query_count"]
+        )
+        per_stratum = int(math_cfg["primary_per_subject_level_stratum"]) + int(
+            math_cfg["reserve_per_subject_level_stratum"]
+        )
+        source_strata = {
+            ("math", f"{subject}|level_{level}"): per_stratum
+            for subject in math_cfg["subjects"]
+            for level in math_cfg["allowed_levels"]
+        }
+        if len(required_ids) != int(protocol["selection"]["incumbent_v2_query_count"]):
+            raise ValueError(
+                "v3 freeze requires the complete 100-query v2 incumbent set"
+            )
+        if (
+            canonical_sha256(required_ids)
+            != protocol["selection"]["incumbent_v2_query_ids_sha256"]
+        ):
+            raise ValueError("v3 incumbent query IDs/order do not match frozen v2")
     selected, report = freeze_query_pool(
         rows,
-        source_counts={
-            "gsm8k": int(source_cfg["gsm8k"]["query_count"]),
-            "asdiv-a": int(source_cfg["asdiv_a"]["query_count"]),
-        },
+        source_counts=source_counts,
         excluded_query_ids=_read_id_file(args.excluded_query_ids),
+        required_query_ids=required_ids,
         near_duplicate_decisions=decisions,
         jaccard_threshold=args.threshold,
+        selection_namespace="clir-smoke-v3" if is_v3 else "clir-smoke-v2",
+        membership="train_only_smoke_v3" if is_v3 else "train_only_smoke_v2",
+        source_stratum_counts=source_strata,
     )
+    if is_v3:
+        primary_per = int(source_cfg["math"]["primary_per_subject_level_stratum"])
+        by_stratum: dict[str, list[dict[str, Any]]] = {}
+        for row in selected:
+            if row["source"] == "math":
+                by_stratum.setdefault(str(row["selection_stratum"]), []).append(row)
+        for stratum_rows in by_stratum.values():
+            stratum_rows.sort(key=lambda row: row["selection_priority"])
+            for rank, row in enumerate(stratum_rows):
+                row["acquisition_batch"] = (
+                    "primary" if rank < primary_per else "reserve"
+                )
+        for row in selected:
+            if row["source"] != "math":
+                row["acquisition_batch"] = "reused_v2"
     output_dir = Path(args.output_dir)
     manifest = publish_manifest(
         output_dir / "query_manifest.jsonl",
         selected,
-        schema_version="clir-smoke-query-manifest-v2",
+        schema_version=(
+            "clir-smoke-query-manifest-v3" if is_v3 else "clir-smoke-query-manifest-v2"
+        ),
         metadata={"protocol_sha256": canonical_sha256(protocol)},
     )
+    if is_v3:
+        primary = [row for row in selected if row["acquisition_batch"] != "reserve"]
+        new_primary = [row for row in selected if row["acquisition_batch"] == "primary"]
+        reserve = [row for row in selected if row["acquisition_batch"] == "reserve"]
+        expected = protocol["generation"]
+        if len(primary) != int(expected["primary_combined_query_count"]):
+            raise AssertionError("v3 primary combined query count is wrong")
+        if len(new_primary) != int(expected["primary_new_query_count"]):
+            raise AssertionError("v3 primary MATH query count is wrong")
+        if len(reserve) != int(expected["reserve_new_query_count"]):
+            raise AssertionError("v3 reserve MATH query count is wrong")
+        publish_manifest(
+            output_dir / "query_manifest_primary.jsonl",
+            primary,
+            schema_version="clir-smoke-query-manifest-primary-v3",
+        )
+        publish_manifest(
+            output_dir / "new_primary_queries.jsonl",
+            new_primary,
+            schema_version="clir-smoke-new-primary-queries-v3",
+        )
+        publish_manifest(
+            output_dir / "reserve_queries.jsonl",
+            reserve,
+            schema_version="clir-smoke-reserve-queries-v3",
+        )
     atomic_write_json(output_dir / "source_freeze_report.json", report)
     publish_manifest(
         output_dir / "permanent_train_only_exclusions.jsonl",
         [
-            {"query_id": row["query_id"], "reason": "train_only_smoke_v2"}
+            {
+                "query_id": row["query_id"],
+                "reason": "train_only_smoke_v3" if is_v3 else "train_only_smoke_v2",
+            }
             for row in selected
         ],
-        schema_version="clir-smoke-permanent-exclusions-v2",
+        schema_version=(
+            "clir-smoke-permanent-exclusions-v3"
+            if is_v3
+            else "clir-smoke-permanent-exclusions-v2"
+        ),
     )
-    print(json.dumps({"query_manifest": manifest, "freeze": report}, indent=2))
+    print(
+        json.dumps(
+            {
+                "query_manifest": manifest,
+                "selected_counts": report.get("selected_counts"),
+                "selected_stratum_counts": report.get("selected_stratum_counts"),
+                "required_query_count": report.get("required_query_count"),
+                "excluded_clusters": report.get("excluded_clusters"),
+            },
+            indent=2,
+        )
+    )
 
 
 def command_rollout(args: argparse.Namespace) -> None:
     protocol = load_protocol(args.protocol)
     generation = protocol["generation"]
     queries = read_jsonl(args.queries)
-    if len(queries) != int(generation["query_count"]):
+    if protocol["schema_version"] == "clir-data-expansion-smoke-v3":
+        allowed_counts = {
+            int(generation["primary_new_query_count"]),
+            int(generation["reserve_new_query_count"]),
+        }
+        if len(queries) not in allowed_counts or any(
+            row.get("source") != "math" for row in queries
+        ):
+            raise ValueError(
+                "v3 rollout accepts only the frozen new-primary or reserve MATH batch"
+            )
+    elif len(queries) != int(generation["query_count"]):
         raise ValueError("query manifest count does not match the frozen protocol")
     try:
         import torch
@@ -557,10 +862,122 @@ def command_rollout(args: argparse.Namespace) -> None:
     manifest = publish_manifest(
         args.output,
         rows,
-        schema_version="clir-smoke-raw-rollouts-v2",
+        schema_version=(
+            "clir-smoke-raw-rollouts-v3"
+            if protocol["schema_version"] == "clir-data-expansion-smoke-v3"
+            else "clir-smoke-raw-rollouts-v2"
+        ),
         metadata={**provenance, **population},
     )
     print(json.dumps(manifest, indent=2))
+
+
+def command_merge_rollouts(args: argparse.Namespace) -> None:
+    protocol = load_protocol(args.protocol)
+    if protocol["schema_version"] != "clir-data-expansion-smoke-v3":
+        raise ValueError("merge-rollouts is defined only for smoke v3")
+    batches = [read_jsonl(path) for path in args.input]
+    expected_batch_count = 3 if args.reserve_included else 2
+    if len(batches) != expected_batch_count:
+        raise ValueError(
+            f"expected {expected_batch_count} rollout batches, found {len(batches)}"
+        )
+    manifests = [read_jsonl(path) for path in args.query_manifest]
+    if len(manifests) != len(batches):
+        raise ValueError("provide one frozen query manifest per rollout input")
+
+    old_hash = str(
+        protocol["selection"]["incumbent_v2_raw_rollout_ordered_rows_sha256"]
+    )
+    batch_hashes = [canonical_sha256(batch) for batch in batches]
+    if batch_hashes[0] != old_hash or old_hash in batch_hashes[1:]:
+        raise ValueError("the first input must be the sole frozen v2 incumbent rollout")
+    protocol_hash = canonical_sha256(protocol)
+    new_query_counts: list[int] = []
+    for batch, manifest, batch_hash in zip(batches, manifests, batch_hashes):
+        manifest_by_id = {str(row.get("query_id")): row for row in manifest}
+        if len(manifest_by_id) != len(manifest):
+            raise ValueError("query manifest contains duplicate query IDs")
+        batch_query_ids = {str(row.get("query_id")) for row in batch}
+        if batch_query_ids != set(manifest_by_id):
+            raise ValueError("rollout batch query IDs do not match its frozen manifest")
+        for row in batch:
+            query = manifest_by_id[str(row["query_id"])]
+            for field in ("source", "question", "reference_answer"):
+                if row.get(field) != query.get(field):
+                    raise ValueError(
+                        f"{row['id']}: rollout {field} differs from frozen query"
+                    )
+        if batch_hash == old_hash:
+            if (
+                canonical_sha256(manifest)
+                != protocol["selection"][
+                    "incumbent_v2_query_manifest_ordered_rows_sha256"
+                ]
+            ):
+                raise ValueError(
+                    "v2 query manifest does not match the frozen incumbent"
+                )
+            continue
+        if any(row.get("source") != "math" for row in batch):
+            raise ValueError("all newly generated v3 rollout rows must come from MATH")
+        provenance_hashes = {
+            str(row.get("provenance", {}).get("protocol_sha256")) for row in batch
+        }
+        if provenance_hashes != {protocol_hash}:
+            raise ValueError("new rollout provenance does not bind to this v3 protocol")
+        manifest_hash = canonical_sha256(manifest)
+        provenance_manifest_hashes = {
+            str(row.get("provenance", {}).get("query_manifest_sha256")) for row in batch
+        }
+        if provenance_manifest_hashes != {manifest_hash}:
+            raise ValueError(
+                "new rollout provenance does not bind to its frozen query manifest"
+            )
+        new_query_counts.append(len(batch_query_ids))
+
+    expected_new_counts = [int(protocol["generation"]["primary_new_query_count"])]
+    if args.reserve_included:
+        expected_new_counts.append(
+            int(protocol["generation"]["reserve_new_query_count"])
+        )
+    if new_query_counts != expected_new_counts:
+        raise ValueError(
+            f"new rollout batch sizes must be {expected_new_counts}, "
+            f"found {new_query_counts}"
+        )
+    rows = [row for batch in batches for row in batch]
+    ids = [str(row.get("id")) for row in rows]
+    if len(ids) != len(set(ids)):
+        raise ValueError("rollout inputs overlap by trajectory ID")
+    population = validate_rollout_population(
+        rows, candidate_count=int(protocol["generation"]["candidate_count"])
+    )
+    expected = (
+        int(protocol["generation"]["maximum_combined_query_count"])
+        if args.reserve_included
+        else int(protocol["generation"]["primary_combined_query_count"])
+    )
+    if population["queries"] != expected:
+        raise ValueError(
+            f"combined rollout query count mismatch: expected {expected}, "
+            f"found {population['queries']}"
+        )
+    report = publish_manifest(
+        args.output,
+        rows,
+        schema_version="clir-smoke-combined-raw-rollouts-v3",
+        metadata={
+            **population,
+            "protocol_sha256": protocol_hash,
+            "input_ordered_hashes": batch_hashes,
+            "input_query_manifest_hashes": [
+                canonical_sha256(manifest) for manifest in manifests
+            ],
+            "reserve_included": bool(args.reserve_included),
+        },
+    )
+    print(json.dumps(report, indent=2))
 
 
 def materialize_rows(
@@ -585,10 +1002,12 @@ def materialize_rows(
         try:
             if tokenizer is None:
                 mapping = row.pop("_fixture_mapping")
+                row["token_mapping_mode"] = "fixture_supplied_offsets"
             else:
                 mapping = tokenize_visible_response(
                     tokenizer, str(row["response"]), row["output_token_ids"]
                 )
+                row["token_mapping_mode"] = mapping.pop("mapping_mode")
             unitization = unitize_exact_tokens(
                 response=str(row["response"]),
                 output_token_ids=row["output_token_ids"],
@@ -608,6 +1027,9 @@ def materialize_rows(
         "rows": len(processed),
         "unitization_ok": sum(row["unitization_status"] == "ok" for row in processed),
         "unitization_failures": dict(failures),
+        "token_mapping_modes": dict(
+            Counter(row.get("token_mapping_mode", "failed") for row in processed)
+        ),
         "checker_statuses": dict(Counter(row["checker_status"] for row in processed)),
         "material_claim_count_histogram": dict(
             sorted(Counter(row["material_claim_count"] for row in processed).items())
@@ -646,7 +1068,11 @@ def command_materialize(args: argparse.Namespace) -> None:
     manifest = publish_manifest(
         args.output,
         processed,
-        schema_version="clir-smoke-materialized-rollouts-v2",
+        schema_version=(
+            "clir-smoke-materialized-rollouts-v3"
+            if protocol["schema_version"] == "clir-data-expansion-smoke-v3"
+            else "clir-smoke-materialized-rollouts-v2"
+        ),
         metadata={
             **report,
             **population,
@@ -664,6 +1090,7 @@ def propose_rows(
     *,
     consistency_count: int,
     hp_quotas: Mapping[tuple[str, int], int],
+    numeric_mismatch_status_only: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     consistency = build_consistency_proposals(
         rows,
@@ -675,8 +1102,32 @@ def propose_rows(
         rows,
         quotas=hp_quotas,
         consistency_proposals=consistency,
+        numeric_mismatch_status_only=numeric_mismatch_status_only,
     )
     return consistency, hp
+
+
+def _hp_quotas_from_strata(
+    strata: Mapping[str, Any],
+) -> dict[tuple[str, int], int]:
+    """Parse frozen ``<source>_numeric_<status>`` proposal quota names."""
+
+    quotas: dict[tuple[str, int], int] = {}
+    for name, count in strata.items():
+        if name.endswith("_numeric_mismatch"):
+            source_name = name.removesuffix("_numeric_mismatch")
+            match = 0
+        elif name.endswith("_numeric_match"):
+            source_name = name.removesuffix("_numeric_match")
+            match = 1
+        else:
+            raise ValueError(f"invalid H/P source stratum name {name!r}")
+        source = {"asdiv_a": "asdiv-a"}.get(source_name, source_name)
+        key = (source, match)
+        if key in quotas:
+            raise ValueError(f"duplicate normalized H/P source stratum {key!r}")
+        quotas[key] = int(count)
+    return quotas
 
 
 def command_propose(args: argparse.Namespace) -> None:
@@ -686,16 +1137,14 @@ def command_propose(args: argparse.Namespace) -> None:
     c_cfg = proposal_cfg["consistency"]
     hp_cfg = proposal_cfg["hallucination_and_prior"]
     strata = hp_cfg["source_numeric_strata"]
-    quotas = {
-        ("gsm8k", 1): int(strata["gsm8k_numeric_match"]),
-        ("gsm8k", 0): int(strata["gsm8k_numeric_mismatch"]),
-        ("asdiv-a", 1): int(strata["asdiv_a_numeric_match"]),
-        ("asdiv-a", 0): int(strata["asdiv_a_numeric_mismatch"]),
-    }
+    quotas = _hp_quotas_from_strata(strata)
     consistency, hp = propose_rows(
         rows,
         consistency_count=int(c_cfg["natural_proposals"]),
         hp_quotas=quotas,
+        numeric_mismatch_status_only=not bool(
+            hp_cfg.get("candidate_parse_failure_allowed", True)
+        ),
     )
     output_dir = Path(args.output_dir)
     c_manifest = publish_manifest(
@@ -726,6 +1175,132 @@ def command_propose(args: argparse.Namespace) -> None:
         schema_version="clir-prior-annotation-items-v2",
     )
     print(json.dumps({"consistency": c_manifest, "h_prior": hp_manifest}, indent=2))
+
+
+def command_readiness(args: argparse.Namespace) -> None:
+    """Apply the frozen primary/reserve yield rule before any v3 annotation."""
+
+    protocol = load_protocol(args.protocol)
+    if protocol["schema_version"] != "clir-data-expansion-smoke-v3":
+        raise ValueError("readiness is defined only for smoke v3")
+    rows = read_jsonl(args.processed)
+    expected_queries = int(
+        protocol["generation"][
+            (
+                "maximum_combined_query_count"
+                if args.reserve_included
+                else "primary_combined_query_count"
+            )
+        ]
+    )
+    population = validate_rollout_population(
+        rows, candidate_count=int(protocol["generation"]["candidate_count"])
+    )
+    if population["queries"] != expected_queries:
+        raise ValueError(
+            f"readiness expected {expected_queries} queries, "
+            f"found {population['queries']}"
+        )
+    mismatch_queries = {
+        str(row["query_id"])
+        for row in rows
+        if row.get("checker_status") == "numeric_mismatch"
+        and row.get("eligible_for_supervision")
+        and row.get("unitization_status") == "ok"
+        and sum(unit.get("kind") == "material_claim" for unit in row.get("units", []))
+        >= int(
+            protocol["unitizer"][
+                "minimum_material_claim_units_for_h_and_prior_proposal"
+            ]
+        )
+    }
+    proposal_error = None
+    try:
+        proposal_cfg = protocol["proposal_manifests"]
+        strata = proposal_cfg["hallucination_and_prior"]["source_numeric_strata"]
+        quotas = _hp_quotas_from_strata(strata)
+        consistency, hp = propose_rows(
+            rows,
+            consistency_count=int(proposal_cfg["consistency"]["natural_proposals"]),
+            hp_quotas=quotas,
+            numeric_mismatch_status_only=True,
+        )
+        proposal_counts = {"consistency": len(consistency), "h_prior": len(hp)}
+    except ValueError as exc:
+        proposal_error = str(exc)
+        proposal_counts = None
+    mismatch_min = int(
+        protocol["acquisition_ladder"][
+            "combined_mechanism_eligible_mismatch_query_count_min"
+        ]
+    )
+    unitization_failures = sum(row.get("unitization_status") != "ok" for row in rows)
+    empty_responses = sum(not str(row.get("response", "")).strip() for row in rows)
+    truncated = sum(row.get("finish_reason") == "length" for row in rows)
+    generation_contract_failure_ids = {
+        str(row["id"])
+        for row in rows
+        if row.get("unitization_status") != "ok"
+        or not str(row.get("response", "")).strip()
+        or row.get("finish_reason") == "length"
+    }
+    generation_contract_failure_fraction = len(generation_contract_failure_ids) / len(
+        rows
+    )
+    maximum_generation_failure_fraction = float(
+        protocol["generation"]["maximum_truncated_empty_or_illegal_fraction"]
+    )
+    exact_contract_pass = unitization_failures == 0
+    generation_quality_pass = (
+        generation_contract_failure_fraction <= maximum_generation_failure_fraction
+    )
+    ready = (
+        len(mismatch_queries) >= mismatch_min
+        and proposal_error is None
+        and exact_contract_pass
+        and generation_quality_pass
+    )
+    if ready:
+        status = "READY_FOR_FROZEN_V3_PROPOSAL_AND_ANNOTATION"
+    elif args.reserve_included:
+        status = "FAIL_YIELD_AFTER_FROZEN_RESERVE"
+    else:
+        status = "ADD_FROZEN_RESERVE_BEFORE_ANNOTATION"
+    report = {
+        "schema_version": "clir-smoke-acquisition-readiness-v3",
+        "status": status,
+        "reserve_included": bool(args.reserve_included),
+        "population": population,
+        "mechanism_eligible_numeric_mismatch_queries": len(mismatch_queries),
+        "mechanism_eligible_numeric_mismatch_query_ids_sha256": canonical_sha256(
+            sorted(mismatch_queries)
+        ),
+        "required_mismatch_queries": mismatch_min,
+        "exact_token_contract": {
+            "pass": exact_contract_pass,
+            "unitization_failures": unitization_failures,
+            "required_pass_rate": protocol["preregistered_gates"][
+                "data_and_exact_token_contract_pass_rate"
+            ],
+        },
+        "generation_quality": {
+            "pass": generation_quality_pass,
+            "truncated": truncated,
+            "empty_responses": empty_responses,
+            "unitization_failures": unitization_failures,
+            "unique_failure_rows": len(generation_contract_failure_ids),
+            "failure_fraction": generation_contract_failure_fraction,
+            "maximum_fraction": maximum_generation_failure_fraction,
+            "checker_ineligible_rows_reported_separately": population[
+                "ineligible_rows"
+            ],
+        },
+        "proposal_counts": proposal_counts,
+        "proposal_error": proposal_error,
+        "annotation_allowed": ready,
+    }
+    atomic_write_json(args.output, report)
+    print(json.dumps(report, indent=2))
 
 
 def _simple_units(texts: Sequence[str]) -> tuple[str, list[dict[str, Any]]]:
@@ -780,13 +1355,17 @@ def _protocol_controls(
             hallucinated = index % 2 == 1
             texts = [
                 "Mina starts with 2 apples.",
-                "The problem gives her 30 more apples."
-                if hallucinated
-                else "The problem gives her 3 more apples.",
+                (
+                    "The problem gives her 30 more apples."
+                    if hallucinated
+                    else "The problem gives her 3 more apples."
+                ),
                 "The requested operation is addition.",
-                "The final total is 32 apples."
-                if hallucinated
-                else "The final total is 5 apples.",
+                (
+                    "The final total is 32 apples."
+                    if hallucinated
+                    else "The final total is 5 apples."
+                ),
             ]
             trajectory, units = _simple_units(texts)
             item = {
@@ -809,9 +1388,7 @@ def _protocol_controls(
             }
         elif task == "prior":
             usable = index % 2 == 0
-            control_problem = (
-                "Mina has 2 apples and receives 3 more. How many apples?"
-            )
+            control_problem = "Mina has 2 apples and receives 3 more. How many apples?"
             if usable:
                 eligibility = "usable"
                 if control_version == "v2":
@@ -1104,9 +1681,9 @@ def command_triage(args: argparse.Namespace) -> None:
         raw.update(
             {
                 "auto_agree_nonlow": len(auto_agree),
-                "pre_adjudication_fraction": len(disputes) / len(natural_ids)
-                if natural_ids
-                else None,
+                "pre_adjudication_fraction": (
+                    len(disputes) / len(natural_ids) if natural_ids else None
+                ),
                 "low_confidence_a": sum(
                     row["confidence"] == "low" for row in by_a.values()
                 ),
@@ -1349,10 +1926,7 @@ def evaluate_preregistered_gates(
         ">=",
         thresholds["consistency_final_accepts_min"],
     )
-    if (
-        min(c_raw["a_decisions"].values(), default=0) >= 5
-        and min(c_raw["b_decisions"].values(), default=0) >= 5
-    ):
+    if _consistency_kappa_applicable(c_raw):
         add(
             "consistency_kappa",
             c_raw["decision_kappa"],
@@ -1530,14 +2104,26 @@ def evaluate_preregistered_gates(
         "==",
         thresholds["final_consistency_accepts"],
     )
-    minimum_source = int(thresholds["minimum_each_source_per_final_h_class"])
+    hp_cfg = protocol["proposal_manifests"]["hallucination_and_prior"]
+    source_minima = hp_cfg.get("minimum_source_by_class")
+    if source_minima is None:
+        minimum_source = int(thresholds["minimum_each_source_per_final_h_class"])
+        source_minima = {
+            status: {"gsm8k": minimum_source, "asdiv-a": minimum_source}
+            for status in ("hallucinated", "clean")
+        }
     for status in ("hallucinated", "clean"):
-        for source in ("gsm8k", "asdiv-a"):
+        for source, minimum_source in sorted(source_minima[status].items()):
             count = sum(
                 row["h_status"] == status and row["source"] == source
                 for row in final_hp
             )
-            add(f"final_{status}_{source}", count, ">=", minimum_source)
+            add(
+                f"final_{status}_{source}",
+                count,
+                ">=",
+                int(minimum_source),
+            )
     final_unit_counts = [
         sum(
             unit["kind"] == "material_claim"
@@ -1572,12 +2158,24 @@ def evaluate_preregistered_gates(
     )
     failed = [row["name"] for row in results if row["status"] == "FAIL"]
     return {
-        "status": "PASS_ALL_PREREGISTERED_GATES"
-        if not failed
-        else "FAIL_PIPELINE_GATES",
+        "status": (
+            "PASS_ALL_PREREGISTERED_GATES" if not failed else "FAIL_PIPELINE_GATES"
+        ),
         "failed_gate_names": failed,
         "results": results,
     }
+
+
+def _consistency_kappa_applicable(
+    raw_report: Mapping[str, Any], *, minimum_per_class: int = 5
+) -> bool:
+    """Require both decision classes from both annotators before gating kappa."""
+
+    return all(
+        raw_report[f"{slot}_decisions"].get(decision, 0) >= minimum_per_class
+        for slot in ("a", "b")
+        for decision in ("accept", "reject")
+    )
 
 
 def _validate_label_file(
@@ -1749,9 +2347,9 @@ def command_finalize(args: argparse.Namespace) -> None:
             "disputes_independently_answered": len(task_triage["dispute_item_ids"]),
             "auto_agree_audit_stable": stable,
             "auto_agree_audit_total": len(audit_ids),
-            "auto_agree_audit_stability": stable / len(audit_ids)
-            if audit_ids
-            else None,
+            "auto_agree_audit_stability": (
+                stable / len(audit_ids) if audit_ids else None
+            ),
             "interpretation": "third-model stability, not natural-label accuracy",
         }
         adjudications = _load_and_validate_adjudications(
@@ -1785,6 +2383,7 @@ def command_finalize(args: argparse.Namespace) -> None:
             labels_a=labels_a,
             labels_b=labels_b,
             adjudications=adjudications,
+            label_tier=str(protocol["annotation"]["label_tier"]),
         )
 
     processed = read_jsonl(args.processed)
@@ -1808,29 +2407,39 @@ def command_finalize(args: argparse.Namespace) -> None:
             row = by_id[str(proposal[field])]
             row["semantic_id"] = str(proposal["query_id"])
             row["style_id"] = style
-            row["consistency_label_tier"] = LABEL_TIER
+            row["consistency_label_tier"] = str(protocol["annotation"]["label_tier"])
 
+    hp_cfg = protocol["proposal_manifests"]["hallucination_and_prior"]
     final_hp = select_joint_h_prior_rows(
         proposals=hp_proposals,
         h_labels=resolved["hallucination"],
         prior_labels=resolved["prior"],
-        per_class=int(
-            protocol["proposal_manifests"]["hallucination_and_prior"][
-                "final_positive_onset"
-            ]
+        per_class=int(hp_cfg["final_positive_onset"]),
+        minimum_each_source_per_class=(
+            int(hp_cfg["minimum_each_source_per_class"])
+            if "minimum_each_source_per_class" in hp_cfg
+            else None
         ),
-        minimum_each_source_per_class=int(
-            protocol["proposal_manifests"]["hallucination_and_prior"][
-                "minimum_each_source_per_class"
-            ]
-        ),
+        minimum_source_by_class=hp_cfg.get("minimum_source_by_class"),
     )
     h_by_id = {str(row["item_id"]): row for row in resolved["hallucination"]}
     p_by_id = {str(row["item_id"]): row for row in resolved["prior"]}
     for proposal in final_hp:
         row = by_id[str(proposal["id"])]
-        row.update(materialize_h_label(h_by_id[str(proposal["id"])], row))
-        row.update(materialize_prior_label(p_by_id[str(proposal["id"])], row))
+        row.update(
+            materialize_h_label(
+                h_by_id[str(proposal["id"])],
+                row,
+                label_tier=str(protocol["annotation"]["label_tier"]),
+            )
+        )
+        row.update(
+            materialize_prior_label(
+                p_by_id[str(proposal["id"])],
+                row,
+                label_tier=str(protocol["annotation"]["label_tier"]),
+            )
+        )
     output_dir = Path(args.output_dir)
     reports["final_counts"] = {
         "consistency_pairs": len(final_c),
@@ -2015,9 +2624,11 @@ def command_fixture(args: argparse.Namespace) -> None:
             "status": "hallucinated" if hallucinated else "clean",
             "first_bad_unit_index": material[-2] if hallucinated else None,
             "confidence": "high",
-            "rationale": "fixture label with a known final arithmetic mismatch"
-            if hallucinated
-            else "fixture clean chain",
+            "rationale": (
+                "fixture label with a known final arithmetic mismatch"
+                if hallucinated
+                else "fixture clean chain"
+            ),
         }
         prior_payload = {
             "item_id": item["item_id"],
@@ -2170,7 +2781,8 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     sources = commands.add_parser(
-        "sources", help="export pinned GSM8K train and ASDiv-A source rows"
+        "sources",
+        help="export protocol-pinned GSM8K/ASDiv-A rows and optional MATH train rows",
     )
     sources.add_argument("--asdiv-repository", required=True)
     sources.add_argument("--output", required=True)
@@ -2185,6 +2797,15 @@ def build_parser() -> argparse.ArgumentParser:
     candidates.add_argument("--output", required=True)
     candidates.add_argument("--threshold", type=float, default=0.82)
     candidates.set_defaults(func=command_dedup_candidates)
+
+    seed_v3_dedup = commands.add_parser(
+        "seed-v3-dedup",
+        help="carry v2 dedup decisions and conservatively handle MATH near pairs",
+    )
+    seed_v3_dedup.add_argument("--candidates", required=True)
+    seed_v3_dedup.add_argument("--prior-decisions", required=True)
+    seed_v3_dedup.add_argument("--output-dir", required=True)
+    seed_v3_dedup.set_defaults(func=command_seed_v3_dedup)
 
     resolve_dedup = commands.add_parser(
         "resolve-dedup", help="merge blind A/B and third-model duplicate decisions"
@@ -2216,11 +2837,15 @@ def build_parser() -> argparse.ArgumentParser:
     exclusions.set_defaults(func=command_collect_exclusions)
 
     freeze = commands.add_parser(
-        "freeze", help="freeze the 60/40 train-only query manifest"
+        "freeze", help="freeze the protocol-pinned train-only query manifest"
     )
     freeze.add_argument("--sources", required=True)
     freeze.add_argument("--near-duplicate-decisions")
     freeze.add_argument("--excluded-query-ids")
+    freeze.add_argument(
+        "--required-query-ids",
+        help="v3 incumbent query manifest/ID file that must remain selected",
+    )
     freeze.add_argument("--threshold", type=float, default=0.82)
     freeze.add_argument("--output-dir", required=True)
     freeze.set_defaults(func=command_freeze)
@@ -2237,6 +2862,20 @@ def build_parser() -> argparse.ArgumentParser:
     rollout.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     rollout.set_defaults(func=command_rollout)
 
+    merge_rollouts = commands.add_parser(
+        "merge-rollouts", help="merge reused v2 and new v3 rollout batches"
+    )
+    merge_rollouts.add_argument("--input", action="append", required=True)
+    merge_rollouts.add_argument(
+        "--query-manifest",
+        action="append",
+        required=True,
+        help="frozen query manifest corresponding positionally to each --input",
+    )
+    merge_rollouts.add_argument("--reserve-included", action="store_true")
+    merge_rollouts.add_argument("--output", required=True)
+    merge_rollouts.set_defaults(func=command_merge_rollouts)
+
     materialize = commands.add_parser(
         "materialize", help="run the protocol-pinned checker and exact-token unitizer"
     )
@@ -2251,6 +2890,14 @@ def build_parser() -> argparse.ArgumentParser:
     propose.add_argument("--processed", required=True)
     propose.add_argument("--output-dir", required=True)
     propose.set_defaults(func=command_propose)
+
+    readiness = commands.add_parser(
+        "readiness", help="apply the frozen v3 primary/reserve yield gate"
+    )
+    readiness.add_argument("--processed", required=True)
+    readiness.add_argument("--reserve-included", action="store_true")
+    readiness.add_argument("--output", required=True)
+    readiness.set_defaults(func=command_readiness)
 
     package = commands.add_parser(
         "package", help="add hidden controls and A-only self repeats to blind packages"

@@ -183,10 +183,31 @@ python prepare_clir_smoke.py fixture \
 [`docs/data_expansion_smoke_protocol_v2.md`](docs/data_expansion_smoke_protocol_v2.md#16-2026-08-25-实现状态与唯一执行入口)；
 可复制提示词在
 [`configs/data_expansion_smoke_v2/annotation_prompts.md`](configs/data_expansion_smoke_v2/annotation_prompts.md)。
-当前下一步不是继续 v2 裁决，而是先冻结 v3 acquisition：决定新增多少更难 query/是否引入第三题源，
-确保修正 checker 后至少有足够的 query-distinct mismatch；同时把 Complete 定义、例子与隐藏控制题改成
-同一口径。只有 v3 的 checker yield 与 proposal manifest 在任何新标签出现前重新冻结，才生成新的六份
-盲包。若继续使用不暴露 temperature 的聊天产品，仍只能报告为带明确复现偏离的 Silver pipeline pilot。
+v2 不再继续裁决或训练；它只保留为失败审计与 backward-compatible checker 回归。v3 acquisition 已按
+下面的新协议完成，旧标签不跨 manifest 搬运。
+
+## 2026-08-25 多题源扩量 smoke v3：主批次过 readiness，等待双 AI
+
+canonical 规格是
+[`docs/data_expansion_smoke_protocol_v3.md`](docs/data_expansion_smoke_protocol_v3.md)，机器契约与标注语义在
+[`configs/data_expansion_smoke_v3`](configs/data_expansion_smoke_v3)。v3 完整保留 v2 的 60 GSM8K +40
+ASDiv-A train-only incumbents，并从 MATH train 的 algebra、counting/probability、number theory、
+prealgebra 中按 level 3/4/5 分层预选 60 个 primary +48 个 reserve。只纳入 final boxed answer 能由同一
+checker 唯一解析为标量数值、官方解至少 45 词且不含 Asymptote 的题。production loader 只请求 train
+parquet，MATH test 不用于读取、选样或调参；冻结前一次开发性 loader 预检曾把 test 写入本机 cache，
+但没有查看 test row/答案/表现，因此不能声称该工作区从未下载过 test。
+
+primary 新增 60 题×8=480 条 Phi rollout，与绑定 hash 的旧 800 条合并为 160 题、1,280 条。v3 checker
+得到 995 match、240 个明确 parsed mismatch、10 个冲突多答案、14 个 parse failure、21 个长度截断；
+1,280/1,280 exact-token partition 通过。截断占 1.64%，低于冻结 2% 上限且全部排除。可用于机制提议的
+query-distinct parsed mismatch 有 57 个，超过预注册最低 30；40 个 C 与 60 个 H/P 固定 strata 也都能
+一次凑齐，因此状态为 `READY_FOR_FROZEN_V3_PROPOSAL_AND_ANNOTATION`，48 题 reserve 没有生成。
+
+H/P 的 60 条固定为 GSM8K match/mismatch `10/8`、ASDiv-A match `12`、MATH match/mismatch `8/22`；
+parse failure 不得冒充错误富集。Complete 现明确指候选实际依赖链里所有被后续使用的唯一非冗余中间
+步骤，不得压缩成另一条更短证明。盲包已生成：A=`52/78/78`，B=`44/66/66`（C/H/P，含隐藏控制和
+A-only self-repeat）；下一步只做六个隔离的 A/B 标注，回来后先运行 raw triage，再决定是否启动第三模型。
+这一轮仍不抽 hidden state、不训练、不产生模块 efficacy 或 Best-of-N 结论。
 
 ## 目录
 
@@ -196,7 +217,8 @@ configs/clean_ablation_v1/            可复现的 C/H/P/full 消融训练配置
 configs/clean_gate_ablation_v1/       P0→PG0 prior-to-gate 冻结消融
 configs/clean_gate_tuning_v2/         gate 工程默认值选择训练配置
 configs/data_expansion_smoke_v2/      双审查后多题源扩量 smoke 的机器可读协议
-prepare_clir_smoke.py                  v2 source→rollout→双标→硬门的唯一入口
+configs/data_expansion_smoke_v3/      当前 MATH 扩量 smoke 的机器协议与标注语义
+prepare_clir_smoke.py                  v2/v3 source→rollout→双标→硬门的唯一入口
 src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约
 src/clir_features.py                  identity/layer-axis 特征编码器
 src/clir_data.py                      JSONL 数据、严格 token 对齐、collate、sampler
@@ -212,10 +234,11 @@ tests/                                模型、数据、续训与评估测试
 docs/proposal.md                      与当前实现一致的方法说明
 docs/handoff.md                       迁移裁决、历史证据和下一步
 docs/data_expansion_smoke_protocol_v2.md  双审查整合后的 100-query smoke 协议
+docs/data_expansion_smoke_protocol_v3.md  当前 160-query primary acquisition 与双标协议
 ```
 
 当前分支顶端只保留训练/打分/评测代码、测试、可运行配置、README、handoff、核心方法说明和
-唯一 canonical 扩量协议。历史报告与被 supersede 的协议仍可从 Git 历史恢复，但不再占用当前
+当前 canonical 扩量协议。历史报告与被 supersede 的协议仍可从 Git 历史恢复，但不再占用当前
 远端目录视图。
 
 ## 环境
@@ -224,8 +247,8 @@ docs/data_expansion_smoke_protocol_v2.md  双审查整合后的 100-query smoke 
 pip install -r requirements.txt
 ```
 
-`torch`、`numpy` 和 `pytest` 是训练与测试依赖；`transformers` 与 `huggingface_hub` 用于 exact-ID
-materialization/抽取。v2 source export 固定 `datasets==3.6.0`，rollout 固定
+`torch`、`numpy` 和 `pytest` 是训练与测试依赖；`transformers`、`huggingface_hub` 与 `pyarrow` 用于
+exact-ID materialization、MATH train parquet 和抽取。v2/v3 source export 固定 `datasets==3.6.0`，rollout 固定
 `vllm==0.5.3.post1` 与 `numpy==1.26.4`；训练和打分本身仍不会导入 task LLM 或 vLLM。
 
 ## 唯一默认配置

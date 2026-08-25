@@ -286,7 +286,12 @@ Prior 比 v2 明显改善：eligibility=`60/60`，Key/Complete macro F1=`.9167/.
 development：同一提示词先做数学路径判断，再做表达差异判断，并明确公式/数字/必然顺序相同不等于照抄。
 第一阶段只回放上述 14 条已检查争议，门为至少13/14 agreement、每边 review≤1 且 accept/reject 各≥2；
 这些行不训练、不算新证据。通过后才制作 30 条不复用 v2/v3 C item/query 的新确认 pair，门为27/30。
-当前状态是 `READY_FOR_DEVELOPMENT_REPLAY`，只需两个全新 A/B 上下文，不调用第三模型。
+两个全新 A/B 上下文已经完成，冻结检查器终态为 `STOP_REPLAY_FAILURE`。decision agreement 只有
+`7/14=.50<13/14`，kappa=`-.0426`；A accept/reject=`8/6`，B=`9/5`，两边 review 都是 0，格式、理由
+前缀和反塌缩门均通过。七个分歧里四个是近抄/真实展开边界，两个是单位表示或乘法分组是否算同一路径，
+一个是回答夹带实质错误是否必须拒绝。因此失败不是输出质量问题，而是 prompt 没有把自然困难边界变成
+跨模型稳定规则。按预注册决定，不制作 30 条新确认，不调用第三模型，不训练，也不把回放当可靠性证据；
+prompt-only 修复路线到此关闭。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -480,9 +485,10 @@ hallucination_onset = k
 
 1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
    失败作为 pipeline-smoke 诊断。
-2. 先完成 C prompt-v4 的两个 14 条开发回放；通过后再做 30 条全新确认。若新确认不过，停止提示词路线，
-   再考虑机械 similarity band；不得降低门或重标 v3 冒充通过。Prior 仍需在新版本中先标显式 dependency
-   edges，再由确定性传递闭包得到 Complete，或预注册等价组容错。
+2. C prompt-v4 已以 `7/14` 未通过，30 条全新确认被禁止，提示词-only 路线已经停止。下一版若保留 C，
+   应先把 pair 构造机械化：显式固定“同一路径”的中间量/依赖等价规则，并用简单的非数学文本重合区间
+   排除近抄与差异过大的 pair；或者暂缓 C 扩量。不得降低门、重标 v3 或用第三模型把失败裁成通过。
+   Prior 仍需在新版本中先标显式 dependency edges，再由确定性传递闭包得到 Complete，或预注册等价组容错。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
 4. 根据 source/numeric/unit-count 分层 yield、裁决成本和许可另发正式扩量协议；目标仍是 C train

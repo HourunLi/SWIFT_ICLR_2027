@@ -261,6 +261,33 @@ hidden controls 各 4/4，A self-repeats=3/3，理由前缀和 schema 全部合�
 允许另写正式 Consistency 扩量协议。v5 自身仍 `eligible_for_training=false`、禁止第三模型补救，不抽 hidden
 state、不训练，也不产生 Consistency efficacy 或 Best-of-N 结论。
 
+## 数据扩容主协议 v6：协议已冻结，尚未启动生成
+
+用户已确认先完成正式扩容准备，不直接继续旧 Full 或在旧小数据上增加 epoch。新的
+[`docs/data_expansion_scale_protocol_v6.md`](docs/data_expansion_scale_protocol_v6.md) 与
+[`configs/data_expansion_scale_v6/protocol.json`](configs/data_expansion_scale_v6/protocol.json) 固定了中档
+Consistency 扩量方案：2,000 个全新 train-only query（1,400 MATH train +600 长链 GSM8K train），每题
+8 个 Phi 候选，共约 16,000 条 raw rollout；query/template cluster 在生成前拆成 1,500 个
+train-acquisition 和 500 个 heldout-acquisition。目标是 400 个训练正关系、150 个 query/cluster-disjoint
+held-out 正关系，再配 150 个确定性 hard negatives 检查表示塌缩。
+
+v6 原样保留 v5 的 numeric/path/surface 机械阈值，不允许看完新 rollout 后调松；两个不同、非 Phi 的 AI
+只审查实质错误，最多 50 条自然 pair 一包，并混入隐藏控制和跨包自重复。只有 A/B 都 accept 的 pair 才能
+按预先冻结的 hash 顺序入选；自然 agreement<95%、任一控制失败、自重复<95% 或 common accepts 不足
+400/150 都直接停止，不由第三模型补救。没有人工复核，因此未来标签只叫
+`silver_dual_ai_consistency_v6`，不能叫 Gold。
+
+存储顺序也已固定：16,000 条只先保存文本和 token IDs，完成机械筛选与双标后只给最终 550 对、1,100 条
+view 抽全层 feature，按 420 output token 的保守均值估计约 105.5 GB；若先给全部 rollout 抽
+`33×3072` BF16 feature，预计约 1.42 TB，协议明确禁止。H 仍需全新 `30 positive +30 clean` 的 H-only
+确认；Prior 仍需先标 dependency edges、由程序做传递闭包得到 Complete；独立 1,500–2,000×16 ranking
+pool 另行冻结预算。
+
+当前状态准确写作 `FROZEN_PREPARATION_ROLLOUT_NOT_STARTED`：协议、预算和失败门已写好，但没有新
+rollout、标注、hidden state 或训练结果。下一道门是先冻结来源 inventory、历史排除表、近重复 cluster、
+1,500/500 query split 和 40 个原子 rollout shard 的 manifest/hash；全部核对后，再向用户确认是否真正启动
+约 16,000 条生成。
+
 ## 目录
 
 ```text
@@ -272,6 +299,7 @@ configs/data_expansion_smoke_v2/      双审查后多题源扩量 smoke 的机�
 configs/data_expansion_smoke_v3/      当前 MATH 扩量 smoke 的机器协议与标注语义
 configs/data_expansion_smoke_v4/      Consistency 提示词修复、14-ID 回放清单与机器门
 configs/data_expansion_smoke_v5/      Consistency 机械筛选与双 AI 事实审计协议/启动提示词
+configs/data_expansion_scale_v6/      正式扩容准备：数量、split、分片、双标门与预算
 prepare_clir_smoke.py                  v2/v3 数据管线与 v4/v5 Consistency gate 入口
 src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约
 src/clir_features.py                  identity/layer-axis 特征编码器
@@ -291,10 +319,11 @@ docs/data_expansion_smoke_protocol_v2.md  双审查整合后的 100-query smoke 
 docs/data_expansion_smoke_protocol_v3.md  当前 160-query primary acquisition 与双标协议
 docs/data_expansion_smoke_protocol_v4.md  Consistency 提示词修复与新样本确认门
 docs/data_expansion_smoke_protocol_v5.md  Consistency 机械筛选与新鲜双盲事实审计
+docs/data_expansion_scale_protocol_v6.md  当前数据扩容主协议；已冻结但尚未 rollout
 ```
 
 当前分支顶端只保留训练/打分/评测代码、测试、可运行配置、README、handoff、核心方法说明和
-当前 canonical 扩量协议。历史报告与被 supersede 的协议仍可从 Git 历史恢复，但不再占用当前
+当前关键扩量协议。历史报告与被 supersede 的协议仍可从 Git 历史恢复，但不再占用当前
 远端目录视图。
 
 ## 环境

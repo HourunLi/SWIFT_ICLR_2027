@@ -1,6 +1,6 @@
 # CLIR clean integration 交接说明
 
-本分支从 `main` 的十余文件结构重新出发，只整合 `panzhixin` 分支中可复用的工程进展和通过相应门的模块部分。它不是对 `panzhixin` 的压缩复制，也没有继承其大量标注流水账、版本化 runner 或失败实现。当前远端顶端只保留训练/打分/评测代码、测试、可运行配置、README、本 handoff、核心方法说明和当前关键 smoke 协议；阶段报告、PDF、v1 协议及审查过程材料的最后完整快照是提交 `596a5e4`，需要时可从 Git 历史恢复。Consistency-v5 的 rollout、双盲包和标签继续只留在被忽略的 `run_artifacts/`。
+本分支从 `main` 的十余文件结构重新出发，只整合 `panzhixin` 分支中可复用的工程进展和通过相应门的模块部分。它不是对 `panzhixin` 的压缩复制，也没有继承其大量标注流水账、版本化 runner 或失败实现。当前远端顶端只保留训练/打分/评测代码、测试、可运行配置、README、本 handoff、核心方法说明、关键 smoke 协议和当前 v6 扩容主协议；阶段报告、PDF、v1 协议及审查过程材料的最后完整快照是提交 `596a5e4`，需要时可从 Git 历史恢复。Consistency-v5 的 rollout、双盲包和标签继续只留在被忽略的 `run_artifacts/`；2026-08-26 重新生成的阶段 PDF 也只作为本地产物交付，不进入精简远端。
 
 当前唯一运行配置是 `configs/best_current.json`。这里的 “best current” 指当前最清晰、最可维护的**整合方案**；历史上最高的单次联合矩阵 BoN@16 是 correctness-only J0 `.920`，不是三模块联合成功。
 
@@ -319,6 +319,33 @@ controls 均被正确 reject，排除了“所有输入都 accept”的简单退
 `eligible_for_training=false`、`third_model_allowed=false`，不发布训练 manifest、不抽 hidden state、不训练，
 也不支持 Consistency 改善 Best-of-N 的结论。
 
+## 2026-08-26 数据扩容主协议 v6：准备已冻结，rollout 未启动
+
+用户确认采用中档 Consistency 扩量方案。canonical 文档是
+[`data_expansion_scale_protocol_v6.md`](data_expansion_scale_protocol_v6.md)，机器契约是
+[`../configs/data_expansion_scale_v6/protocol.json`](../configs/data_expansion_scale_v6/protocol.json)。v6 不是
+v5 数据的放大复制，也不复用那 12 对 smoke：它计划从所有历史 query 之外重新冻结 2,000 个 train-only
+query，来源为 1,400 MATH train 与 600 个长链 GSM8K train，每题 8 条、共约 16,000 条 raw rollout。
+生成前按 original query + near-duplicate template cluster 拆成 1,500 train-acquisition 与 500
+heldout-acquisition，目标是 400 train positive relations、150 held-out positive relations，并从 heldout
+query 确定性匹配 150 个 different-semantic/similar-surface hard negatives。
+
+机械筛选完全复用 `clir_consistency_mechanical_v1` 的 v5 阈值：两边 numeric match/同答案、至少 4 个
+material claims、长度比 `[1.15,3]`、math trace≥`.60`、numeric trace≥`.75`、surface bigram Jaccard
+`[.10,.40]`，每题最多一对且 hash tie-break。AI 只审事实错误；A/B 必须是不同、非 Phi 模型系列，最多
+50 个自然 pair 一 shard，带 4 个隐藏控制和约 10% 跨 shard 自重复。未来只有双方共同 accept 的 pair 可按
+冻结顺序入选；agreement<.95、控制非 100%、自重复<.95 或 common accepts 不足 400/150 都 fail-closed，
+不允许第三模型救活。无人类复核，所以标签只叫 `silver_dual_ai_consistency_v6`。
+
+预算按真实 v3/v5 token 长度估算：全层 BF16 每 token `33×3072×2=202,752` bytes。2,000×8 若全部抽
+feature 约 1.42 TB，因此 v6 明确先 rollout/check/unitize/filter/双标，最后只抽入选的 1,100 条 views 与
+550 个共享 prompt，保守估计约 105.5 GB。独立 ranking pool 的 TB 级 feature 另算，不能混入本轮预算。
+
+本轮提交只冻结协议，不实现或启动大规模生成。`execution_authorization.rollout_allowed=false`；下一道门是
+发布 source inventory、永久排除表、template clusters、1,500/500 query manifests、40 个原子 rollout
+shards 和重算后的预算 hash，然后再次取得用户明确确认。当前状态必须写为“正在准备数据扩容”，不能写成
+“数据扩容已完成”或“Consistency 已经有 400 对训练数据”。
+
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
 | 维度 | 结论 | 边界 |
@@ -511,15 +538,15 @@ hallucination_onset = k
 
 1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
    失败作为 pipeline-smoke 诊断。
-2. C prompt-v4 已以 `7/14` 未通过；v5 的机械筛选与双盲事实审计现已全门通过。下一步另行冻结
-   300–500 train /100–200 held-out 的正式 C 扩量协议，继续沿用机械规则，并增加 query-disjoint held-out
-   relation 评估；不得直接把 v5 的 12 对当训练集，也不得因本轮 12/12 accept 就省略正式扩量的质量审计。
-   Prior 仍需在新版本中先标显式 dependency edges，再由确定性传递闭包得到 Complete，或预注册等价组容错。
+2. C prompt-v4 已失败；v5 的机械筛选与双盲事实审计已通过；v6 的 400-train/150-heldout 正式扩容协议现已
+   冻结。下一步只制作并核对 source/exclusion/template-cluster/query-split/40-shard manifests 与预算，不启动
+   rollout。manifest/hash 全门通过并再次取得用户确认后，才可生成约 16,000 条；不得复用 v5 的 12 对，
+   不得看完新 yield 后调松机械阈值。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
-4. 根据 source/numeric/unit-count 分层 yield、裁决成本和许可另发正式扩量协议；目标仍是 C train
-   300–500/held-out 100–200、H train 200+200/dev 100+100、prior train 300–500/dev 100–200，以及统一
-   checker 的 1500–2000 independent queries ×16 ranking validation。
+4. Prior 先用 40–60 条全新轨迹标显式 dependency edges，由确定性传递闭包得到 Complete、再选 Key；只有
+   exact-set 分歧和裁决负担降下来才扩为 train 300–500/dev 100–200。H 通过后目标仍是 train
+   200+200/dev 100+100；统一 checker 的 1500–2000 independent queries ×16 ranking validation 另发协议。
 5. 用新数据完整重跑 `C0/C1/H0/CH0`；H 先过 boundary/calibration，当前 gold-tail、MIL、pseudo-tail 不进
    核心矩阵。prior 先复核 direct target，再在新 ranking population 上固定 `.25` 做 gate off/on，不再调权重。
    若要归因 encoder，补 strict/encoded SWIFT 等预算 baseline。

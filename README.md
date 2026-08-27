@@ -6,6 +6,19 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 
 需要先明确证据边界：[`configs/best_current.json`](configs/best_current.json) 是当前唯一的**整合配置**，不是已经证明优于 correctness-only baseline 的“最优效果配置”。三模块联合训练的历史结果没有通过扩展门，详见 [`docs/handoff.md`](docs/handoff.md)。
 
+## 当前标注账本（扩量前）
+
+必须把“已经用于小规模训练的数据”和“后来只做流程审计的数据”分开：
+
+| 数据层 | 现有规模 | 现在能否训练 | 准确含义 |
+|---|---:|---|---|
+| Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
+| Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
+| Hallucination H | 17 条 first-bad-unit positive +31 条明确 clean | 是，但很稀疏 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”；H0 学起点，H1 另把起点后的 value 往负方向推 |
+| Dual Prior | 48 条与 H 共用的轨迹、每个 head 14,307 个 token 标签 | 是，但有效独立样本仍只有 48 条 | 双 AI 标 Key（最关键步骤）和 Complete（支撑结论所需步骤集合） |
+
+后来的标注不能并入这张训练表：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过了机械筛选流程审计，协议明确 `eligible_for_training=false`。所以现阶段不是“已经有很多新标签但还没训练”，而是“旧小数据已跑通，新扩量数据尚未生成”。
+
 ## 2026-08-23 clean integration 审计与训练试跑
 
 本轮在 `clir-clean-integration` 的 `8b116c4` 上完成了代码、旧 artifact 兼容和真实训练审计，并修复了一个 CUDA 续训回归：full-state checkpoint 现在先加载到 CPU，再恢复 model/optimizer/RNG；若把整个 checkpoint 映射到 CUDA，CPU RNG state 会被搬到 GPU，`torch.set_rng_state` 会直接失败。修复后固定 SWIFT Python 环境的完整测试为 `37 passed`，CUDA 上的 interrupted→resume 回归也通过。
@@ -284,9 +297,11 @@ view 抽全层 feature，按 420 output token 的保守均值估计约 105.5 GB�
 pool 另行冻结预算。
 
 当前状态准确写作 `FROZEN_PREPARATION_ROLLOUT_NOT_STARTED`：协议、预算和失败门已写好，但没有新
-rollout、标注、hidden state 或训练结果。下一道门是先冻结来源 inventory、历史排除表、近重复 cluster、
-1,500/500 query split 和 40 个原子 rollout shard 的 manifest/hash；全部核对后，再向用户确认是否真正启动
-约 16,000 条生成。
+rollout、标注、hidden state 或训练结果。2026-08-27 又在生成前冻结了长链 GSM 统计、实体/数字模板、
+MinHash/Jaccard 阈值、历史排除传播、分层配额、prompt 上限与每 shard `35 MATH +15 GSM8K` 等执行细节。
+独立入口 [`prepare_clir_scale.py`](prepare_clir_scale.py) 只提供 `freeze/verify`，刻意没有 rollout 命令；它先
+发布来源 inventory、永久排除表、近重复 cluster、1,500/500 query split、40 个原子 shard 和实际预算 hash，
+全部核对后仍须再次取得用户确认，才可真正启动约 16,000 条生成。
 
 ## 目录
 
@@ -301,7 +316,9 @@ configs/data_expansion_smoke_v4/      Consistency 提示词修复、14-ID 回放
 configs/data_expansion_smoke_v5/      Consistency 机械筛选与双 AI 事实审计协议/启动提示词
 configs/data_expansion_scale_v6/      正式扩容准备：数量、split、分片、双标门与预算
 prepare_clir_smoke.py                  v2/v3 数据管线与 v4/v5 Consistency gate 入口
+prepare_clir_scale.py                  v6 扩量前六清单冻结与只读复核；不包含 rollout
 src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约
+src/clir_scale.py                      v6 来源过滤、历史排除、模板分簇、split/shard/预算契约
 src/clir_features.py                  identity/layer-axis 特征编码器
 src/clir_data.py                      JSONL 数据、严格 token 对齐、collate、sampler
 src/consistency_localized_reward.py   reward model、三模块和 loss

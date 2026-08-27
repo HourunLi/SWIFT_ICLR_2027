@@ -181,7 +181,20 @@ Consistency v6 通过也只解锁 C 数据，不自动解锁其他模块或 Full
 
 ## 10. 当前唯一下一步
 
-目前处于**数据扩容准备阶段**。下一步不是启动训练，而是实现并核对：
+目前处于**数据扩容准备阶段**。2026-08-27 的生成前澄清已经在机器契约中补齐并冻结：长链 GSM 的统计口径、
+数字/实体模板算法、64-permutation/16-band MinHash、token/trigram Jaccard 阈值、历史排除项向整个 cluster
+传播、MATH 学科×难度与 GSM 四分位分层、3,072-token prompt 上限，以及每个 shard 固定
+`35 MATH +15 GSM8K`。这些都发生在任何 v6 rollout 之前，不是看过 yield 后调规则。
+
+独立入口是：
+
+```bash
+python prepare_clir_scale.py freeze
+python prepare_clir_scale.py verify
+```
+
+它刻意没有 rollout、标注、抽特征或训练子命令；`freeze` 还会拒绝 dirty worktree 和覆盖已有冻结目录。
+下一步不是启动训练，而是用该入口发布并核对：
 
 1. 两个来源的完整 inventory 和许可字段；
 2. 历史 query 永久排除表；

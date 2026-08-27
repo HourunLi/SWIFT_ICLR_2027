@@ -341,10 +341,12 @@ material claims、长度比 `[1.15,3]`、math trace≥`.60`、numeric trace≥`.
 feature 约 1.42 TB，因此 v6 明确先 rollout/check/unitize/filter/双标，最后只抽入选的 1,100 条 views 与
 550 个共享 prompt，保守估计约 105.5 GB。独立 ranking pool 的 TB 级 feature 另算，不能混入本轮预算。
 
-本轮提交只冻结协议，不实现或启动大规模生成。`execution_authorization.rollout_allowed=false`；下一道门是
-发布 source inventory、永久排除表、template clusters、1,500/500 query manifests、40 个原子 rollout
-shards 和重算后的预算 hash，然后再次取得用户明确确认。当前状态必须写为“正在准备数据扩容”，不能写成
-“数据扩容已完成”或“Consistency 已经有 400 对训练数据”。
+2026-08-27 已补齐生成前执行契约和独立的 [`../prepare_clir_scale.py`](../prepare_clir_scale.py)；核心逻辑在
+[`../src/clir_scale.py`](../src/clir_scale.py)。它只允许在 clean commit 上执行 `freeze/verify`，负责来源过滤、
+永久排除传播、exact/near-template cluster、1,500/500 query split、40 个原子 shard、prompt 长度和 GPU/磁盘
+预算复核；刻意没有 rollout、标注、抽特征或训练命令。`execution_authorization.rollout_allowed=false` 仍未改变。
+六份 manifest/hash 全门通过后还要再次取得用户明确确认，才能启动生成。当前状态必须写为“正在准备数据
+扩容”，不能写成“数据扩容已完成”或“Consistency 已经有 400 对训练数据”。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -538,10 +540,10 @@ hallucination_onset = k
 
 1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
    失败作为 pipeline-smoke 诊断。
-2. C prompt-v4 已失败；v5 的机械筛选与双盲事实审计已通过；v6 的 400-train/150-heldout 正式扩容协议现已
-   冻结。下一步只制作并核对 source/exclusion/template-cluster/query-split/40-shard manifests 与预算，不启动
-   rollout。manifest/hash 全门通过并再次取得用户确认后，才可生成约 16,000 条；不得复用 v5 的 12 对，
-   不得看完新 yield 后调松机械阈值。
+2. C prompt-v4 已失败；v5 的机械筛选与双盲事实审计已通过；v6 的 400-train/150-heldout 正式扩容协议和
+   `prepare_clir_scale.py freeze/verify` 已冻结。下一步只制作并核对 source/exclusion/template-cluster/
+   query-split/40-shard manifests 与预算，不启动 rollout。manifest/hash 全门通过并再次取得用户确认后，才可
+   生成约 16,000 条；不得复用 v5 的 12 对，不得看完新 yield 后调松机械阈值。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
 4. Prior 先用 40–60 条全新轨迹标显式 dependency edges，由确定性传递闭包得到 Complete、再选 Key；只有

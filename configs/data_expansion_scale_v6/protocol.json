@@ -13,6 +13,79 @@
     "terminal_status": "PASS_FRESH_MECHANICAL_AUDIT",
     "parent_rows_reusable_for_training_or_heldout": false
   },
+  "pre_rollout_implementation": {
+    "clarified_at_utc": "2026-08-27",
+    "clarification_scope": "deterministic_execution_details_frozen_before_any_v6_rollout",
+    "source_parent": {
+      "protocol_path": "configs/data_expansion_smoke_v3/protocol.json",
+      "protocol_file_sha256": "0640e6c82ee497de0b04799528e0ef6624a045efde663eecf445ae138c13848b",
+      "source_corpus_path": "run_artifacts/data_expansion_smoke_v3/sources/all.jsonl",
+      "source_corpus_schema": "clir-smoke-source-corpus-v3",
+      "source_corpus_row_count": 10543,
+      "source_corpus_file_sha256": "ea079ed1d096ebccd8b10a17da270989e7da27b0786c75dafa5c8131afa47841",
+      "source_corpus_ordered_rows_sha256": "baf525a509bd983faf72f22ef208ff9f0e214499d490a6e16ef568b3574619ac",
+      "source_corpus_sidecar_file_sha256": "cbc636250f3a67812a0821de49c7fa7e08cc8f84273b905eee17179b33157b69",
+      "historical_exclusion_path": "run_artifacts/data_expansion_smoke_v2/sources/prior_exclusions.jsonl",
+      "historical_exclusion_row_count": 1108,
+      "historical_exclusion_file_sha256": "548b32d17ed87cac3a0a5230418e87ce6d606a2a7452d9bb4e5dac66d6e10c6f",
+      "historical_exclusion_ordered_rows_sha256": "bb88a9e58cc284038515881c985f872ad9c8ef9c1eabc730e688ac13645d546f",
+      "historical_exclusion_sidecar_file_sha256": "d6ddefec738f37391ce77639511fb0a3d79165dd2b3b72fd2bc3c03bf9d71bb9",
+      "smoke_query_manifest_path": "run_artifacts/data_expansion_smoke_v3/frozen/query_manifest.jsonl",
+      "smoke_query_manifest_row_count": 208,
+      "smoke_query_manifest_file_sha256": "3e89ca1832214548f68db03e3aef5a31f91173a54ce4b349a3a0556f486ece6c",
+      "smoke_query_manifest_ordered_rows_sha256": "bc57c06582e1ea619fd14a2c864546a38c72cf763ac30d51af41054900009481",
+      "smoke_query_manifest_sidecar_file_sha256": "c20401142e2e89ec380c27a182de7e45f6beba1de9d88b2bf94795f7df734155"
+    },
+    "gsm8k_long_chain_materialization": {
+      "reasoning_segment": "text_before_first_literal_####",
+      "word_regex": "[A-Za-z0-9]+(?:'[A-Za-z]+)?",
+      "calculation_marker_regex": "<<([^<>]+)>>",
+      "intermediate_value_rule": "distinct_numeric_literals_on_rhs_of_marked_calculations"
+    },
+    "template_clustering": {
+      "entity_template_version": "clir_entity_template_v1",
+      "entity_rule": "replace_non_question_word_capitalized_tokens_after_unicode_nfkc_then_replace_numbers",
+      "minhash_permutations": 64,
+      "minhash_bands": 16,
+      "token_set_jaccard_min": 0.82,
+      "token_trigram_jaccard_min": 0.72,
+      "exact_duplicate_survivor": "lowest_sha256_query_id",
+      "near_duplicates_are_clustered_not_deleted": true,
+      "excluded_anchor_cluster_is_fully_excluded": true,
+      "heldout_hash_fraction": 0.25
+    },
+    "stratified_selection": {
+      "math_stratum": "source_subject_plus_source_level",
+      "gsm8k_stratum": "four_equal_count_reference_reasoning_word_quantiles_after_all_exclusions",
+      "per_source_split_allocation": "largest_remainder_proportional_to_available_strata_then_query_priority",
+      "insufficient_any_source_split_action": "STOP_PRE_ROLLOUT_CAPACITY_FAILURE"
+    },
+    "rollout_sharding": {
+      "train_shards": 30,
+      "heldout_shards": 10,
+      "queries_per_shard": 50,
+      "math_queries_per_shard": 35,
+      "gsm8k_queries_per_shard": 15
+    },
+    "prompt_token_counting": {
+      "tokenizer": "generation.model_id_at_generation.tokenizer_revision",
+      "rendering": "apply_chat_template_single_user_add_generation_prompt_true",
+      "counted_axis": "rendered_prompt_token_ids",
+      "maximum_prompt_tokens": 3072,
+      "overflow_action": "exclude_before_stratified_query_selection_and_report"
+    },
+    "budget_assumptions": {
+      "expected_output_tokens_per_candidate": {
+        "math": 460,
+        "gsm8k": 289
+      },
+      "conservative_output_tokens_per_candidate": 420,
+      "full_feature_bytes_per_token": 202752,
+      "gpu_model": "NVIDIA L20Z",
+      "tensor_parallel_size": 1,
+      "maximum_concurrent_l20z_jobs": 8
+    }
+  },
   "claim_boundary": {
     "this_protocol_contains_new_results": false,
     "rollout_has_started": false,

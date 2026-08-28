@@ -10,6 +10,11 @@
 执行结果状态（2026-08-28）：`PASS_ALL_16000_RAW_ROLLOUTS_VERIFIED_V6`。基础状态是生成前冻结时的不可变
 记录，执行覆盖和结果是后加的 hash-bound 审计层；三者不是矛盾，也不能用 rollout PASS 解锁后续阶段。
 
+标注前执行覆盖状态（2026-08-28）：`AUTHORIZED_PRE_ANNOTATION_ONLY`。用户明确要求“接着做，到要标数据再
+叫我”，授权记录见 `configs/data_expansion_scale_v6/pre_annotation_authorization.json`。它只允许 CPU
+checker/unitizer、原样机械筛选、候选冻结和隔离盲标包构造；真正的 AI 标注、标签 triage/finalize、feature、
+训练、raw 重生成和阈值变更仍为 false。当前覆盖尚未执行。
+
 冻结日期：2026-08-26
 
 机器契约：`configs/data_expansion_scale_v6/protocol.json`
@@ -242,7 +247,14 @@ raw artifact 与完成报告均在 Git 忽略目录，远端只保存执行代�
 token 估计的 105.23 GB 选中-view feature 预算，因 raw 实测均值为 449.24，必须等最终 1,100 个 views
 确定后按实际长度重算；全部 16,000 条抽 feature 的禁令不变。
 
-当前授权在 merge 报告处终止。607 条截断输出必须在下一阶段排除；checker、
+rollout 授权在 merge 报告处终止。607 条截断输出必须在下一阶段排除；checker、
 `clir_material_claim_unitizer_v2`、机械候选筛选、双 AI 审计、feature extraction 和训练均未启动。因此现在
-只能写“raw acquisition 完成”，不能写“训练数据扩容完成”或“已有 400 对训练数据”。唯一下一步是先冻结并
-复核 materialization-only 入口及其输出契约，再取得明确授权后运行；不得把本次 rollout 授权自动扩展到该阶段。
+只能写“raw acquisition 完成”，不能写“训练数据扩容完成”或“已有 400 对训练数据”。
+
+新的标注前授权现已单独冻结。入口新增 `materialize → verify-materialization → propose → verify-proposals →
+package → verify-pre-annotation`，只能在 clean commit 上执行，所有 artifact 原子写入且不得覆盖。材料化保留
+16,000 行审计总体，但截断、parse failure、冲突答案或 unitization failure 一律不可进入 pair；`propose`
+逐字复用 v5 阈值并把所有 query-distinct admitted pair 留在标注分母。只有机械池至少覆盖 train 400、heldout
+150 才能打包。每包最多 50 个自然 pair，混 4 个平衡控制；A/B 各 10% 的盲重复只进入后续 shard，每个新
+上下文只准处理一个 shard。`PASS_PRE_ANNOTATION_PACKAGES_VERIFIED_V6` 出现后必须停止并通知用户，不能由
+脚本自行调用两个 AI。

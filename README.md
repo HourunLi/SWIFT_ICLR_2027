@@ -318,8 +318,14 @@ checker/unitizer materialization、标注、抽特征和训练仍关闭。入口
 
 raw 文件和完成报告只保存在被 Git 忽略的 `run_artifacts/data_expansion_scale_v6/rollouts/`，不会推到远端。
 这只表示生成阶段完成，不表示已经得到 400 个可训练 Consistency pair：checker、
-`clir_material_claim_unitizer_v2`、机械筛选、双 AI 审计、feature 和训练均未启动。下一道门必须另行冻结并授权
-“材料化 + 候选生成”，不能沿用 rollout 授权越权执行。
+`clir_material_claim_unitizer_v2`、机械筛选、双 AI 审计、feature 和训练均未启动。
+
+用户随后明确要求“接着做，到要标数据再叫我”。新的
+[`pre_annotation_authorization.json`](configs/data_expansion_scale_v6/pre_annotation_authorization.json) 只解锁
+CPU checker/unitizer 材料化、原样 v5 机械筛选、自然候选冻结和 A/B 盲标包构造，并在真正调用 AI 标注前强制
+停止；它仍禁止 provider call、标签裁决/发布、抽 feature、训练、重跑 raw rollout 或修改阈值。每个标注
+shard 最多 50 个自然 pair，另混 2 accept +2 reject 控制；A/B 各约 10% 自重复只放到后续 shard。启动词
+要求一个全新上下文只处理一个 shard，避免同一上下文记住重复项。当前只是实现和授权已冻结，尚未执行材料化。
 
 ## 目录
 
@@ -334,9 +340,10 @@ configs/data_expansion_smoke_v4/      Consistency 提示词修复、14-ID 回放
 configs/data_expansion_smoke_v5/      Consistency 机械筛选与双 AI 事实审计协议/启动提示词
 configs/data_expansion_scale_v6/      正式扩容：协议、冻结分片、rollout 授权与后续双标门
 prepare_clir_smoke.py                  v2/v3 数据管线与 v4/v5 Consistency gate 入口
-prepare_clir_scale.py                  v6 六清单、授权后原子 rollout、复核与合并；不含标注/抽取/训练
+prepare_clir_scale.py                  v6 rollout 及 CPU 材料化/候选/盲标包；在 AI 标注前停止
 src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约
 src/clir_scale.py                      v6 来源过滤、历史排除、模板分簇、split/shard/预算契约
+src/clir_scale_pre_annotation.py       v6 exact-token 材料化、机械 pair 和隔离盲标包契约
 src/clir_features.py                  identity/layer-axis 特征编码器
 src/clir_data.py                      JSONL 数据、严格 token 对齐、collate、sampler
 src/consistency_localized_reward.py   reward model、三模块和 loss

@@ -1,0 +1,62 @@
+{
+  "schema_version": "clir-consistency-scale-v6-pre-annotation-authorization",
+  "status": "AUTHORIZED_PRE_ANNOTATION_ONLY",
+  "authorized_at_utc": "2026-08-28T04:04:53Z",
+  "user_instruction": "ok，你接着做，到要标数据再叫我",
+  "authorization_interpretation": "prepare_and_verify_checker_unitizer_mechanical_proposals_and_blind_packages_then_stop_before_any_ai_annotation",
+  "authorized_from_clean_parent_commit": "49aabdddb13f137f2ef28e92954fa01644cb0984",
+  "authorized_scope": {
+    "checker_and_unitizer_materialization": true,
+    "mechanical_consistency_filter": true,
+    "natural_proposal_freeze": true,
+    "blind_package_construction": true,
+    "ai_annotation_or_provider_call": false,
+    "label_triage_or_finalization": false,
+    "feature_extraction": false,
+    "training": false,
+    "threshold_or_query_manifest_change": false,
+    "raw_rollout_overwrite_or_regeneration": false
+  },
+  "frozen_parent": {
+    "protocol_path": "configs/data_expansion_scale_v6/protocol.json",
+    "protocol_file_sha256": "92c44defb551d814a548c1404cc79b2f89f4a63b2727c7335e2858d71cbd0cab",
+    "pre_rollout_registry_path": "run_artifacts/data_expansion_scale_v6/pre_rollout/manifest_registry.json",
+    "pre_rollout_registry_file_sha256": "7e6d6da9570221ef46425fd68952db7335aad7d7670ebdef8c52b35075e68352",
+    "rollout_authorization_path": "configs/data_expansion_scale_v6/rollout_authorization.json",
+    "rollout_authorization_file_sha256": "21debedf945795a083e436a516fd6352cfe357c1f8f4512573b5c7db54be1100",
+    "rollout_completion_report_path": "run_artifacts/data_expansion_scale_v6/rollout_completion_report.json",
+    "rollout_completion_report_file_sha256": "351e9931273373c7c9e210504a41974c7e5f2096b559fe8c38b8510956d4faa0",
+    "rollout_terminal_status": "PASS_ALL_16000_RAW_ROLLOUTS_VERIFIED_V6",
+    "rollout_code_commit": "078eb6b1c3d1aa8c1c950030e4aeff496ea1f342",
+    "combined_raw_path": "run_artifacts/data_expansion_scale_v6/rollouts/combined_raw.jsonl",
+    "combined_raw_file_sha256": "f538373b3d99791001cbe2119466b0bd52e23a8337223053920371cda7e75139",
+    "combined_raw_sidecar_file_sha256": "ceae0a2e2fa42f1d8f139f90b9f1f882b81e3fd13eb6c2357dc9ac96ab614d9e",
+    "combined_raw_ordered_rows_sha256": "1e276e4443d8242ced86bb426e323188f57c8063cf270e0b1101a2e72c37a32c",
+    "combined_raw_row_count": 16000,
+    "combined_raw_query_count": 2000
+  },
+  "annotation_contract": {
+    "audit_prompt_path": "configs/data_expansion_scale_v6/audit_prompt.md",
+    "audit_prompt_file_sha256": "7ed75e73c7d00d2c0e6f8badcf6b9de386d1d7849ee66c976086269176a9e163",
+    "launch_prompt_a_path": "configs/data_expansion_scale_v6/launch_prompt_a.txt",
+    "launch_prompt_a_file_sha256": "eaf3acc767cee36a6249194505d276245ad9801215e1c496088cade78d45a7ea",
+    "launch_prompt_b_path": "configs/data_expansion_scale_v6/launch_prompt_b.txt",
+    "launch_prompt_b_file_sha256": "da7bea7ecbd7d9036e05117432d7432833414bccbd239b496206bb697810f906",
+    "requested_a": "gpt-5.5-sol/xhigh",
+    "requested_b": "claude-opus-5/high",
+    "actual_model_identity_must_be_recorded_before_labels_are_checked": true
+  },
+  "runtime_contract": {
+    "output_root": "run_artifacts/data_expansion_scale_v6/pre_annotation",
+    "materialized_path": "run_artifacts/data_expansion_scale_v6/pre_annotation/materialized/combined_rows.jsonl",
+    "proposals_directory": "run_artifacts/data_expansion_scale_v6/pre_annotation/proposals",
+    "packages_directory": "run_artifacts/data_expansion_scale_v6/pre_annotation/packages",
+    "refuse_existing_partial_or_complete_output": true,
+    "require_clean_committed_implementation": true,
+    "cpu_only": true,
+    "maximum_natural_pairs_per_annotation_shard": 50,
+    "hidden_controls_per_annotation_shard": 4,
+    "self_repeat_fraction_per_annotator": 0.1
+  },
+  "stop_condition": "stop_after_PASS_PRE_ANNOTATION_PACKAGES_VERIFIED_V6_and_request_user_to_launch_two_blind_annotators"
+}

@@ -368,9 +368,16 @@ shard 原子生成、completion marker、只读复核和 40-shard fail-closed �
 
 这里完成的是 raw acquisition，不是可训练数据扩容。607 条截断输出尚未由材料化阶段排除，checker、
 `clir_material_claim_unitizer_v2`、机械筛选、双 AI 审计、hidden-state extraction 和训练全部未启动，当前也
-不能写“Consistency 已经有 400 对训练数据”。下一步需先冻结/复核 materialization-only 入口并取得新的明确
-授权；本次 rollout 授权不能自动沿用。当前不再占用 GPU，后续 checker/unitizer 主要走 CPU，直到 feature
-extraction 和训练才重新需要 GPU。
+不能写“Consistency 已经有 400 对训练数据”。
+
+用户随后明确授权“接着做，到要标数据再叫我”。独立的
+[`../configs/data_expansion_scale_v6/pre_annotation_authorization.json`](../configs/data_expansion_scale_v6/pre_annotation_authorization.json)
+把范围固定为：CPU 材料化、原样 v5 机械筛选、全部自然候选冻结和 A/B 隔离盲标包；真正调用两个 AI、标签
+triage/finalize、抽 feature、训练、重生成 raw 或改阈值仍禁止。新入口每阶段拒绝覆盖旧 artifact，并提供独立
+recompute verifier。每个标注 shard 最多 50 个自然 pair，另有 2 accept +2 reject 控制；A/B 各 10% 自重复
+只放后续 shard，启动词要求一个全新上下文只处理一个 shard，防止上下文记忆虚高自一致性。当前是授权和实现
+已冻结但尚未执行；执行终点必须是 `PASS_PRE_ANNOTATION_PACKAGES_VERIFIED_V6`，然后通知用户启动双 AI。
+本阶段不占 GPU，直到后续 selected-view feature extraction 和训练才重新需要 GPU。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 

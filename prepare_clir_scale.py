@@ -1,11 +1,13 @@
 #!/usr/bin/env python
-"""Prepare and execute the authorized CLIR Consistency scale-v6 data stage.
+"""Prepare and execute authorized CLIR Consistency scale-v6 data stages.
 
 ``freeze`` and ``verify`` manage the immutable pre-rollout gate.  After a
 separate hash-bound user authorization, ``rollout`` writes one atomic frozen
 shard, ``verify-rollouts`` audits shard artifacts, and ``merge-rollouts``
-publishes the complete raw population.  This entry point intentionally has no
-annotation, feature-extraction, or training command.
+publishes the complete raw population.  A second hash-bound authorization may
+then run CPU-only materialization, frozen mechanical proposals, and blind-package
+construction.  This entry point intentionally stops before AI annotation and
+has no model-provider, feature-extraction, or training command.
 """
 
 from __future__ import annotations
@@ -31,6 +33,18 @@ from src.clir_scale import (
     select_acquisition_queries,
     storage_and_gpu_budget,
 )
+from src.clir_scale_pre_annotation import (
+    MATERIALIZED_SCHEMA,
+    NATURAL_ITEM_SCHEMA,
+    PACKAGE_SCHEMA,
+    PRE_ANNOTATION_AUTHORIZATION_SCHEMA,
+    PROPOSAL_SCHEMA,
+    build_scale_annotation_packages,
+    build_scale_consistency_proposals,
+    build_scale_natural_items,
+    materialize_scale_rows,
+    validate_scale_materialized_rows,
+)
 from src.clir_smoke import (
     atomic_write_json,
     canonical_sha256,
@@ -50,6 +64,13 @@ DEFAULT_AUTHORIZATION = (
     / "configs/data_expansion_scale_v6/rollout_authorization.json"
 )
 DEFAULT_ROLLOUT_ROOT = PROJECT_ROOT / "run_artifacts/data_expansion_scale_v6"
+DEFAULT_PRE_ANNOTATION_AUTHORIZATION = (
+    PROJECT_ROOT
+    / "configs/data_expansion_scale_v6/pre_annotation_authorization.json"
+)
+DEFAULT_PRE_ANNOTATION_ROOT = (
+    PROJECT_ROOT / "run_artifacts/data_expansion_scale_v6/pre_annotation"
+)
 REQUIRED_FILES = (
     "source_inventory.json",
     "permanent_exclusions.jsonl",
@@ -1232,11 +1253,839 @@ def command_merge_rollouts(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
+def _read_published_jsonl(
+    path: Path, *, expected_schema: str | None = None
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    sidecar_path = path.with_suffix(path.suffix + ".manifest.json")
+    if not path.is_file() or not sidecar_path.is_file():
+        raise FileNotFoundError(f"published JSONL or sidecar is missing: {path}")
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    if expected_schema is not None and sidecar.get("schema_version") != expected_schema:
+        raise ValueError(f"{path}: published schema differs from {expected_schema}")
+    if sidecar.get("file_sha256") != file_sha256(path):
+        raise ValueError(f"{path}: file SHA-256 differs from its sidecar")
+    rows = read_jsonl(path)
+    if int(sidecar.get("row_count", -1)) != len(rows):
+        raise ValueError(f"{path}: sidecar row count mismatch")
+    if sidecar.get("ordered_rows_sha256") != canonical_sha256(rows):
+        raise ValueError(f"{path}: ordered-row SHA-256 mismatch")
+    return rows, sidecar
+
+
+def load_pre_annotation_authorization(
+    path: Path,
+    *,
+    protocol_path: Path,
+    pre_rollout_dir: Path,
+    rollout_root: Path,
+) -> dict[str, Any]:
+    authorization = json.loads(path.read_text(encoding="utf-8"))
+    if authorization.get("schema_version") != PRE_ANNOTATION_AUTHORIZATION_SCHEMA:
+        raise ValueError("unsupported scale-v6 pre-annotation authorization schema")
+    if authorization.get("status") != "AUTHORIZED_PRE_ANNOTATION_ONLY":
+        raise ValueError("scale-v6 pre-annotation stage is not authorized")
+    expected_scope = {
+        "checker_and_unitizer_materialization": True,
+        "mechanical_consistency_filter": True,
+        "natural_proposal_freeze": True,
+        "blind_package_construction": True,
+        "ai_annotation_or_provider_call": False,
+        "label_triage_or_finalization": False,
+        "feature_extraction": False,
+        "training": False,
+        "threshold_or_query_manifest_change": False,
+        "raw_rollout_overwrite_or_regeneration": False,
+    }
+    if authorization.get("authorized_scope") != expected_scope:
+        raise ValueError("pre-annotation authorization scope was broadened or changed")
+    parent = authorization["frozen_parent"]
+    bound_paths = (
+        (protocol_path, parent["protocol_file_sha256"], "protocol"),
+        (
+            pre_rollout_dir / "manifest_registry.json",
+            parent["pre_rollout_registry_file_sha256"],
+            "pre-rollout registry",
+        ),
+        (
+            _project_path(parent["rollout_authorization_path"]),
+            parent["rollout_authorization_file_sha256"],
+            "rollout authorization",
+        ),
+        (
+            _project_path(parent["rollout_completion_report_path"]),
+            parent["rollout_completion_report_file_sha256"],
+            "rollout completion report",
+        ),
+        (
+            _project_path(parent["combined_raw_path"]),
+            parent["combined_raw_file_sha256"],
+            "combined raw rollout",
+        ),
+    )
+    for bound_path, expected_hash, label in bound_paths:
+        if file_sha256(bound_path) != expected_hash:
+            raise ValueError(f"pre-annotation {label} SHA-256 mismatch")
+    raw_path = _project_path(parent["combined_raw_path"])
+    raw_sidecar = raw_path.with_suffix(raw_path.suffix + ".manifest.json")
+    if file_sha256(raw_sidecar) != parent["combined_raw_sidecar_file_sha256"]:
+        raise ValueError("pre-annotation combined raw sidecar SHA-256 mismatch")
+    sidecar = json.loads(raw_sidecar.read_text(encoding="utf-8"))
+    if (
+        sidecar.get("file_sha256") != parent["combined_raw_file_sha256"]
+        or sidecar.get("ordered_rows_sha256")
+        != parent["combined_raw_ordered_rows_sha256"]
+        or int(sidecar.get("row_count", -1)) != int(parent["combined_raw_row_count"])
+    ):
+        raise ValueError("pre-annotation combined raw sidecar content mismatch")
+    completion = json.loads(
+        _project_path(parent["rollout_completion_report_path"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    if (
+        completion.get("status") != parent["rollout_terminal_status"]
+        or completion.get("combined_file_sha256")
+        != parent["combined_raw_file_sha256"]
+        or completion.get("combined_ordered_rows_sha256")
+        != parent["combined_raw_ordered_rows_sha256"]
+        or completion.get("code_commit") != parent["rollout_code_commit"]
+    ):
+        raise ValueError("rollout completion report no longer matches authorization")
+    if raw_path.resolve().parent.parent != rollout_root.resolve():
+        raise ValueError("combined raw rollout is outside the authorized rollout root")
+    annotation = authorization["annotation_contract"]
+    for path_key, hash_key in (
+        ("audit_prompt_path", "audit_prompt_file_sha256"),
+        ("launch_prompt_a_path", "launch_prompt_a_file_sha256"),
+        ("launch_prompt_b_path", "launch_prompt_b_file_sha256"),
+    ):
+        if file_sha256(_project_path(annotation[path_key])) != annotation[hash_key]:
+            raise ValueError(f"pre-annotation prompt hash mismatch: {path_key}")
+    verify_pre_rollout(pre_rollout_dir, protocol_path)
+    return authorization
+
+
+def _load_pre_annotation_contract(
+    *,
+    protocol_path: Path,
+    authorization_path: Path,
+    pre_rollout_dir: Path,
+    rollout_root: Path,
+    output_root: Path,
+) -> tuple[dict[str, Any], dict[str, Any], Path, Path]:
+    protocol = load_protocol(protocol_path)
+    authorization = load_pre_annotation_authorization(
+        authorization_path,
+        protocol_path=protocol_path,
+        pre_rollout_dir=pre_rollout_dir,
+        rollout_root=rollout_root,
+    )
+    runtime = authorization["runtime_contract"]
+    expected_root = _project_path(runtime["output_root"]).resolve()
+    if output_root.resolve() != expected_root:
+        raise ValueError(
+            f"pre-annotation output root differs from authorization: "
+            f"{output_root} != {expected_root}"
+        )
+    materialized_path = _project_path(runtime["materialized_path"]).resolve()
+    if output_root.resolve() not in materialized_path.parents:
+        raise ValueError("authorized materialized path is outside output root")
+    raw_path = _project_path(
+        authorization["frozen_parent"]["combined_raw_path"]
+    ).resolve()
+    return protocol, authorization, raw_path, materialized_path
+
+
+def _require_clean_execution() -> str:
+    if _git_dirty():
+        raise RuntimeError("scale-v6 data execution requires a clean Git commit")
+    return _git_head()
+
+
+def command_materialize(args: argparse.Namespace) -> None:
+    protocol_path = Path(args.protocol).resolve()
+    authorization_path = Path(args.pre_annotation_authorization).resolve()
+    pre_rollout_dir = Path(args.pre_rollout_dir).resolve()
+    rollout_root = Path(args.rollout_root).resolve()
+    output_root = Path(args.output_root).resolve()
+    protocol, authorization, raw_path, output = _load_pre_annotation_contract(
+        protocol_path=protocol_path,
+        authorization_path=authorization_path,
+        pre_rollout_dir=pre_rollout_dir,
+        rollout_root=rollout_root,
+        output_root=output_root,
+    )
+    code_commit = _require_clean_execution()
+    sidecar_path = output.with_suffix(output.suffix + ".manifest.json")
+    report_path = output.parent / "materialization_report.json"
+    if output.exists() or sidecar_path.exists() or report_path.exists():
+        raise FileExistsError("materialization artifacts already exist; never overwrite")
+    try:
+        from transformers import AutoTokenizer
+    except ImportError as exc:
+        raise SystemExit("scale-v6 materialization requires transformers") from exc
+    generation = protocol["generation"]
+    tokenizer = AutoTokenizer.from_pretrained(
+        generation["model_id"],
+        revision=generation["tokenizer_revision"],
+        use_fast=True,
+        cache_dir=args.cache_dir,
+    )
+    if not getattr(tokenizer, "is_fast", False):
+        raise ValueError("scale-v6 unitizer requires a fast tokenizer")
+    raw_rows, raw_sidecar = _read_published_jsonl(
+        raw_path,
+        expected_schema="clir-consistency-scale-combined-raw-rollouts-v6",
+    )
+    parent = authorization["frozen_parent"]
+    if (
+        len(raw_rows) != int(parent["combined_raw_row_count"])
+        or canonical_sha256(raw_rows) != parent["combined_raw_ordered_rows_sha256"]
+    ):
+        raise ValueError("combined raw population differs from authorization")
+    checker = protocol["checker_and_unitizer"]
+    processed, health = materialize_scale_rows(
+        raw_rows,
+        tokenizer,
+        checker_version=str(checker["checker_version"]),
+        unitizer_version=str(checker["unitizer_version"]),
+    )
+    validation = validate_scale_materialized_rows(
+        processed,
+        raw_rows=raw_rows,
+        candidate_count=int(generation["candidate_count"]),
+        checker_version=str(checker["checker_version"]),
+        unitizer_version=str(checker["unitizer_version"]),
+    )
+    manifest = publish_manifest(
+        output,
+        processed,
+        schema_version=MATERIALIZED_SCHEMA,
+        metadata={
+            "protocol_file_sha256": file_sha256(protocol_path),
+            "pre_annotation_authorization_file_sha256": file_sha256(
+                authorization_path
+            ),
+            "combined_raw_file_sha256": raw_sidecar["file_sha256"],
+            "combined_raw_ordered_rows_sha256": raw_sidecar[
+                "ordered_rows_sha256"
+            ],
+            "code_commit": code_commit,
+            "checker_version": checker["checker_version"],
+            "unitizer_version": checker["unitizer_version"],
+            **health,
+        },
+    )
+    report = {
+        "schema_version": "clir-consistency-scale-materialization-report-v6",
+        "status": "PASS_SCALE_V6_MATERIALIZATION",
+        "annotation_started": False,
+        "feature_extraction_started": False,
+        "training_started": False,
+        "protocol_file_sha256": file_sha256(protocol_path),
+        "pre_annotation_authorization_file_sha256": file_sha256(
+            authorization_path
+        ),
+        "combined_raw_file_sha256": file_sha256(raw_path),
+        "materialized_file_sha256": manifest["file_sha256"],
+        "materialized_sidecar_file_sha256": file_sha256(sidecar_path),
+        "materialized_ordered_rows_sha256": manifest["ordered_rows_sha256"],
+        "code_commit": code_commit,
+        "health": health,
+        "validation": validation,
+        "next_gate": "apply_unchanged_v5_mechanical_filter",
+    }
+    atomic_write_json(report_path, report)
+    print(
+        json.dumps(
+            {
+                "status": report["status"],
+                "rows": len(processed),
+                "checker_statuses": health["checker_statuses"],
+                "unitization_ok": health["unitization_ok"],
+                "unitization_failures": health["unitization_failures"],
+                "eligible_rows": health["eligible_rows"],
+                "materialized_file_sha256": manifest["file_sha256"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+def _verify_materialization_contract(
+    *,
+    protocol_path: Path,
+    authorization_path: Path,
+    pre_rollout_dir: Path,
+    rollout_root: Path,
+    output_root: Path,
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, Any],
+]:
+    protocol, authorization, raw_path, materialized_path = (
+        _load_pre_annotation_contract(
+            protocol_path=protocol_path,
+            authorization_path=authorization_path,
+            pre_rollout_dir=pre_rollout_dir,
+            rollout_root=rollout_root,
+            output_root=output_root,
+        )
+    )
+    raw_rows, _ = _read_published_jsonl(
+        raw_path,
+        expected_schema="clir-consistency-scale-combined-raw-rollouts-v6",
+    )
+    rows, sidecar = _read_published_jsonl(
+        materialized_path, expected_schema=MATERIALIZED_SCHEMA
+    )
+    checker = protocol["checker_and_unitizer"]
+    validation = validate_scale_materialized_rows(
+        rows,
+        raw_rows=raw_rows,
+        candidate_count=int(protocol["generation"]["candidate_count"]),
+        checker_version=str(checker["checker_version"]),
+        unitizer_version=str(checker["unitizer_version"]),
+    )
+    metadata = sidecar.get("metadata", {})
+    if (
+        metadata.get("protocol_file_sha256") != file_sha256(protocol_path)
+        or metadata.get("pre_annotation_authorization_file_sha256")
+        != file_sha256(authorization_path)
+        or metadata.get("combined_raw_file_sha256") != file_sha256(raw_path)
+    ):
+        raise ValueError("materialized sidecar provenance mismatch")
+    report_path = materialized_path.parent / "materialization_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if (
+        report.get("status") != "PASS_SCALE_V6_MATERIALIZATION"
+        or report.get("materialized_file_sha256") != file_sha256(materialized_path)
+        or report.get("materialized_sidecar_file_sha256")
+        != file_sha256(materialized_path.with_suffix(materialized_path.suffix + ".manifest.json"))
+        or report.get("materialized_ordered_rows_sha256")
+        != canonical_sha256(rows)
+    ):
+        raise ValueError("materialization report does not bind current artifacts")
+    return protocol, authorization, raw_rows, rows, validation
+
+
+def command_verify_materialization(args: argparse.Namespace) -> None:
+    _, _, _, rows, validation = _verify_materialization_contract(
+        protocol_path=Path(args.protocol).resolve(),
+        authorization_path=Path(args.pre_annotation_authorization).resolve(),
+        pre_rollout_dir=Path(args.pre_rollout_dir).resolve(),
+        rollout_root=Path(args.rollout_root).resolve(),
+        output_root=Path(args.output_root).resolve(),
+    )
+    print(
+        json.dumps(
+            {
+                "status": "PASS_SCALE_V6_MATERIALIZATION_VERIFY",
+                "rows": len(rows),
+                "validation": validation,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+def command_propose(args: argparse.Namespace) -> None:
+    protocol_path = Path(args.protocol).resolve()
+    authorization_path = Path(args.pre_annotation_authorization).resolve()
+    output_root = Path(args.output_root).resolve()
+    protocol, authorization, _, rows, validation = _verify_materialization_contract(
+        protocol_path=protocol_path,
+        authorization_path=authorization_path,
+        pre_rollout_dir=Path(args.pre_rollout_dir).resolve(),
+        rollout_root=Path(args.rollout_root).resolve(),
+        output_root=output_root,
+    )
+    code_commit = _require_clean_execution()
+    proposals_dir = _project_path(
+        authorization["runtime_contract"]["proposals_directory"]
+    ).resolve()
+    if proposals_dir.exists():
+        raise FileExistsError("scale-v6 proposal directory already exists")
+    proposals, filter_report = build_scale_consistency_proposals(
+        rows, mechanical=protocol["mechanical_filter"]
+    )
+    natural_items = build_scale_natural_items(proposals, rows)
+    proposal_manifest = publish_manifest(
+        proposals_dir / "mechanically_admitted_pairs.jsonl",
+        proposals,
+        schema_version=PROPOSAL_SCHEMA,
+        metadata={
+            "protocol_file_sha256": file_sha256(protocol_path),
+            "pre_annotation_authorization_file_sha256": file_sha256(
+                authorization_path
+            ),
+            "materialized_file_sha256": file_sha256(
+                _project_path(authorization["runtime_contract"]["materialized_path"])
+            ),
+            "code_commit": code_commit,
+            **filter_report,
+        },
+    )
+    natural_manifest = publish_manifest(
+        proposals_dir / "annotation_natural_items.jsonl",
+        natural_items,
+        schema_version=NATURAL_ITEM_SCHEMA,
+        metadata={
+            "protocol_file_sha256": file_sha256(protocol_path),
+            "proposal_file_sha256": proposal_manifest["file_sha256"],
+            "code_commit": code_commit,
+        },
+    )
+    split_counts = Counter(
+        str(row["acquisition_split"]) for row in proposals
+    )
+    train_target = int(
+        protocol["annotation_gates"]["train_common_accept_count_min"]
+    )
+    heldout_target = int(
+        protocol["annotation_gates"]["heldout_common_accept_count_min"]
+    )
+    ready = (
+        split_counts["train_acquisition"] >= train_target
+        and split_counts["heldout_acquisition"] >= heldout_target
+    )
+    report = {
+        "schema_version": "clir-consistency-scale-mechanical-filter-report-v6",
+        "status": (
+            "READY_FOR_SCALE_V6_BLIND_PACKAGING"
+            if ready
+            else "STOP_SCALE_V6_MECHANICAL_YIELD_FAILURE"
+        ),
+        "annotation_allowed": ready,
+        "annotation_started": False,
+        "thresholds_changed_after_rollout": False,
+        "protocol_file_sha256": file_sha256(protocol_path),
+        "pre_annotation_authorization_file_sha256": file_sha256(
+            authorization_path
+        ),
+        "materialization_validation": validation,
+        "mechanical_filter": filter_report,
+        "minimum_required_before_annotation": {
+            "train_acquisition": train_target,
+            "heldout_acquisition": heldout_target,
+        },
+        "proposal_manifest": proposal_manifest,
+        "natural_item_manifest": natural_manifest,
+        "code_commit": code_commit,
+        "next_gate": (
+            "construct_isolated_blind_packages"
+            if ready
+            else "request_new_query_budget_without_threshold_change"
+        ),
+    }
+    atomic_write_json(proposals_dir / "mechanical_filter_report.json", report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if not ready:
+        raise SystemExit(2)
+
+
+def _verify_proposal_contract(
+    *,
+    protocol_path: Path,
+    authorization_path: Path,
+    pre_rollout_dir: Path,
+    rollout_root: Path,
+    output_root: Path,
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, Any],
+]:
+    protocol, authorization, _, rows, _ = _verify_materialization_contract(
+        protocol_path=protocol_path,
+        authorization_path=authorization_path,
+        pre_rollout_dir=pre_rollout_dir,
+        rollout_root=rollout_root,
+        output_root=output_root,
+    )
+    proposals_dir = _project_path(
+        authorization["runtime_contract"]["proposals_directory"]
+    )
+    proposals_path = proposals_dir / "mechanically_admitted_pairs.jsonl"
+    natural_path = proposals_dir / "annotation_natural_items.jsonl"
+    proposals, _ = _read_published_jsonl(
+        proposals_path, expected_schema=PROPOSAL_SCHEMA
+    )
+    natural_items, _ = _read_published_jsonl(
+        natural_path, expected_schema=NATURAL_ITEM_SCHEMA
+    )
+    expected_proposals, filter_report = build_scale_consistency_proposals(
+        rows, mechanical=protocol["mechanical_filter"]
+    )
+    expected_natural = build_scale_natural_items(expected_proposals, rows)
+    if proposals != expected_proposals:
+        raise ValueError("published scale-v6 proposals differ from recomputation")
+    if natural_items != expected_natural:
+        raise ValueError("published natural audit items differ from recomputation")
+    report = json.loads(
+        (proposals_dir / "mechanical_filter_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    if (
+        report.get("proposal_manifest", {}).get("file_sha256")
+        != file_sha256(proposals_path)
+        or report.get("natural_item_manifest", {}).get("file_sha256")
+        != file_sha256(natural_path)
+    ):
+        raise ValueError("mechanical report does not bind proposal artifacts")
+    return protocol, authorization, rows, proposals, natural_items, {
+        "status": report.get("status"),
+        "annotation_allowed": bool(report.get("annotation_allowed")),
+        "filter": filter_report,
+    }
+
+
+def command_verify_proposals(args: argparse.Namespace) -> None:
+    _, _, _, proposals, _, report = _verify_proposal_contract(
+        protocol_path=Path(args.protocol).resolve(),
+        authorization_path=Path(args.pre_annotation_authorization).resolve(),
+        pre_rollout_dir=Path(args.pre_rollout_dir).resolve(),
+        rollout_root=Path(args.rollout_root).resolve(),
+        output_root=Path(args.output_root).resolve(),
+    )
+    print(
+        json.dumps(
+            {
+                "status": "PASS_SCALE_V6_PROPOSAL_VERIFY",
+                "proposal_count": len(proposals),
+                **report,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+def _package_public_index(
+    *,
+    slot: str,
+    requested_model: str,
+    prompt_path: Path,
+    prompt_sha256: str,
+    label_output_dir: Path,
+    shard_manifests: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "schema_version": "clir-consistency-scale-public-package-index-v6",
+        "annotator_slot": slot,
+        "requested_model": requested_model,
+        "audit_prompt_path": str(prompt_path.resolve()),
+        "audit_prompt_file_sha256": prompt_sha256,
+        "label_output_directory": str(label_output_dir.resolve()),
+        "instructions": (
+            "use one fresh isolated model context per shard in listed order; write "
+            "one same-named strict JSONL label file; never read later shards early, "
+            "the peer package, or PRIVATE files"
+        ),
+        "shard_count": len(shard_manifests),
+        "total_items": sum(int(row["row_count"]) for row in shard_manifests),
+        "shards": [dict(row) for row in shard_manifests],
+    }
+
+
+def command_package(args: argparse.Namespace) -> None:
+    protocol_path = Path(args.protocol).resolve()
+    authorization_path = Path(args.pre_annotation_authorization).resolve()
+    output_root = Path(args.output_root).resolve()
+    protocol, authorization, _, proposals, natural_items, proposal_report = (
+        _verify_proposal_contract(
+            protocol_path=protocol_path,
+            authorization_path=authorization_path,
+            pre_rollout_dir=Path(args.pre_rollout_dir).resolve(),
+            rollout_root=Path(args.rollout_root).resolve(),
+            output_root=output_root,
+        )
+    )
+    if not proposal_report["annotation_allowed"]:
+        raise RuntimeError("mechanical yield gate failed; blind packaging is blocked")
+    code_commit = _require_clean_execution()
+    runtime = authorization["runtime_contract"]
+    packages_dir = _project_path(runtime["packages_directory"]).resolve()
+    if packages_dir.exists():
+        raise FileExistsError("scale-v6 package directory already exists")
+    labels_a = packages_dir.parent.parent / "labels_a"
+    labels_b = packages_dir.parent.parent / "labels_b"
+    if labels_a.exists() or labels_b.exists():
+        raise RuntimeError("label directory already exists; annotation may have started")
+    packages, private = build_scale_annotation_packages(
+        natural_items,
+        proposals,
+        max_natural_per_shard=int(
+            runtime["maximum_natural_pairs_per_annotation_shard"]
+        ),
+        controls_per_shard=int(runtime["hidden_controls_per_annotation_shard"]),
+        repeat_fraction_per_annotator=float(
+            runtime["self_repeat_fraction_per_annotator"]
+        ),
+    )
+    annotation = authorization["annotation_contract"]
+    prompt_path = _project_path(annotation["audit_prompt_path"])
+    public_indices: dict[str, Any] = {}
+    package_records: dict[str, Any] = {}
+    for slot, requested_model, label_dir in (
+        ("a", annotation["requested_a"], labels_a),
+        ("b", annotation["requested_b"], labels_b),
+    ):
+        shard_manifests = []
+        package_records[slot] = {}
+        for shard_id, package_rows in packages[slot].items():
+            path = packages_dir / f"annotator_{slot}" / f"{shard_id}.jsonl"
+            manifest = publish_manifest(
+                path,
+                package_rows,
+                schema_version=PACKAGE_SCHEMA,
+                metadata={
+                    "protocol_file_sha256": file_sha256(protocol_path),
+                    "pre_annotation_authorization_file_sha256": file_sha256(
+                        authorization_path
+                    ),
+                    "audit_prompt_file_sha256": file_sha256(prompt_path),
+                    "annotator_slot": slot,
+                    "shard_id": shard_id,
+                    "code_commit": code_commit,
+                },
+            )
+            record = {
+                "shard_id": shard_id,
+                "path": str(path.resolve()),
+                "row_count": manifest["row_count"],
+                "file_sha256": manifest["file_sha256"],
+                "sidecar_file_sha256": file_sha256(
+                    path.with_suffix(path.suffix + ".manifest.json")
+                ),
+                "ordered_rows_sha256": manifest["ordered_rows_sha256"],
+            }
+            shard_manifests.append(record)
+            package_records[slot][shard_id] = record
+        index = _package_public_index(
+            slot=slot,
+            requested_model=str(requested_model),
+            prompt_path=prompt_path,
+            prompt_sha256=str(annotation["audit_prompt_file_sha256"]),
+            label_output_dir=label_dir,
+            shard_manifests=shard_manifests,
+        )
+        index_path = packages_dir / f"annotator_{slot}" / "PUBLIC_INDEX.json"
+        atomic_write_json(index_path, index)
+        public_indices[slot] = {
+            "path": str(index_path.resolve()),
+            "file_sha256": file_sha256(index_path),
+            "shard_count": index["shard_count"],
+            "total_items": index["total_items"],
+        }
+    private.update(
+        {
+            "protocol_file_sha256": file_sha256(protocol_path),
+            "pre_annotation_authorization_file_sha256": file_sha256(
+                authorization_path
+            ),
+            "proposal_file_sha256": file_sha256(
+                _project_path(runtime["proposals_directory"])
+                / "mechanically_admitted_pairs.jsonl"
+            ),
+            "natural_items_file_sha256": file_sha256(
+                _project_path(runtime["proposals_directory"])
+                / "annotation_natural_items.jsonl"
+            ),
+            "audit_prompt_file_sha256": file_sha256(prompt_path),
+            "code_commit": code_commit,
+            "package_records": package_records,
+            "public_indices": public_indices,
+        }
+    )
+    private_path = packages_dir / "PRIVATE_manifest.json"
+    atomic_write_json(private_path, private)
+    report = {
+        "schema_version": "clir-consistency-scale-pre-annotation-report-v6",
+        "status": "PASS_PRE_ANNOTATION_PACKAGES_VERIFIED_V6",
+        "annotation_started": False,
+        "provider_call_started": False,
+        "feature_extraction_started": False,
+        "training_started": False,
+        "protocol_file_sha256": file_sha256(protocol_path),
+        "pre_annotation_authorization_file_sha256": file_sha256(
+            authorization_path
+        ),
+        "code_commit": code_commit,
+        "natural_pair_count": len(proposals),
+        "natural_pairs_by_split": dict(
+            sorted(Counter(str(row["acquisition_split"]) for row in proposals).items())
+        ),
+        "natural_pairs_by_source": dict(
+            sorted(Counter(str(row["source"]) for row in proposals).items())
+        ),
+        "annotation_shard_count": private["annotation_shard_count"],
+        "self_repeat_count_per_annotator": {
+            slot: len(private["self_repeats"][slot]) for slot in ("a", "b")
+        },
+        "private_manifest_file_sha256": file_sha256(private_path),
+        "public_indices": public_indices,
+        "audit_prompt_file_sha256": file_sha256(prompt_path),
+        "launch_prompt_a_file_sha256": file_sha256(
+            _project_path(annotation["launch_prompt_a_path"])
+        ),
+        "launch_prompt_b_file_sha256": file_sha256(
+            _project_path(annotation["launch_prompt_b_path"])
+        ),
+        "next_gate": "STOP_AND_REQUEST_USER_TO_LAUNCH_TWO_BLIND_ANNOTATORS",
+    }
+    report_path = output_root / "pre_annotation_report.json"
+    atomic_write_json(report_path, report)
+    verified = _verify_pre_annotation_contract(
+        protocol_path=protocol_path,
+        authorization_path=authorization_path,
+        pre_rollout_dir=Path(args.pre_rollout_dir).resolve(),
+        rollout_root=Path(args.rollout_root).resolve(),
+        output_root=output_root,
+    )
+    print(json.dumps(verified, ensure_ascii=False, indent=2))
+
+
+def _verify_pre_annotation_contract(
+    *,
+    protocol_path: Path,
+    authorization_path: Path,
+    pre_rollout_dir: Path,
+    rollout_root: Path,
+    output_root: Path,
+) -> dict[str, Any]:
+    protocol, authorization, _, proposals, natural_items, proposal_report = (
+        _verify_proposal_contract(
+            protocol_path=protocol_path,
+            authorization_path=authorization_path,
+            pre_rollout_dir=pre_rollout_dir,
+            rollout_root=rollout_root,
+            output_root=output_root,
+        )
+    )
+    if not proposal_report["annotation_allowed"]:
+        raise ValueError("cannot verify packages after a failed proposal yield gate")
+    runtime = authorization["runtime_contract"]
+    packages_dir = _project_path(runtime["packages_directory"])
+    private_path = packages_dir / "PRIVATE_manifest.json"
+    private = json.loads(private_path.read_text(encoding="utf-8"))
+    packages, expected_private = build_scale_annotation_packages(
+        natural_items,
+        proposals,
+        max_natural_per_shard=int(
+            runtime["maximum_natural_pairs_per_annotation_shard"]
+        ),
+        controls_per_shard=int(runtime["hidden_controls_per_annotation_shard"]),
+        repeat_fraction_per_annotator=float(
+            runtime["self_repeat_fraction_per_annotator"]
+        ),
+    )
+    for field in (
+        "schema_version",
+        "natural_item_ids",
+        "natural_metadata",
+        "controls_by_shard",
+        "self_repeats",
+        "natural_pair_count",
+        "annotation_shard_count",
+        "max_natural_per_shard",
+        "repeat_fraction_per_annotator",
+        "package_ordered_rows_sha256",
+    ):
+        if private.get(field) != expected_private.get(field):
+            raise ValueError(f"private package manifest drift: {field}")
+    annotation = authorization["annotation_contract"]
+    verified_items = 0
+    for slot in ("a", "b"):
+        index_path = packages_dir / f"annotator_{slot}" / "PUBLIC_INDEX.json"
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        if (
+            index.get("schema_version")
+            != "clir-consistency-scale-public-package-index-v6"
+            or index.get("annotator_slot") != slot
+            or index.get("audit_prompt_file_sha256")
+            != annotation["audit_prompt_file_sha256"]
+        ):
+            raise ValueError(f"annotator {slot} public index drift")
+        if len(index.get("shards", [])) != len(packages[slot]):
+            raise ValueError(f"annotator {slot} public shard count drift")
+        for record in index["shards"]:
+            shard_id = str(record["shard_id"])
+            path = Path(record["path"])
+            rows, sidecar = _read_published_jsonl(path, expected_schema=PACKAGE_SCHEMA)
+            if rows != packages[slot][shard_id]:
+                raise ValueError(f"annotator {slot}/{shard_id} package drift")
+            if (
+                record.get("file_sha256") != file_sha256(path)
+                or record.get("sidecar_file_sha256")
+                != file_sha256(path.with_suffix(path.suffix + ".manifest.json"))
+                or record.get("ordered_rows_sha256")
+                != sidecar["ordered_rows_sha256"]
+                or int(record.get("row_count", -1)) != len(rows)
+            ):
+                raise ValueError(f"annotator {slot}/{shard_id} index hash drift")
+            verified_items += len(rows)
+        private_index = private.get("public_indices", {}).get(slot, {})
+        if private_index.get("file_sha256") != file_sha256(index_path):
+            raise ValueError(f"annotator {slot} private/public index hash drift")
+    report_path = output_root / "pre_annotation_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if (
+        report.get("status") != "PASS_PRE_ANNOTATION_PACKAGES_VERIFIED_V6"
+        or report.get("annotation_started") is not False
+        or report.get("provider_call_started") is not False
+        or report.get("private_manifest_file_sha256") != file_sha256(private_path)
+    ):
+        raise ValueError("pre-annotation report does not bind current packages")
+    return {
+        "status": "PASS_PRE_ANNOTATION_PACKAGES_VERIFIED_V6",
+        "natural_pair_count": len(proposals),
+        "natural_pairs_by_split": report["natural_pairs_by_split"],
+        "annotation_shard_count": expected_private["annotation_shard_count"],
+        "verified_package_items_across_a_and_b": verified_items,
+        "self_repeat_count_per_annotator": report[
+            "self_repeat_count_per_annotator"
+        ],
+        "annotation_started": False,
+        "next_gate": report["next_gate"],
+    }
+
+
+def command_verify_pre_annotation(args: argparse.Namespace) -> None:
+    report = _verify_pre_annotation_contract(
+        protocol_path=Path(args.protocol).resolve(),
+        authorization_path=Path(args.pre_annotation_authorization).resolve(),
+        pre_rollout_dir=Path(args.pre_rollout_dir).resolve(),
+        rollout_root=Path(args.rollout_root).resolve(),
+        output_root=Path(args.output_root).resolve(),
+    )
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
 def command_verify(args: argparse.Namespace) -> None:
     result = verify_pre_rollout(
         Path(args.output_dir).resolve(), Path(args.protocol).resolve()
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _add_pre_annotation_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--pre-annotation-authorization",
+        default=str(DEFAULT_PRE_ANNOTATION_AUTHORIZATION),
+    )
+    parser.add_argument("--pre-rollout-dir", default=str(DEFAULT_OUTPUT))
+    parser.add_argument("--rollout-root", default=str(DEFAULT_ROLLOUT_ROOT))
+    parser.add_argument("--output-root", default=str(DEFAULT_PRE_ANNOTATION_ROOT))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1280,6 +2129,43 @@ def build_parser() -> argparse.ArgumentParser:
     merge.add_argument("--pre-rollout-dir", default=str(DEFAULT_OUTPUT))
     merge.add_argument("--rollout-root", default=str(DEFAULT_ROLLOUT_ROOT))
     merge.set_defaults(func=command_merge_rollouts)
+    materialize = subparsers.add_parser(
+        "materialize",
+        help="run the separately authorized scale-v6 checker and exact-token unitizer",
+    )
+    _add_pre_annotation_arguments(materialize)
+    materialize.add_argument("--cache-dir")
+    materialize.set_defaults(func=command_materialize)
+    verify_materialization = subparsers.add_parser(
+        "verify-materialization",
+        help="independently verify scale-v6 materialized rows and token partitions",
+    )
+    _add_pre_annotation_arguments(verify_materialization)
+    verify_materialization.set_defaults(func=command_verify_materialization)
+    propose = subparsers.add_parser(
+        "propose",
+        help="apply unchanged v5 mechanical thresholds and freeze all v6 pairs",
+    )
+    _add_pre_annotation_arguments(propose)
+    propose.set_defaults(func=command_propose)
+    verify_proposals = subparsers.add_parser(
+        "verify-proposals",
+        help="recompute and verify the complete scale-v6 mechanical proposal set",
+    )
+    _add_pre_annotation_arguments(verify_proposals)
+    verify_proposals.set_defaults(func=command_verify_proposals)
+    package = subparsers.add_parser(
+        "package",
+        help="construct isolated A/B JSONL shards and stop before AI annotation",
+    )
+    _add_pre_annotation_arguments(package)
+    package.set_defaults(func=command_package)
+    verify_pre_annotation = subparsers.add_parser(
+        "verify-pre-annotation",
+        help="verify every frozen proposal, blind package, control, and repeat",
+    )
+    _add_pre_annotation_arguments(verify_pre_annotation)
+    verify_pre_annotation.set_defaults(func=command_verify_pre_annotation)
     return parser
 
 

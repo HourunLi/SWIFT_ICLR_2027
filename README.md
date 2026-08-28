@@ -274,7 +274,7 @@ hidden controls 各 4/4，A self-repeats=3/3，理由前缀和 schema 全部合�
 允许另写正式 Consistency 扩量协议。v5 自身仍 `eligible_for_training=false`、禁止第三模型补救，不抽 hidden
 state、不训练，也不产生 Consistency efficacy 或 Best-of-N 结论。
 
-## 数据扩容主协议 v6：708 对盲标候选已冻结，等待双 AI
+## 数据扩容主协议 v6：A/B 全部 15 个盲标 shard 已返回
 
 用户已确认先完成正式扩容准备，不直接继续旧 Full 或在旧小数据上增加 epoch。新的
 [`docs/data_expansion_scale_protocol_v6.md`](docs/data_expansion_scale_protocol_v6.md) 与
@@ -336,14 +336,21 @@ row 全部不可监督。原样 v5 机械阈值最终留下 708 个 query-distin
 348、GSM8K 360，超过标注前最低 400/150，未调阈值。
 
 708 对现已冻结为 15 个 shard。每边总计 839 行 =708 natural +60 controls +71 later-shard repeats；两个公共
-索引和全部 1,678 个 A/B package item 已复核，标签目录尚不存在，`annotation_started=false`。要最终通过，
+索引和全部 1,678 个 A/B package item 已复核；在该 pre-annotation 报告的冻结时点，标签目录尚不存在且
+`annotation_started=false`。要最终通过，
 两个 AI 共同接受率至少需达到 train `400/526=76.0%`、heldout `150/182=82.4%`，同时自然 decision agreement
 ≥95%、每边 review≤2%、60/60 控制正确、自重复≥95%。这些 raw gate 的纯机械评估器也在零标签状态下实现，
-不会由第三模型补救。现在的下一步正是让 GPT-5.5-sol/xhigh 与 Claude Opus 5/high 分别在全新上下文中逐 shard
-标注；两边可重复使用各自的
-[`launch_prompt_a.txt`](configs/data_expansion_scale_v6/launch_prompt_a.txt) /
-[`launch_prompt_b.txt`](configs/data_expansion_scale_v6/launch_prompt_b.txt)，每个全新会话会自动只取下一个未完成 shard。仍未产生可训练的 400/150 对，
-也未抽 feature 或训练。
+不会由第三模型补救。首个 A/B shard 已经存在后，用户澄清 A 的实际模型是 GPT-5.6-sol/xhigh，而不是
+基础索引文字中的 5.5；公开的
+[`annotation_model_amendment_v1.json`](configs/data_expansion_scale_v6/annotation_model_amendment_v1.json) 如实绑定了当时两个
+`shard-000` 的 hash，并把模型证据标为 user-reported、精确 revision/temperature 未验证。708 对、包顺序、
+控制/重复项和 raw gate 均未改变。A/B 现已分别完成 15 个 shard、839 行；使用的启动词是
+[`launch_prompt_a_5_6.txt`](configs/data_expansion_scale_v6/launch_prompt_a_5_6.txt) /
+[`launch_prompt_b.txt`](configs/data_expansion_scale_v6/launch_prompt_b.txt)。下一步是用已冻结的纯机械 evaluator 做全量 schema、
+agreement、controls、self-repeat 和 common-accept gate；在结果固化前仍未发布可训练的 400/150 对，也未抽 feature 或训练。
+[`post_annotation_authorization.json`](configs/data_expansion_scale_v6/post_annotation_authorization.json)（SHA-256
+`7dcd096a…ab34`）只解锁这次 deterministic audit、条件式正关系选择和 frozen hard-negative feasibility；provider、
+第三模型、改标签/阈值、feature extraction 与训练仍为 false。
 
 ## 目录
 

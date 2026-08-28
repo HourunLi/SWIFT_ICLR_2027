@@ -6,6 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from prepare_clir_scale import (
+    load_post_annotation_authorization,
+    verify_annotation_model_amendment,
+)
 from src.clir_scale_pre_annotation import (
     PRE_ANNOTATION_AUTHORIZATION_SCHEMA,
     build_scale_annotation_packages,
@@ -306,5 +310,84 @@ def test_pre_annotation_authorization_stops_before_ai_calls() -> None:
     assert scope["checker_and_unitizer_materialization"] is True
     assert scope["blind_package_construction"] is True
     assert scope["ai_annotation_or_provider_call"] is False
+    assert scope["feature_extraction"] is False
+    assert scope["training"] is False
+
+
+def test_annotation_model_amendment_only_changes_annotator_a(
+    tmp_path: Path,
+) -> None:
+    amendment_path = (
+        ROOT
+        / "configs/data_expansion_scale_v6/annotation_model_amendment_v1.json"
+    )
+    result = verify_annotation_model_amendment(
+        amendment_path,
+        protocol_path=ROOT / "configs/data_expansion_scale_v6/protocol.json",
+        authorization_path=(
+            ROOT
+            / "configs/data_expansion_scale_v6/pre_annotation_authorization.json"
+        ),
+        output_root=(
+            ROOT / "run_artifacts/data_expansion_scale_v6/pre_annotation"
+        ),
+    )
+    assert result["status"] == "PASS_SCALE_V6_ANNOTATION_MODEL_AMENDMENT"
+    assert result["effective_requested_models"] == {
+        "a": "gpt-5.6-sol/xhigh",
+        "b": "claude-opus-5/high",
+    }
+    assert result["base_package_contents_changed"] is False
+    assert result["raw_gates_changed"] is False
+    assert result["annotation_started_before_amendment"] is True
+    assert result["model_identity_evidence"] == (
+        "user_reported_unverified_revision_and_temperature"
+    )
+
+    invalid = json.loads(amendment_path.read_text(encoding="utf-8"))
+    invalid["model_roster_change"]["annotator_a_effective"] = (
+        "gpt-5.7-sol/xhigh"
+    )
+    invalid_path = tmp_path / "invalid_amendment.json"
+    invalid_path.write_text(
+        json.dumps(invalid, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="roster change drift"):
+        verify_annotation_model_amendment(
+            invalid_path,
+            protocol_path=ROOT / "configs/data_expansion_scale_v6/protocol.json",
+            authorization_path=(
+                ROOT
+                / "configs/data_expansion_scale_v6/pre_annotation_authorization.json"
+            ),
+            output_root=(
+                ROOT / "run_artifacts/data_expansion_scale_v6/pre_annotation"
+            ),
+        )
+
+
+def test_post_annotation_authorization_stays_audit_only() -> None:
+    authorization = load_post_annotation_authorization(
+        ROOT
+        / "configs/data_expansion_scale_v6/post_annotation_authorization.json",
+        protocol_path=ROOT / "configs/data_expansion_scale_v6/protocol.json",
+        pre_annotation_authorization_path=(
+            ROOT
+            / "configs/data_expansion_scale_v6/pre_annotation_authorization.json"
+        ),
+        pre_annotation_root=(
+            ROOT / "run_artifacts/data_expansion_scale_v6/pre_annotation"
+        ),
+        annotation_model_amendment_path=(
+            ROOT
+            / "configs/data_expansion_scale_v6/annotation_model_amendment_v1.json"
+        ),
+    )
+    scope = authorization["authorized_scope"]
+    assert scope["evaluate_frozen_raw_annotation_gates"] is True
+    assert scope["attempt_frozen_150_heldout_hard_negative_plan"] is True
+    assert scope["provider_or_third_model_call"] is False
+    assert scope["threshold_or_denominator_change"] is False
     assert scope["feature_extraction"] is False
     assert scope["training"] is False

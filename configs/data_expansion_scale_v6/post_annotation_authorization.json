@@ -1,0 +1,36 @@
+{
+  "schema_version": "clir-consistency-scale-v6-post-annotation-authorization",
+  "status": "AUTHORIZED_DETERMINISTIC_POST_ANNOTATION_AUDIT_ONLY",
+  "authorized_at_utc": "2026-08-28T15:55:45Z",
+  "user_context": [
+    "ok，你接着做，到要标数据再叫我",
+    "现在都标完了"
+  ],
+  "frozen_parent": {
+    "protocol_path": "configs/data_expansion_scale_v6/protocol.json",
+    "protocol_file_sha256": "92c44defb551d814a548c1404cc79b2f89f4a63b2727c7335e2858d71cbd0cab",
+    "pre_annotation_authorization_path": "configs/data_expansion_scale_v6/pre_annotation_authorization.json",
+    "pre_annotation_authorization_file_sha256": "b61729ed0d9c0d22967b42d8bbaff3cb26237169530793288e0688a850e67dbe",
+    "pre_annotation_report_path": "run_artifacts/data_expansion_scale_v6/pre_annotation/pre_annotation_report.json",
+    "pre_annotation_report_file_sha256": "acce07c6308787c291cd288671b9d6eb21a222ced05de5c0f189c1d280433db8",
+    "private_manifest_path": "run_artifacts/data_expansion_scale_v6/pre_annotation/packages/PRIVATE_manifest.json",
+    "private_manifest_file_sha256": "07884ceb75e5b18e35d8d64c6f6211995f2e4705954910b0d8bca4656aaa904f",
+    "annotation_model_amendment_path": "configs/data_expansion_scale_v6/annotation_model_amendment_v1.json",
+    "annotation_model_amendment_file_sha256": "fadb33519694b5019710645e320776f0404963f5cfaa838835d5316d97975a47"
+  },
+  "authorized_scope": {
+    "validate_all_A_and_B_label_shards": true,
+    "evaluate_frozen_raw_annotation_gates": true,
+    "select_first_400_train_and_150_heldout_common_accepts_only_if_raw_gates_pass": true,
+    "attempt_frozen_150_heldout_hard_negative_plan": true,
+    "publish_relation_manifests_only_if_every_post_annotation_gate_passes": true,
+    "write_fail_closed_audit_reports": true,
+    "provider_or_third_model_call": false,
+    "adjudication_or_label_repair": false,
+    "threshold_or_denominator_change": false,
+    "feature_extraction": false,
+    "training": false,
+    "gpu_required": false
+  },
+  "failure_rule": "any_raw_or_hard_negative_gate_failure_stops_before_relation_manifest_publication_feature_extraction_and_training"
+}

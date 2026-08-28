@@ -17,6 +17,10 @@ checker/unitizer、原样机械筛选、候选冻结和隔离盲标包构造；�
 
 标注前执行结果（2026-08-28）：`PASS_PRE_ANNOTATION_PACKAGES_VERIFIED_V6`。16,000 条材料化、708 对机械
 候选和 15 个 A/B shard 均已由独立 verifier 重算；`annotation_started=false`，当前必须停下并通知用户。
+首个 A/B `shard-000` 已经产生后，用户澄清 A 实际使用的是 GPT-5.6-sol/xhigh，不是基础索引误记的 5.5。
+`configs/data_expansion_scale_v6/annotation_model_amendment_v1.json` 作为公开、可哈希的模型身份更正记录（SHA-256
+`fadb3351…5a47`）：它绑定了更正时两个 `shard-000` 的 hash，证据等级明确为 user-reported，精确 provider
+revision/temperature 仍未验证；B、包内容/顺序、controls、repeats、分母与 raw gate 均不变。
 
 冻结日期：2026-08-26
 
@@ -125,7 +129,7 @@ v5 的 48 题得到 16 个机械通过 query，观测 yield 是 `33.3%`。把它
 
 机械程序已经判断“同路径”和“文字差异够大”。AI 只回答：任一视图里是否存在实质性的算术、代数、单位、实体、数量或内部矛盾错误；不得重新审理近抄、风格或方法等价。
 
-- A、B 固定为两个不同、非 Phi 的模型系列：GPT-5.5-sol/xhigh 与 Claude Opus 5/high；若执行时必须换模型，先修订协议版本再标注，不能在同一 v6 下静默替换；
+- A、B 固定为两个不同、非 Phi 的模型系列。基础稿曾记为 GPT-5.5-sol/xhigh + Claude Opus 5/high；用户在首个 shard 后澄清实际 A 为 GPT-5.6-sol/xhigh，公开更正记录将有效 roster 记为 GPT-5.6-sol/xhigh + Claude Opus 5/high，但 exact revision/temperature 均不得冒充已验证。若之后还要换模型，必须再修订协议版本后才能继续；
 - 每个模型一次最多处理 50 条自然 pair；脚本直接给它对应 JSONL 路径，不再让人逐条复制；
 - 每 shard 混入 4 个隐藏控制：2 个事实正确必须 accept，2 个有明确错误必须 reject；
 - 每个模型约 10% 的自然 item 在后续 shard 盲重复，测自身稳定性；
@@ -275,7 +279,13 @@ package → verify-pre-annotation`，只能在 clean commit 上执行，所有 a
   index SHA-256 分别为 `160d8c7f…429a` / `e895cd29…b1c3`；
 - 两边合计 1,678 个 package item 已复核，标签目录未创建，provider call、feature 和训练均未开始。
 
-正式标注前的余量是 train 126 对、heldout 32 对，因此 common-accept 最低比例分别为 76.0% 和82.4%。下一步
-只允许用户分别启动 GPT-5.5-sol/xhigh 与 Claude Opus 5/high；每个新上下文处理一个 shard。零标签时已冻结的
-raw gate 仍是 decision agreement≥95%、review≤2%、每边 60/60 controls、自重复≥95%、common accepts
+正式标注前的余量是 train 126 对、heldout 32 对，因此 common-accept 最低比例分别为 76.0% 和82.4%。A/B
+现已分别返回 15 个 shard、839 行，待 deterministic post-annotation evaluator 固化结果。标签前已冻结的 raw
+gate 仍是 decision agreement≥95%、review≤2%、每边 60/60 controls、自重复≥95%、common accepts
 train≥400/heldout≥150，且任何失败均不准第三模型救活。
+
+用户报告两边全部 shard 完成后，独立的
+`configs/data_expansion_scale_v6/post_annotation_authorization.json`（SHA-256 `7dcd096a…ab34`）只解锁
+全量 label/schema 验证、冻结 raw gate、条件式 400/150 选择和原协议 150 hard-negative feasibility。它明确禁止
+provider/第三模型、裁决或修标签、改阈值/分母、feature extraction 和训练；任何后置门失败都只写审计报告，不发布
+relation manifest。

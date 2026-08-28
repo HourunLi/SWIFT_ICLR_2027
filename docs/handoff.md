@@ -319,7 +319,7 @@ controls 均被正确 reject，排除了“所有输入都 accept”的简单退
 `eligible_for_training=false`、`third_model_allowed=false`，不发布训练 manifest、不抽 hidden state、不训练，
 也不支持 Consistency 改善 Best-of-N 的结论。
 
-## 2026-08-26/28 数据扩容主协议 v6：708 对已冻结，等待双 AI 标注
+## 2026-08-26/28 数据扩容主协议 v6：A/B 15 个 shard 已全部返回
 
 用户确认采用中档 Consistency 扩量方案。canonical 文档是
 [`data_expansion_scale_protocol_v6.md`](data_expansion_scale_protocol_v6.md)，机器契约是
@@ -391,13 +391,21 @@ later-shard repeats =839 行；全部 A/B package 1,678 行复核通过。A/B �
 `160d8c7f…429a` / `e895cd29…b1c3`，private manifest 为 `07884ceb…904f`。标签目录仍不存在，报告明确
 `annotation_started=false`。
 
-当前阻塞点就是双 AI 标注，不是继续跑本地计算。最终 common-accept 至少要求 train 400/526（76.0%）、
+双 AI 标注现已完成，当前阻塞点变为 deterministic raw-gate 与 hard-negative feasibility。最终 common-accept 至少要求 train 400/526（76.0%）、
 heldout 150/182（82.4%），另需自然 decision agreement≥95%、review≤2%、两边各 60/60 controls 和自重复
 ≥95%。这些 raw gate 的评估逻辑已在看到任何标签前写入并测试，失败不允许第三模型补救。每个新上下文只能
-处理一个 shard；A 用 GPT-5.5-sol/xhigh，B 用 Claude Opus 5/high。两边分别重复使用
-[`../configs/data_expansion_scale_v6/launch_prompt_a.txt`](../configs/data_expansion_scale_v6/launch_prompt_a.txt) 和
-[`../configs/data_expansion_scale_v6/launch_prompt_b.txt`](../configs/data_expansion_scale_v6/launch_prompt_b.txt)，每次在全新会话中启动。标注完成前仍不能发布
-400/150 训练/heldout 关系、构造最终 hard negatives、抽 feature 或训练。
+处理一个 shard。首个 A/B shard 已存在后，用户澄清 A 实际为 GPT-5.6-sol/xhigh，不是基础索引中的 5.5；
+[`../configs/data_expansion_scale_v6/annotation_model_amendment_v1.json`](../configs/data_expansion_scale_v6/annotation_model_amendment_v1.json)
+绑定了当时两个 `shard-000`，SHA-256 为 `fadb3351…5a47`；该身份是 user-reported，exact revision/temperature
+未验证。B 仍为 Claude Opus 5/high，包和 gate 都不变。两边分别重复使用
+[`../configs/data_expansion_scale_v6/launch_prompt_a_5_6.txt`](../configs/data_expansion_scale_v6/launch_prompt_a_5_6.txt) 和
+[`../configs/data_expansion_scale_v6/launch_prompt_b.txt`](../configs/data_expansion_scale_v6/launch_prompt_b.txt)，每次在全新会话中启动；
+两边现均为 15 shard/839 行。raw gate 与 150 个 hard negatives 尚未固化前，仍不能发布 400/150 训练/heldout
+关系、抽 feature 或训练。
+用户报告全部 shard 完成后，
+[`../configs/data_expansion_scale_v6/post_annotation_authorization.json`](../configs/data_expansion_scale_v6/post_annotation_authorization.json)
+（SHA-256 `7dcd096a…ab34`）只解锁 deterministic label audit、条件式 400/150 选择和 frozen hard-negative
+feasibility；第三模型、裁决、修标签/阈值、feature extraction 和训练仍全部关闭。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -592,9 +600,9 @@ hallucination_onset = k
 1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
    失败作为 pipeline-smoke 诊断。
 2. C prompt-v4 已失败；v5 的机械筛选与双盲事实审计已通过；v6 的 40 个 rollout shard、16,000 条
-   exact-token 材料化、708 对机械候选和 15 个 A/B 盲标 shard 已冻结并复核。下一步是 GPT-5.5-sol/xhigh
-   与 Claude Opus 5/high 分别在全新上下文中每次只标一个 shard；两边全部完成后先跑冻结 raw gate，失败不准
-   用第三模型补救。在 gate 通过前，不发布 400/150 relations、不构造最终 hard negatives、不抽 feature、不训练。
+   exact-token 材料化、708 对机械候选和 15 个 A/B 盲标 shard 已冻结并复核；两边 839 行标注现已全部返回。
+   下一步只运行冻结 raw gate 和 deterministic hard-negative feasibility，失败不准用第三模型补救或改阈值；
+   在完整 post-annotation plan 通过前，不发布 relations、不抽 feature、不训练。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
 4. Prior 先用 40–60 条全新轨迹标显式 dependency edges，由确定性传递闭包得到 Complete、再选 Key；只有

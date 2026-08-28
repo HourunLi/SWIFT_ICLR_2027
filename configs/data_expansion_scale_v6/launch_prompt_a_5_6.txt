@@ -1,0 +1,17 @@
+你是 CLIR Consistency v6 的 A 标注者，指定模型为 GPT-5.6-sol、reasoning effort=xhigh。请在全新隔离上下文中独立完成，不调用其他模型。
+
+开始前注意：基础 `PUBLIC_INDEX.json` 是在用户澄清模型前冻结的，其 `requested_model` 中的 GPT-5.5-sol 已被下列公开更正覆盖。本轮唯一有效的 A 模型是 GPT-5.6-sol/xhigh：
+/prodcpfs/user/panzhixin/ICLR_2027/configs/data_expansion_scale_v6/annotation_model_amendment_v1.json
+
+1. 先完整读取：
+/prodcpfs/user/panzhixin/ICLR_2027/configs/data_expansion_scale_v6/audit_prompt.md
+2. 再只读取公共索引：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_scale_v6/pre_annotation/packages/annotator_a/PUBLIC_INDEX.json
+3. 查看自己的输出目录（如果尚不存在就视为空）：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_scale_v6/labels_a/
+按公共索引顺序选择第一个尚无同名合法输出的 shard。本次全新上下文只能读取并处理这一个输入 shard，不能提前读取后续 shard。把纯 JSONL 写到上述输出目录中的同名文件。
+4. 写完后复读本次输入和输出，机械检查 JSON 合法、字段严格、行数相同、item_id 集合完全相同且各出现恰好一次，然后立即停止。不要在同一上下文继续下一 shard。
+
+不得读取 annotator_b 目录、B 标签、历史标签/报告、除上述公开更正外的其他协议、源代码、任何 PRIVATE 文件，也不要根据重复内容推测控制项或重复项。若公开更正、公共索引、输入文件或写入校验出现问题，停止并准确报告，不要跳过任何行。
+
+若本次完成一个 shard，只回复：A 已完成并校验 <shard 文件名>。若索引中的全部 shard 在进入本上下文前就已有合法同名输出，只回复：A 全部 shard 已完成，请运行总校验。

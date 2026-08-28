@@ -1,13 +1,10 @@
 #!/usr/bin/env python
 """Prepare and execute authorized CLIR Consistency scale-v6 data stages.
 
-``freeze`` and ``verify`` manage the immutable pre-rollout gate.  After a
-separate hash-bound user authorization, ``rollout`` writes one atomic frozen
-shard, ``verify-rollouts`` audits shard artifacts, and ``merge-rollouts``
-publishes the complete raw population.  A second hash-bound authorization may
-then run CPU-only materialization, frozen mechanical proposals, and blind-package
-construction.  This entry point intentionally stops before AI annotation and
-has no model-provider, feature-extraction, or training command.
+``freeze`` and ``verify`` manage the immutable pre-rollout gate.  Separate
+hash-bound authorizations gate rollout, CPU-only pre-annotation preparation,
+and deterministic post-annotation auditing.  This entry point has no AI
+provider, feature-extraction, or training command.
 """
 
 from __future__ import annotations
@@ -42,9 +39,12 @@ from src.clir_scale_pre_annotation import (
     build_scale_annotation_packages,
     build_scale_consistency_proposals,
     build_scale_natural_items,
+    evaluate_scale_annotations,
     materialize_scale_rows,
+    validate_scale_package_labels,
     validate_scale_materialized_rows,
 )
+from src.clir_scale_post_annotation import build_scale_post_annotation_plan
 from src.clir_smoke import (
     atomic_write_json,
     canonical_sha256,
@@ -68,8 +68,19 @@ DEFAULT_PRE_ANNOTATION_AUTHORIZATION = (
     PROJECT_ROOT
     / "configs/data_expansion_scale_v6/pre_annotation_authorization.json"
 )
+DEFAULT_ANNOTATION_MODEL_AMENDMENT = (
+    PROJECT_ROOT
+    / "configs/data_expansion_scale_v6/annotation_model_amendment_v1.json"
+)
+DEFAULT_POST_ANNOTATION_AUTHORIZATION = (
+    PROJECT_ROOT
+    / "configs/data_expansion_scale_v6/post_annotation_authorization.json"
+)
 DEFAULT_PRE_ANNOTATION_ROOT = (
     PROJECT_ROOT / "run_artifacts/data_expansion_scale_v6/pre_annotation"
+)
+DEFAULT_POST_ANNOTATION_ROOT = (
+    PROJECT_ROOT / "run_artifacts/data_expansion_scale_v6/post_annotation"
 )
 REQUIRED_FILES = (
     "source_inventory.json",
@@ -1365,6 +1376,217 @@ def load_pre_annotation_authorization(
     return authorization
 
 
+def verify_annotation_model_amendment(
+    path: Path,
+    *,
+    protocol_path: Path,
+    authorization_path: Path,
+    output_root: Path,
+) -> dict[str, Any]:
+    """Verify the public user-reported GPT-5.5-to-5.6 identity correction."""
+
+    amendment = json.loads(path.read_text(encoding="utf-8"))
+    if amendment.get("schema_version") != (
+        "clir-consistency-scale-v6-annotation-model-amendment-v1"
+    ):
+        raise ValueError("unsupported scale-v6 annotation model amendment schema")
+    if amendment.get("status") != (
+        "RECORDED_USER_MODEL_IDENTITY_CORRECTION_DURING_ANNOTATION"
+    ):
+        raise ValueError("scale-v6 annotation model identity correction drift")
+    if amendment.get("user_instruction") != "哦对，是5.6 sol":
+        raise ValueError("annotation model amendment does not preserve user instruction")
+    if amendment.get("interpretation") != (
+        "record_user_reported_annotator_a_as_gpt_5_6_sol_xhigh_after_"
+        "shard_000_existed_and_before_remaining_shards"
+    ):
+        raise ValueError("annotation model amendment interpretation drift")
+    if amendment.get("authorized_from_clean_parent_commit") != (
+        "791a71ac8f6644914f76ad3461981d4ab2dc18a0"
+    ):
+        raise ValueError("annotation model amendment parent commit drift")
+    observed = amendment.get("observed_state_at_correction")
+    expected_observed_flags = {
+        "annotation_started": True,
+        "provider_call_started": True,
+        "labels_a_directory_existed": True,
+        "labels_b_directory_existed": True,
+    }
+    if not isinstance(observed, dict) or any(
+        observed.get(key) != value for key, value in expected_observed_flags.items()
+    ):
+        raise ValueError("annotation model amendment observed-state drift")
+    for slot in ("a", "b"):
+        record = observed.get(f"existing_labels_{slot}")
+        if not isinstance(record, dict) or int(record.get("row_count", -1)) != 54:
+            raise ValueError("annotation model amendment shard-000 record drift")
+        label_path = _project_path(record["path"])
+        if label_path.name != "shard-000.jsonl":
+            raise ValueError("annotation model amendment did not bind shard-000")
+        if label_path.exists():
+            if file_sha256(label_path) != record["file_sha256"]:
+                raise ValueError(
+                    f"annotation model amendment annotator {slot} shard-000 drift"
+                )
+            if len(read_jsonl(label_path)) != 54:
+                raise ValueError(
+                    f"annotation model amendment annotator {slot} row-count drift"
+                )
+    if amendment.get("model_identity_evidence") != {
+        "source": "user_reported_in_chat",
+        "annotator_a_scope": (
+            "all_scale_v6_A_shards_including_the_already_existing_shard_000"
+        ),
+        "exact_provider_revision": "unverified",
+        "temperature": "unverified",
+        "independently_machine_verifiable_from_label_files": False,
+    }:
+        raise ValueError("annotation model identity evidence drift")
+
+    frozen = amendment["frozen_base"]
+    expected_bindings = (
+        (
+            "protocol_path",
+            "protocol_file_sha256",
+            protocol_path.resolve(),
+            "protocol",
+        ),
+        (
+            "pre_annotation_authorization_path",
+            "pre_annotation_authorization_file_sha256",
+            authorization_path.resolve(),
+            "pre-annotation authorization",
+        ),
+        (
+            "pre_annotation_report_path",
+            "pre_annotation_report_file_sha256",
+            (output_root / "pre_annotation_report.json").resolve(),
+            "pre-annotation report",
+        ),
+        (
+            "public_index_a_path",
+            "public_index_a_file_sha256",
+            (
+                output_root
+                / "packages/annotator_a/PUBLIC_INDEX.json"
+            ).resolve(),
+            "annotator A public index",
+        ),
+        (
+            "public_index_b_path",
+            "public_index_b_file_sha256",
+            (
+                output_root
+                / "packages/annotator_b/PUBLIC_INDEX.json"
+            ).resolve(),
+            "annotator B public index",
+        ),
+    )
+    for path_key, hash_key, expected_path, label in expected_bindings:
+        bound_path = _project_path(frozen[path_key]).resolve()
+        if bound_path != expected_path:
+            raise ValueError(f"annotation model amendment {label} path mismatch")
+        if file_sha256(bound_path) != frozen[hash_key]:
+            raise ValueError(f"annotation model amendment {label} SHA-256 mismatch")
+
+    authorization = json.loads(authorization_path.read_text(encoding="utf-8"))
+    base_annotation = authorization["annotation_contract"]
+    for path_key, hash_key in (
+        ("original_launch_prompt_a_path", "original_launch_prompt_a_file_sha256"),
+        ("launch_prompt_b_path", "launch_prompt_b_file_sha256"),
+    ):
+        bound_path = _project_path(frozen[path_key])
+        if file_sha256(bound_path) != frozen[hash_key]:
+            raise ValueError(f"annotation model amendment prompt drift: {path_key}")
+    if (
+        frozen["original_launch_prompt_a_path"]
+        != base_annotation["launch_prompt_a_path"]
+        or frozen["original_launch_prompt_a_file_sha256"]
+        != base_annotation["launch_prompt_a_file_sha256"]
+        or frozen["launch_prompt_b_path"]
+        != base_annotation["launch_prompt_b_path"]
+        or frozen["launch_prompt_b_file_sha256"]
+        != base_annotation["launch_prompt_b_file_sha256"]
+    ):
+        raise ValueError("annotation model amendment no longer matches base prompts")
+
+    change = amendment["model_roster_change"]
+    expected_change = {
+        "annotator_a_before": "gpt-5.5-sol/xhigh",
+        "annotator_a_effective": "gpt-5.6-sol/xhigh",
+        "annotator_b_before": "claude-opus-5/high",
+        "annotator_b_effective": "claude-opus-5/high",
+        "corrected_launch_prompt_a_path": (
+            "configs/data_expansion_scale_v6/launch_prompt_a_5_6.txt"
+        ),
+        "corrected_launch_prompt_a_file_sha256": (
+            "fcb4358b44d4bbf01750620e3195bceff2632ef5f77a22645855e9ef5e0be1da"
+        ),
+    }
+    if change != expected_change:
+        raise ValueError("annotation model amendment roster change drift")
+    if (
+        base_annotation["requested_a"] != change["annotator_a_before"]
+        or base_annotation["requested_b"] != change["annotator_b_before"]
+    ):
+        raise ValueError("annotation model amendment base roster mismatch")
+    corrected_prompt = _project_path(change["corrected_launch_prompt_a_path"])
+    if file_sha256(corrected_prompt) != change["corrected_launch_prompt_a_file_sha256"]:
+        raise ValueError("corrected annotator A launch prompt SHA-256 mismatch")
+
+    expected_unchanged = {
+        "natural_pairs": 708,
+        "annotation_shards": 15,
+        "package_contents_or_order_changed": False,
+        "hidden_controls_or_repeats_changed": False,
+        "audit_prompt_changed": False,
+        "annotator_b_prompt_or_model_changed": False,
+        "raw_gates_changed": False,
+        "third_model_rescue_allowed": False,
+        "feature_extraction_allowed": False,
+        "training_allowed": False,
+    }
+    if amendment.get("unchanged_contract") != expected_unchanged:
+        raise ValueError("annotation model amendment broadened or changed the contract")
+
+    report = json.loads(
+        (output_root / "pre_annotation_report.json").read_text(encoding="utf-8")
+    )
+    indices = {
+        slot: json.loads(
+            (
+                output_root
+                / f"packages/annotator_{slot}/PUBLIC_INDEX.json"
+            ).read_text(encoding="utf-8")
+        )
+        for slot in ("a", "b")
+    }
+    if (
+        report.get("annotation_started") is not False
+        or report.get("provider_call_started") is not False
+        or int(report.get("natural_pair_count", -1)) != 708
+        or int(report.get("annotation_shard_count", -1)) != 15
+        or indices["a"].get("requested_model") != change["annotator_a_before"]
+        or indices["b"].get("requested_model") != change["annotator_b_before"]
+    ):
+        raise ValueError("annotation model amendment base state mismatch")
+    return {
+        "status": "PASS_SCALE_V6_ANNOTATION_MODEL_AMENDMENT",
+        "effective_requested_models": {
+            "a": change["annotator_a_effective"],
+            "b": change["annotator_b_effective"],
+        },
+        "corrected_launch_prompt_a_path": str(corrected_prompt.resolve()),
+        "corrected_launch_prompt_a_file_sha256": change[
+            "corrected_launch_prompt_a_file_sha256"
+        ],
+        "base_package_contents_changed": False,
+        "raw_gates_changed": False,
+        "annotation_started_before_amendment": True,
+        "model_identity_evidence": "user_reported_unverified_revision_and_temperature",
+    }
+
+
 def _load_pre_annotation_contract(
     *,
     protocol_path: Path,
@@ -2068,7 +2290,380 @@ def command_verify_pre_annotation(args: argparse.Namespace) -> None:
         rollout_root=Path(args.rollout_root).resolve(),
         output_root=Path(args.output_root).resolve(),
     )
+    report["annotation_model_amendment"] = verify_annotation_model_amendment(
+        Path(args.annotation_model_amendment).resolve(),
+        protocol_path=Path(args.protocol).resolve(),
+        authorization_path=Path(args.pre_annotation_authorization).resolve(),
+        output_root=Path(args.output_root).resolve(),
+    )
     print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def load_post_annotation_authorization(
+    path: Path,
+    *,
+    protocol_path: Path,
+    pre_annotation_authorization_path: Path,
+    pre_annotation_root: Path,
+    annotation_model_amendment_path: Path,
+) -> dict[str, Any]:
+    authorization = json.loads(path.read_text(encoding="utf-8"))
+    if authorization.get("schema_version") != (
+        "clir-consistency-scale-v6-post-annotation-authorization"
+    ):
+        raise ValueError("unsupported scale-v6 post-annotation authorization")
+    if authorization.get("status") != (
+        "AUTHORIZED_DETERMINISTIC_POST_ANNOTATION_AUDIT_ONLY"
+    ):
+        raise ValueError("scale-v6 post-annotation audit is not authorized")
+    expected_scope = {
+        "validate_all_A_and_B_label_shards": True,
+        "evaluate_frozen_raw_annotation_gates": True,
+        "select_first_400_train_and_150_heldout_common_accepts_only_if_raw_gates_pass": True,
+        "attempt_frozen_150_heldout_hard_negative_plan": True,
+        "publish_relation_manifests_only_if_every_post_annotation_gate_passes": True,
+        "write_fail_closed_audit_reports": True,
+        "provider_or_third_model_call": False,
+        "adjudication_or_label_repair": False,
+        "threshold_or_denominator_change": False,
+        "feature_extraction": False,
+        "training": False,
+        "gpu_required": False,
+    }
+    if authorization.get("authorized_scope") != expected_scope:
+        raise ValueError("post-annotation authorization scope drift")
+    parent = authorization["frozen_parent"]
+    bindings = (
+        (
+            "protocol_path",
+            "protocol_file_sha256",
+            protocol_path.resolve(),
+        ),
+        (
+            "pre_annotation_authorization_path",
+            "pre_annotation_authorization_file_sha256",
+            pre_annotation_authorization_path.resolve(),
+        ),
+        (
+            "pre_annotation_report_path",
+            "pre_annotation_report_file_sha256",
+            (pre_annotation_root / "pre_annotation_report.json").resolve(),
+        ),
+        (
+            "private_manifest_path",
+            "private_manifest_file_sha256",
+            (
+                pre_annotation_root / "packages/PRIVATE_manifest.json"
+            ).resolve(),
+        ),
+        (
+            "annotation_model_amendment_path",
+            "annotation_model_amendment_file_sha256",
+            annotation_model_amendment_path.resolve(),
+        ),
+    )
+    for path_key, hash_key, expected_path in bindings:
+        bound_path = _project_path(parent[path_key]).resolve()
+        if bound_path != expected_path:
+            raise ValueError(f"post-annotation parent path drift: {path_key}")
+        if file_sha256(bound_path) != parent[hash_key]:
+            raise ValueError(f"post-annotation parent hash drift: {path_key}")
+    verify_annotation_model_amendment(
+        annotation_model_amendment_path,
+        protocol_path=protocol_path,
+        authorization_path=pre_annotation_authorization_path,
+        output_root=pre_annotation_root,
+    )
+    return authorization
+
+
+def _load_validated_scale_label_population(
+    *,
+    pre_annotation_root: Path,
+    labels_root: Path,
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    labels_by_slot: dict[str, list[dict[str, Any]]] = {}
+    provenance: dict[str, Any] = {}
+    for slot in ("a", "b"):
+        package_dir = pre_annotation_root / f"packages/annotator_{slot}"
+        index_path = package_dir / "PUBLIC_INDEX.json"
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        if (
+            index.get("schema_version")
+            != "clir-consistency-scale-public-package-index-v6"
+            or index.get("annotator_slot") != slot
+        ):
+            raise ValueError(f"annotator {slot} public index drift")
+        records = list(index.get("shards", []))
+        expected_names = [Path(record["path"]).name for record in records]
+        if len(expected_names) != len(set(expected_names)):
+            raise ValueError(f"annotator {slot} index repeats shard filenames")
+        label_dir = labels_root / f"labels_{slot}"
+        actual_names = sorted(path.name for path in label_dir.glob("shard-*.jsonl"))
+        if sorted(expected_names) != actual_names:
+            missing = sorted(set(expected_names) - set(actual_names))
+            extra = sorted(set(actual_names) - set(expected_names))
+            raise ValueError(
+                f"annotator {slot} label shard population mismatch: "
+                f"missing={missing} extra={extra}"
+            )
+        validated: list[dict[str, Any]] = []
+        shard_records: list[dict[str, Any]] = []
+        for record in records:
+            package_path = Path(record["path"])
+            if file_sha256(package_path) != record["file_sha256"]:
+                raise ValueError(f"annotator {slot} package hash drift")
+            package_rows, sidecar = _read_published_jsonl(
+                package_path, expected_schema=PACKAGE_SCHEMA
+            )
+            if (
+                sidecar["ordered_rows_sha256"] != record["ordered_rows_sha256"]
+                or len(package_rows) != int(record["row_count"])
+            ):
+                raise ValueError(f"annotator {slot} package sidecar drift")
+            label_path = label_dir / package_path.name
+            label_rows = read_jsonl(label_path)
+            validated.extend(
+                validate_scale_package_labels(package_rows, label_rows)
+            )
+            shard_records.append(
+                {
+                    "shard_id": str(record["shard_id"]),
+                    "path": str(label_path.resolve()),
+                    "row_count": len(label_rows),
+                    "file_sha256": file_sha256(label_path),
+                    "ordered_rows_sha256": canonical_sha256(label_rows),
+                }
+            )
+        if len(validated) != int(index["total_items"]):
+            raise ValueError(f"annotator {slot} total label count drift")
+        labels_by_slot[slot] = validated
+        provenance[slot] = {
+            "public_index_path": str(index_path.resolve()),
+            "public_index_file_sha256": file_sha256(index_path),
+            "requested_model_in_frozen_index": str(index["requested_model"]),
+            "effective_model": (
+                "gpt-5.6-sol/xhigh"
+                if slot == "a"
+                else "claude-opus-5/high"
+            ),
+            "effective_model_evidence": "user_reported",
+            "exact_provider_revision": "unverified",
+            "temperature": "unverified",
+            "shard_count": len(shard_records),
+            "row_count": len(validated),
+            "ordered_rows_sha256": canonical_sha256(validated),
+            "shards": shard_records,
+        }
+    return labels_by_slot, provenance
+
+
+def _evaluate_current_scale_labels(
+    *,
+    protocol_path: Path,
+    post_annotation_authorization_path: Path,
+    pre_annotation_authorization_path: Path,
+    annotation_model_amendment_path: Path,
+    pre_annotation_root: Path,
+    labels_root: Path,
+    code_commit: str,
+) -> dict[str, Any]:
+    protocol = load_protocol(protocol_path)
+    load_post_annotation_authorization(
+        post_annotation_authorization_path,
+        protocol_path=protocol_path,
+        pre_annotation_authorization_path=pre_annotation_authorization_path,
+        pre_annotation_root=pre_annotation_root,
+        annotation_model_amendment_path=annotation_model_amendment_path,
+    )
+    private_path = pre_annotation_root / "packages/PRIVATE_manifest.json"
+    private = json.loads(private_path.read_text(encoding="utf-8"))
+    labels, label_provenance = _load_validated_scale_label_population(
+        pre_annotation_root=pre_annotation_root,
+        labels_root=labels_root,
+    )
+    report = evaluate_scale_annotations(
+        labels_a=labels["a"],
+        labels_b=labels["b"],
+        private=private,
+        gates=protocol["annotation_gates"],
+    )
+    report.update(
+        {
+            "evaluated_at_utc": _utc_now(),
+            "code_commit": code_commit,
+            "protocol_file_sha256": file_sha256(protocol_path),
+            "post_annotation_authorization_file_sha256": file_sha256(
+                post_annotation_authorization_path
+            ),
+            "annotation_model_amendment_file_sha256": file_sha256(
+                annotation_model_amendment_path
+            ),
+            "private_manifest_file_sha256": file_sha256(private_path),
+            "label_provenance": label_provenance,
+            "label_tier": "silver_dual_ai_consistency_v6",
+            "human_verification": False,
+            "provider_revision_and_temperature_verified": False,
+            "feature_extraction_allowed": False,
+            "training_allowed": False,
+            "next_gate": (
+                "FROZEN_POSITIVE_SELECTION_AND_HARD_NEGATIVE_FEASIBILITY"
+                if report["status"] == "PASS_SCALE_V6_RAW_ANNOTATION_GATES"
+                else "STOP_NO_RESCUE"
+            ),
+        }
+    )
+    return report
+
+
+def command_evaluate_annotations(args: argparse.Namespace) -> None:
+    code_commit = _require_clean_execution()
+    output_root = Path(args.post_annotation_root).resolve()
+    report_path = output_root / "raw_annotation_gate_report.json"
+    if report_path.exists():
+        raise FileExistsError(f"raw annotation report already exists: {report_path}")
+    report = _evaluate_current_scale_labels(
+        protocol_path=Path(args.protocol).resolve(),
+        post_annotation_authorization_path=Path(
+            args.post_annotation_authorization
+        ).resolve(),
+        pre_annotation_authorization_path=Path(
+            args.pre_annotation_authorization
+        ).resolve(),
+        annotation_model_amendment_path=Path(
+            args.annotation_model_amendment
+        ).resolve(),
+        pre_annotation_root=Path(args.output_root).resolve(),
+        labels_root=Path(args.rollout_root).resolve(),
+        code_commit=code_commit,
+    )
+    atomic_write_json(report_path, report)
+    summary = {
+        "status": report["status"],
+        "report_path": str(report_path),
+        "report_file_sha256": file_sha256(report_path),
+        "failed_gate_names": report["failed_gate_names"],
+        "natural_agreement_rate": report["natural_agreement_rate"],
+        "common_accept_by_split": report["common_accept_by_split"],
+        "next_gate": report["next_gate"],
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
+def command_plan_final_relations(args: argparse.Namespace) -> None:
+    code_commit = _require_clean_execution()
+    protocol_path = Path(args.protocol).resolve()
+    protocol = load_protocol(protocol_path)
+    post_root = Path(args.post_annotation_root).resolve()
+    raw_report_path = post_root / "raw_annotation_gate_report.json"
+    plan_report_path = post_root / "post_annotation_plan_report.json"
+    if plan_report_path.exists():
+        raise FileExistsError(f"post-annotation plan already exists: {plan_report_path}")
+    raw_report = json.loads(raw_report_path.read_text(encoding="utf-8"))
+    current = _evaluate_current_scale_labels(
+        protocol_path=protocol_path,
+        post_annotation_authorization_path=Path(
+            args.post_annotation_authorization
+        ).resolve(),
+        pre_annotation_authorization_path=Path(
+            args.pre_annotation_authorization
+        ).resolve(),
+        annotation_model_amendment_path=Path(
+            args.annotation_model_amendment
+        ).resolve(),
+        pre_annotation_root=Path(args.output_root).resolve(),
+        labels_root=Path(args.rollout_root).resolve(),
+        code_commit=code_commit,
+    )
+    for field in (
+        "status",
+        "failed_gate_names",
+        "natural_agreement",
+        "natural_agreement_rate",
+        "annotators",
+        "common_accept_count",
+        "common_accept_by_split",
+        "common_accept_by_source",
+        "common_accept_item_ids",
+        "gates",
+        "protocol_file_sha256",
+        "post_annotation_authorization_file_sha256",
+        "annotation_model_amendment_file_sha256",
+        "private_manifest_file_sha256",
+        "label_provenance",
+    ):
+        if raw_report.get(field) != current.get(field):
+            raise ValueError(f"raw annotation report drift: {field}")
+
+    proposals, _ = _read_published_jsonl(
+        Path(args.output_root).resolve()
+        / "proposals/mechanically_admitted_pairs.jsonl",
+        expected_schema=PROPOSAL_SCHEMA,
+    )
+    materialized, _ = _read_published_jsonl(
+        Path(args.output_root).resolve() / "materialized/combined_rows.jsonl",
+        expected_schema=MATERIALIZED_SCHEMA,
+    )
+    artifacts, report = build_scale_post_annotation_plan(
+        proposals=proposals,
+        materialized_rows=materialized,
+        raw_gate_report=raw_report,
+        protocol=protocol,
+    )
+    report.update(
+        {
+            "planned_at_utc": _utc_now(),
+            "code_commit": code_commit,
+            "protocol_file_sha256": file_sha256(protocol_path),
+            "post_annotation_authorization_file_sha256": file_sha256(
+                Path(args.post_annotation_authorization).resolve()
+            ),
+            "raw_annotation_gate_report_file_sha256": file_sha256(
+                raw_report_path
+            ),
+            "proposal_file_sha256": file_sha256(
+                Path(args.output_root).resolve()
+                / "proposals/mechanically_admitted_pairs.jsonl"
+            ),
+            "materialized_file_sha256": file_sha256(
+                Path(args.output_root).resolve()
+                / "materialized/combined_rows.jsonl"
+            ),
+        }
+    )
+    if report["publishable_relation_manifests_allowed"]:
+        manifests = {
+            "train": publish_manifest(
+                post_root / "train_positive_relations.jsonl",
+                artifacts["train"],
+                schema_version="clir-consistency-scale-train-positive-manifest-v6",
+            ),
+            "heldout": publish_manifest(
+                post_root / "heldout_positive_relations.jsonl",
+                artifacts["heldout"],
+                schema_version="clir-consistency-scale-heldout-positive-manifest-v6",
+            ),
+            "hard_negatives": publish_manifest(
+                post_root / "heldout_hard_negative_relations.jsonl",
+                artifacts["negatives"],
+                schema_version="clir-consistency-scale-heldout-hard-negative-manifest-v6",
+            ),
+        }
+        report["published_manifests"] = manifests
+    else:
+        report["published_manifests"] = {}
+    atomic_write_json(plan_report_path, report)
+    summary = {
+        "status": report["status"],
+        "report_path": str(plan_report_path),
+        "report_file_sha256": file_sha256(plan_report_path),
+        "positive_selection": report["positive_selection"],
+        "heldout_hard_negatives": report["heldout_hard_negatives"],
+        "published_manifests": report["published_manifests"],
+        "feature_extraction_allowed": report["feature_extraction_allowed"],
+        "training_allowed": report["training_allowed"],
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
 def command_verify(args: argparse.Namespace) -> None:
@@ -2086,6 +2681,22 @@ def _add_pre_annotation_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--pre-rollout-dir", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--rollout-root", default=str(DEFAULT_ROLLOUT_ROOT))
     parser.add_argument("--output-root", default=str(DEFAULT_PRE_ANNOTATION_ROOT))
+
+
+def _add_post_annotation_arguments(parser: argparse.ArgumentParser) -> None:
+    _add_pre_annotation_arguments(parser)
+    parser.add_argument(
+        "--annotation-model-amendment",
+        default=str(DEFAULT_ANNOTATION_MODEL_AMENDMENT),
+    )
+    parser.add_argument(
+        "--post-annotation-authorization",
+        default=str(DEFAULT_POST_ANNOTATION_AUTHORIZATION),
+    )
+    parser.add_argument(
+        "--post-annotation-root",
+        default=str(DEFAULT_POST_ANNOTATION_ROOT),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2165,7 +2776,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="verify every frozen proposal, blind package, control, and repeat",
     )
     _add_pre_annotation_arguments(verify_pre_annotation)
+    verify_pre_annotation.add_argument(
+        "--annotation-model-amendment",
+        default=str(DEFAULT_ANNOTATION_MODEL_AMENDMENT),
+    )
     verify_pre_annotation.set_defaults(func=command_verify_pre_annotation)
+    evaluate_annotations = subparsers.add_parser(
+        "evaluate-annotations",
+        help="validate all blind labels and apply the frozen raw annotation gates",
+    )
+    _add_post_annotation_arguments(evaluate_annotations)
+    evaluate_annotations.set_defaults(func=command_evaluate_annotations)
+    plan_relations = subparsers.add_parser(
+        "plan-final-relations",
+        help=(
+            "select frozen positives and attempt the frozen heldout hard-negative plan"
+        ),
+    )
+    _add_post_annotation_arguments(plan_relations)
+    plan_relations.set_defaults(func=command_plan_final_relations)
     return parser
 
 

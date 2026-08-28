@@ -1,0 +1,68 @@
+{
+  "schema_version": "clir-consistency-scale-v6-annotation-model-amendment-v1",
+  "status": "RECORDED_USER_MODEL_IDENTITY_CORRECTION_DURING_ANNOTATION",
+  "amended_at_utc": "2026-08-28T04:42:13Z",
+  "user_instruction": "哦对，是5.6 sol",
+  "interpretation": "record_user_reported_annotator_a_as_gpt_5_6_sol_xhigh_after_shard_000_existed_and_before_remaining_shards",
+  "authorized_from_clean_parent_commit": "791a71ac8f6644914f76ad3461981d4ab2dc18a0",
+  "frozen_base": {
+    "protocol_path": "configs/data_expansion_scale_v6/protocol.json",
+    "protocol_file_sha256": "92c44defb551d814a548c1404cc79b2f89f4a63b2727c7335e2858d71cbd0cab",
+    "pre_annotation_authorization_path": "configs/data_expansion_scale_v6/pre_annotation_authorization.json",
+    "pre_annotation_authorization_file_sha256": "b61729ed0d9c0d22967b42d8bbaff3cb26237169530793288e0688a850e67dbe",
+    "pre_annotation_report_path": "run_artifacts/data_expansion_scale_v6/pre_annotation/pre_annotation_report.json",
+    "pre_annotation_report_file_sha256": "acce07c6308787c291cd288671b9d6eb21a222ced05de5c0f189c1d280433db8",
+    "public_index_a_path": "run_artifacts/data_expansion_scale_v6/pre_annotation/packages/annotator_a/PUBLIC_INDEX.json",
+    "public_index_a_file_sha256": "160d8c7fd0fa22174a5b056075db0314a2bb06a309537210735b9db943ed429a",
+    "public_index_b_path": "run_artifacts/data_expansion_scale_v6/pre_annotation/packages/annotator_b/PUBLIC_INDEX.json",
+    "public_index_b_file_sha256": "e895cd29c2ca185c0a9c572d5015387c36c6c191dea4b68941ae9b4986fdb1c3",
+    "original_launch_prompt_a_path": "configs/data_expansion_scale_v6/launch_prompt_a.txt",
+    "original_launch_prompt_a_file_sha256": "eaf3acc767cee36a6249194505d276245ad9801215e1c496088cade78d45a7ea",
+    "launch_prompt_b_path": "configs/data_expansion_scale_v6/launch_prompt_b.txt",
+    "launch_prompt_b_file_sha256": "da7bea7ecbd7d9036e05117432d7432833414bccbd239b496206bb697810f906"
+  },
+  "model_roster_change": {
+    "annotator_a_before": "gpt-5.5-sol/xhigh",
+    "annotator_a_effective": "gpt-5.6-sol/xhigh",
+    "annotator_b_before": "claude-opus-5/high",
+    "annotator_b_effective": "claude-opus-5/high",
+    "corrected_launch_prompt_a_path": "configs/data_expansion_scale_v6/launch_prompt_a_5_6.txt",
+    "corrected_launch_prompt_a_file_sha256": "fcb4358b44d4bbf01750620e3195bceff2632ef5f77a22645855e9ef5e0be1da"
+  },
+  "observed_state_at_correction": {
+    "annotation_started": true,
+    "provider_call_started": true,
+    "labels_a_directory_existed": true,
+    "labels_b_directory_existed": true,
+    "existing_labels_a": {
+      "path": "run_artifacts/data_expansion_scale_v6/labels_a/shard-000.jsonl",
+      "row_count": 54,
+      "file_sha256": "06004a9e4bb585b25f87d1ba1aa5dc5cc2a866ce97089a88029b43c7b1303528"
+    },
+    "existing_labels_b": {
+      "path": "run_artifacts/data_expansion_scale_v6/labels_b/shard-000.jsonl",
+      "row_count": 54,
+      "file_sha256": "840bc6f12c1fcb2eb6da33379f641ecb99171cd3946d5b879ad17bdb9d9ddb40"
+    }
+  },
+  "model_identity_evidence": {
+    "source": "user_reported_in_chat",
+    "annotator_a_scope": "all_scale_v6_A_shards_including_the_already_existing_shard_000",
+    "exact_provider_revision": "unverified",
+    "temperature": "unverified",
+    "independently_machine_verifiable_from_label_files": false
+  },
+  "unchanged_contract": {
+    "natural_pairs": 708,
+    "annotation_shards": 15,
+    "package_contents_or_order_changed": false,
+    "hidden_controls_or_repeats_changed": false,
+    "audit_prompt_changed": false,
+    "annotator_b_prompt_or_model_changed": false,
+    "raw_gates_changed": false,
+    "third_model_rescue_allowed": false,
+    "feature_extraction_allowed": false,
+    "training_allowed": false
+  },
+  "supersession_rule": "for_scale_v6_annotation_only_the_user_reported_A_model_identity_supersedes_the_public_index_and_original_launch_prompt_model_name;_all_package_paths_hashes_rows_order_controls_repeats_and_gates_remain_frozen"
+}

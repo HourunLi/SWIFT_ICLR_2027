@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from pathlib import Path
+
+import pytest
 
 from src.clir_scale_pre_annotation import (
     PRE_ANNOTATION_AUTHORIZATION_SCHEMA,
     build_scale_annotation_packages,
     build_scale_consistency_proposals,
     build_scale_natural_items,
+    evaluate_scale_annotations,
     materialize_scale_rows,
+    validate_scale_package_labels,
     validate_scale_materialized_rows,
 )
 
@@ -212,6 +217,80 @@ def test_scale_packages_have_balanced_controls_and_later_self_repeats() -> None:
         for rows in packages[slot].values():
             ids = [row["item_id"] for row in rows]
             assert len(ids) == len(set(ids))
+
+    expected_controls = {
+        control["item_id"]: control["expected_annotation"]["decision"]
+        for shard_controls in private["controls_by_shard"].values()
+        for control in shard_controls
+    }
+
+    def labels_for(slot: str) -> list[dict]:
+        labels = []
+        for package_rows in packages[slot].values():
+            for item in package_rows:
+                decision = expected_controls.get(item["item_id"], "accept")
+                labels.append(
+                    {
+                        "item_id": item["item_id"],
+                        "decision": decision,
+                        "confidence": "high",
+                        "rationale": (
+                            "[ACCEPT_VALID] correct"
+                            if decision == "accept"
+                            else "[REJECT_ERROR] explicit error"
+                        ),
+                    }
+                )
+        return labels
+
+    labels_a = labels_for("a")
+    labels_b = labels_for("b")
+    first_shard = next(iter(packages["a"]))
+    first_ids = {row["item_id"] for row in packages["a"][first_shard]}
+    first_labels = [row for row in labels_a if row["item_id"] in first_ids]
+    validated = validate_scale_package_labels(
+        packages["a"][first_shard],
+        first_labels,
+    )
+    assert len(validated) == len(packages["a"][first_shard])
+    with pytest.raises(ValueError, match="strict schema"):
+        malformed = deepcopy(first_labels)
+        malformed[0]["extra"] = True
+        validate_scale_package_labels(packages["a"][first_shard], malformed)
+    gates = {
+        "natural_decision_agreement_min": 0.95,
+        "review_fraction_max_per_annotator": 0.02,
+        "hidden_control_accuracy_required_per_annotator": 1.0,
+        "self_repeat_agreement_min_per_annotator": 0.95,
+        "train_common_accept_count_min": 70,
+        "heldout_common_accept_count_min": 35,
+    }
+    report = evaluate_scale_annotations(
+        labels_a=labels_a, labels_b=labels_b, private=private, gates=gates
+    )
+    assert report["status"] == "PASS_SCALE_V6_RAW_ANNOTATION_GATES"
+    assert report["common_accept_by_split"] == {
+        "heldout_acquisition": 40,
+        "train_acquisition": 80,
+    }
+
+    failed_b = deepcopy(labels_b)
+    first_control = next(iter(expected_controls))
+    for label in failed_b:
+        if label["item_id"] == first_control:
+            label["decision"] = (
+                "reject" if label["decision"] == "accept" else "accept"
+            )
+            label["rationale"] = (
+                "[REJECT_ERROR] wrong"
+                if label["decision"] == "reject"
+                else "[ACCEPT_VALID] wrong"
+            )
+    failed = evaluate_scale_annotations(
+        labels_a=labels_a, labels_b=failed_b, private=private, gates=gates
+    )
+    assert failed["status"] == "STOP_SCALE_V6_RAW_ANNOTATION_GATE_FAILURE"
+    assert "hidden_control_accuracy_b" in failed["failed_gate_names"]
 
 
 def test_pre_annotation_authorization_stops_before_ai_calls() -> None:

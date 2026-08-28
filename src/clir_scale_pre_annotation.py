@@ -13,6 +13,7 @@ from typing import Any, Mapping, Sequence
 
 from src.clir_smoke import (
     UNITIZER_VERSION,
+    agreement_report,
     build_mechanical_consistency_proposals,
     canonical_sha256,
     check_numeric_response,
@@ -600,6 +601,216 @@ def build_scale_annotation_packages(
     return packages, private
 
 
+def validate_scale_package_labels(
+    package_rows: Sequence[Mapping[str, Any]],
+    labels: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Validate one shard's strict schema and exact item population."""
+
+    expected_by_id = {str(row["item_id"]): row for row in package_rows}
+    if len(expected_by_id) != len(package_rows):
+        raise ValueError("annotation package contains duplicate item IDs")
+    label_by_id: dict[str, Mapping[str, Any]] = {}
+    required_fields = {"item_id", "decision", "confidence", "rationale"}
+    for label in labels:
+        if set(label) != required_fields:
+            raise ValueError("annotation label fields differ from the strict schema")
+        item_id = str(label.get("item_id"))
+        if item_id in label_by_id:
+            raise ValueError("annotation label contains a duplicate item ID")
+        label_by_id[item_id] = label
+    if set(label_by_id) != set(expected_by_id):
+        missing = sorted(set(expected_by_id) - set(label_by_id))
+        extra = sorted(set(label_by_id) - set(expected_by_id))
+        raise ValueError(
+            f"annotation label population differs from package: "
+            f"missing={missing[:5]} extra={extra[:5]}"
+        )
+    return [
+        validate_annotation(
+            "consistency", label_by_id[item_id], expected_by_id[item_id]
+        )
+        for item_id in expected_by_id
+    ]
+
+
+def evaluate_scale_annotations(
+    *,
+    labels_a: Sequence[Mapping[str, Any]],
+    labels_b: Sequence[Mapping[str, Any]],
+    private: Mapping[str, Any],
+    gates: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Evaluate the preregistered v6 raw gates without adjudication or rescue."""
+
+    natural_ids = [str(value) for value in private["natural_item_ids"]]
+    natural_id_set = set(natural_ids)
+    by_slot = {
+        "a": {str(row["item_id"]): dict(row) for row in labels_a},
+        "b": {str(row["item_id"]): dict(row) for row in labels_b},
+    }
+    if len(by_slot["a"]) != len(labels_a) or len(by_slot["b"]) != len(labels_b):
+        raise ValueError("annotation labels contain duplicate item IDs")
+    for slot in ("a", "b"):
+        if not natural_id_set.issubset(by_slot[slot]):
+            missing = sorted(natural_id_set - set(by_slot[slot]))
+            raise ValueError(f"annotator {slot} is missing natural IDs: {missing[:5]}")
+    natural = {
+        slot: [by_slot[slot][item_id] for item_id in natural_ids]
+        for slot in ("a", "b")
+    }
+    agreement = agreement_report("consistency", natural["a"], natural["b"])
+    natural_metadata = {
+        str(row["item_id"]): row for row in private["natural_metadata"]
+    }
+    if set(natural_metadata) != natural_id_set:
+        raise ValueError("private natural metadata differs from natural IDs")
+
+    expected_prefix = {
+        "accept": "[ACCEPT_VALID]",
+        "reject": "[REJECT_ERROR]",
+        "review": "[REVIEW]",
+    }
+    gate_rows: list[dict[str, Any]] = []
+
+    def add_gate(name: str, passed: bool, **details: Any) -> None:
+        gate_rows.append(
+            {"name": name, "status": "PASS" if passed else "FAIL", **details}
+        )
+
+    agreement_rate = (
+        agreement["exact_target_agree"] / len(natural_ids) if natural_ids else 0.0
+    )
+    add_gate(
+        "natural_decision_agreement",
+        agreement_rate >= float(gates["natural_decision_agreement_min"]),
+        value=agreement_rate,
+        numerator=agreement["exact_target_agree"],
+        denominator=len(natural_ids),
+        threshold=float(gates["natural_decision_agreement_min"]),
+    )
+
+    annotator_reports: dict[str, Any] = {}
+    all_controls = [
+        control
+        for shard_controls in private["controls_by_shard"].values()
+        for control in shard_controls
+    ]
+    for slot in ("a", "b"):
+        natural_counts = Counter(str(row["decision"]) for row in natural[slot])
+        review_fraction = (
+            natural_counts["review"] / len(natural_ids) if natural_ids else 0.0
+        )
+        control_correct = sum(
+            by_slot[slot][str(control["item_id"])]["decision"]
+            == control["expected_annotation"]["decision"]
+            for control in all_controls
+        )
+        repeats = private["self_repeats"][slot]
+        repeat_correct = sum(
+            by_slot[slot][str(repeat["original_item_id"])]["decision"]
+            == by_slot[slot][str(repeat["repeat_item_id"])]["decision"]
+            for repeat in repeats
+        )
+        repeat_rate = repeat_correct / len(repeats) if repeats else 1.0
+        invalid_prefixes = [
+            str(row["item_id"])
+            for row in by_slot[slot].values()
+            if not str(row["rationale"]).startswith(
+                expected_prefix[str(row["decision"])]
+            )
+        ]
+        annotator_reports[slot] = {
+            "natural_decision_counts": dict(sorted(natural_counts.items())),
+            "natural_review_fraction": review_fraction,
+            "hidden_control_correct": control_correct,
+            "hidden_control_total": len(all_controls),
+            "self_repeat_correct": repeat_correct,
+            "self_repeat_total": len(repeats),
+            "self_repeat_agreement": repeat_rate,
+            "invalid_rationale_prefix_item_ids": invalid_prefixes,
+        }
+        add_gate(
+            f"natural_review_fraction_{slot}",
+            review_fraction <= float(gates["review_fraction_max_per_annotator"]),
+            value=review_fraction,
+            numerator=natural_counts["review"],
+            denominator=len(natural_ids),
+            threshold=float(gates["review_fraction_max_per_annotator"]),
+        )
+        add_gate(
+            f"hidden_control_accuracy_{slot}",
+            control_correct == len(all_controls),
+            value=(control_correct / len(all_controls) if all_controls else 1.0),
+            numerator=control_correct,
+            denominator=len(all_controls),
+            threshold=float(gates["hidden_control_accuracy_required_per_annotator"]),
+        )
+        add_gate(
+            f"self_repeat_agreement_{slot}",
+            repeat_rate >= float(gates["self_repeat_agreement_min_per_annotator"]),
+            value=repeat_rate,
+            numerator=repeat_correct,
+            denominator=len(repeats),
+            threshold=float(gates["self_repeat_agreement_min_per_annotator"]),
+        )
+        add_gate(
+            f"rationale_prefixes_{slot}",
+            not invalid_prefixes,
+            invalid_item_ids=invalid_prefixes,
+        )
+
+    common_accept_ids = [
+        item_id
+        for item_id in natural_ids
+        if by_slot["a"][item_id]["decision"] == "accept"
+        and by_slot["b"][item_id]["decision"] == "accept"
+        and by_slot["a"][item_id]["confidence"] != "low"
+        and by_slot["b"][item_id]["confidence"] != "low"
+    ]
+    common_by_split = Counter(
+        str(natural_metadata[item_id]["acquisition_split"])
+        for item_id in common_accept_ids
+    )
+    common_by_source = Counter(
+        str(natural_metadata[item_id]["source"]) for item_id in common_accept_ids
+    )
+    add_gate(
+        "train_common_accept_count",
+        common_by_split["train_acquisition"]
+        >= int(gates["train_common_accept_count_min"]),
+        value=common_by_split["train_acquisition"],
+        threshold=int(gates["train_common_accept_count_min"]),
+    )
+    add_gate(
+        "heldout_common_accept_count",
+        common_by_split["heldout_acquisition"]
+        >= int(gates["heldout_common_accept_count_min"]),
+        value=common_by_split["heldout_acquisition"],
+        threshold=int(gates["heldout_common_accept_count_min"]),
+    )
+    failed = [row["name"] for row in gate_rows if row["status"] == "FAIL"]
+    return {
+        "schema_version": "clir-consistency-scale-raw-annotation-gate-report-v6",
+        "status": (
+            "PASS_SCALE_V6_RAW_ANNOTATION_GATES"
+            if not failed
+            else "STOP_SCALE_V6_RAW_ANNOTATION_GATE_FAILURE"
+        ),
+        "failed_gate_names": failed,
+        "third_model_rescue_allowed": False,
+        "finalization_allowed": not failed,
+        "natural_agreement": agreement,
+        "natural_agreement_rate": agreement_rate,
+        "annotators": annotator_reports,
+        "common_accept_count": len(common_accept_ids),
+        "common_accept_by_split": dict(sorted(common_by_split.items())),
+        "common_accept_by_source": dict(sorted(common_by_source.items())),
+        "common_accept_item_ids": common_accept_ids,
+        "gates": gate_rows,
+    }
+
+
 __all__ = [
     "MATERIALIZED_SCHEMA",
     "NATURAL_ITEM_SCHEMA",
@@ -609,6 +820,8 @@ __all__ = [
     "build_scale_annotation_packages",
     "build_scale_consistency_proposals",
     "build_scale_natural_items",
+    "evaluate_scale_annotations",
     "materialize_scale_rows",
+    "validate_scale_package_labels",
     "validate_scale_materialized_rows",
 ]

@@ -13,7 +13,10 @@
 标注前执行覆盖状态（2026-08-28）：`AUTHORIZED_PRE_ANNOTATION_ONLY`。用户明确要求“接着做，到要标数据再
 叫我”，授权记录见 `configs/data_expansion_scale_v6/pre_annotation_authorization.json`。它只允许 CPU
 checker/unitizer、原样机械筛选、候选冻结和隔离盲标包构造；真正的 AI 标注、标签 triage/finalize、feature、
-训练、raw 重生成和阈值变更仍为 false。当前覆盖尚未执行。
+训练、raw 重生成和阈值变更仍为 false。
+
+标注前执行结果（2026-08-28）：`PASS_PRE_ANNOTATION_PACKAGES_VERIFIED_V6`。16,000 条材料化、708 对机械
+候选和 15 个 A/B shard 均已由独立 verifier 重算；`annotation_started=false`，当前必须停下并通知用户。
 
 冻结日期：2026-08-26
 
@@ -258,3 +261,21 @@ package → verify-pre-annotation`，只能在 clean commit 上执行，所有 a
 150 才能打包。每包最多 50 个自然 pair，混 4 个平衡控制；A/B 各 10% 的盲重复只进入后续 shard，每个新
 上下文只准处理一个 shard。`PASS_PRE_ANNOTATION_PACKAGES_VERIFIED_V6` 出现后必须停止并通知用户，不能由
 脚本自行调用两个 AI。
+
+该阶段已经按上述顺序完成，执行代码 commit 为 `5ab1fb743185a806f70269d66230768b7a4ad38d`：
+
+- 16,000/16,000 unitization 成功；15,927 条使用 canonical fast offsets，73 条使用保留 frozen IDs 的
+  prefix-decode fallback；
+- checker 为 8,877 numeric match、5,907 numeric mismatch、607 truncated、350 parse failed、259
+  ambiguous multiple answers；最终 14,784 行可监督，1,216 行只留审计；
+- materialized 文件 SHA-256 为 `ca37d027…ea4fd`；
+- 不改 v5 阈值后得到 708 个 query-distinct pair：train/heldout=`526/182`，MATH/GSM8K=`348/360`；proposal
+  SHA-256 为 `795a1d47…33b73`；
+- 15 个盲标 shard 中，每边为 708 natural +60 hidden controls +71 later-shard repeats =839 行；A/B 公共
+  index SHA-256 分别为 `160d8c7f…429a` / `e895cd29…b1c3`；
+- 两边合计 1,678 个 package item 已复核，标签目录未创建，provider call、feature 和训练均未开始。
+
+正式标注前的余量是 train 126 对、heldout 32 对，因此 common-accept 最低比例分别为 76.0% 和82.4%。下一步
+只允许用户分别启动 GPT-5.5-sol/xhigh 与 Claude Opus 5/high；每个新上下文处理一个 shard。零标签时已冻结的
+raw gate 仍是 decision agreement≥95%、review≤2%、每边 60/60 controls、自重复≥95%、common accepts
+train≥400/heldout≥150，且任何失败均不准第三模型救活。

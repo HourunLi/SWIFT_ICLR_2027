@@ -274,7 +274,7 @@ hidden controls 各 4/4，A self-repeats=3/3，理由前缀和 schema 全部合�
 允许另写正式 Consistency 扩量协议。v5 自身仍 `eligible_for_training=false`、禁止第三模型补救，不抽 hidden
 state、不训练，也不产生 Consistency efficacy 或 Best-of-N 结论。
 
-## 数据扩容主协议 v6：16,000 条 raw rollout 已完成，材料化未启动
+## 数据扩容主协议 v6：708 对盲标候选已冻结，等待双 AI
 
 用户已确认先完成正式扩容准备，不直接继续旧 Full 或在旧小数据上增加 epoch。新的
 [`docs/data_expansion_scale_protocol_v6.md`](docs/data_expansion_scale_protocol_v6.md) 与
@@ -325,7 +325,25 @@ raw 文件和完成报告只保存在被 Git 忽略的 `run_artifacts/data_expan
 CPU checker/unitizer 材料化、原样 v5 机械筛选、自然候选冻结和 A/B 盲标包构造，并在真正调用 AI 标注前强制
 停止；它仍禁止 provider call、标签裁决/发布、抽 feature、训练、重跑 raw rollout 或修改阈值。每个标注
 shard 最多 50 个自然 pair，另混 2 accept +2 reject 控制；A/B 各约 10% 自重复只放到后续 shard。启动词
-要求一个全新上下文只处理一个 shard，避免同一上下文记住重复项。当前只是实现和授权已冻结，尚未执行材料化。
+要求一个全新上下文只处理一个 shard，避免同一上下文记住重复项。执行前先把实现、启动词和 raw gate
+评估器冻结在干净提交上，然后才运行下述标注前阶段。
+
+标注前阶段现已在 clean commit `5ab1fb7` 上执行并经独立重算通过，终态为
+`PASS_PRE_ANNOTATION_PACKAGES_VERIFIED_V6`：16,000/16,000 exact-token unitization 成功，其中 15,927 条走
+canonical fast offsets，73 条走不改写 frozen IDs 的 prefix fallback。checker 得到 8,877 numeric match、
+5,907 numeric mismatch、607 truncated、350 parse failed 和259 conflicting answers；后 1,216 条 audit-only
+row 全部不可监督。原样 v5 机械阈值最终留下 708 个 query-distinct pair：train 526、heldout 182，MATH
+348、GSM8K 360，超过标注前最低 400/150，未调阈值。
+
+708 对现已冻结为 15 个 shard。每边总计 839 行 =708 natural +60 controls +71 later-shard repeats；两个公共
+索引和全部 1,678 个 A/B package item 已复核，标签目录尚不存在，`annotation_started=false`。要最终通过，
+两个 AI 共同接受率至少需达到 train `400/526=76.0%`、heldout `150/182=82.4%`，同时自然 decision agreement
+≥95%、每边 review≤2%、60/60 控制正确、自重复≥95%。这些 raw gate 的纯机械评估器也在零标签状态下实现，
+不会由第三模型补救。现在的下一步正是让 GPT-5.5-sol/xhigh 与 Claude Opus 5/high 分别在全新上下文中逐 shard
+标注；两边可重复使用各自的
+[`launch_prompt_a.txt`](configs/data_expansion_scale_v6/launch_prompt_a.txt) /
+[`launch_prompt_b.txt`](configs/data_expansion_scale_v6/launch_prompt_b.txt)，每个全新会话会自动只取下一个未完成 shard。仍未产生可训练的 400/150 对，
+也未抽 feature 或训练。
 
 ## 目录
 
@@ -361,7 +379,7 @@ docs/data_expansion_smoke_protocol_v2.md  双审查整合后的 100-query smoke 
 docs/data_expansion_smoke_protocol_v3.md  当前 160-query primary acquisition 与双标协议
 docs/data_expansion_smoke_protocol_v4.md  Consistency 提示词修复与新样本确认门
 docs/data_expansion_smoke_protocol_v5.md  Consistency 机械筛选与新鲜双盲事实审计
-docs/data_expansion_scale_protocol_v6.md  当前数据扩容主协议；已冻结但尚未 rollout
+docs/data_expansion_scale_protocol_v6.md  当前数据扩容主协议；已到双 AI 标注门
 ```
 
 当前分支顶端只保留训练/打分/评测代码、测试、可运行配置、README、handoff、核心方法说明和

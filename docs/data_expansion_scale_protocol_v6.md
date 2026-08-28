@@ -22,6 +22,16 @@ checker/unitizer、原样机械筛选、候选冻结和隔离盲标包构造；�
 `fadb3351…5a47`）：它绑定了更正时两个 `shard-000` 的 hash，证据等级明确为 user-reported，精确 provider
 revision/temperature 仍未验证；B、包内容/顺序、controls、repeats、分母与 raw gate 均不变。
 
+标注后执行结果（2026-08-29）：commit `657d471` 上的 evaluator 对 A/B 各 15 shard、839 行完成全量 package/schema
+绑定，raw report SHA-256 为 `4c80626e…a598`，终态 `PASS_SCALE_V6_RAW_ANNOTATION_GATES`。自然 agreement
+`676/708=95.48%`；controls A/B=`60/60`；self-repeat A=`71/71`、B=`69/71`；review A/B=`7/708`/`0`；
+common accepts train/heldout=`474/167`。这些只证明双 AI Silver 操作一致性达到冻结门，不证明事实准确或模块效果。
+
+同一提交随后严格执行 400/150 first-N selection 和 150 hard-negative 计划。正关系数量、query/cluster 跨 split
+分离均通过，但 300 个 heldout 正视图在原 response-surface/长度/答案条件下只有 10 条 eligible edge，greedy
+只能选 8/150。post-plan report SHA-256 为 `42052c40…bb0`，终态
+`STOP_SCALE_V6_POST_ANNOTATION_PLAN`；按 fail-closed 规则没有发布 relation manifest、没有抽 feature、没有训练。
+
 冻结日期：2026-08-26
 
 机器契约：`configs/data_expansion_scale_v6/protocol.json`
@@ -280,12 +290,17 @@ package → verify-pre-annotation`，只能在 clean commit 上执行，所有 a
 - 两边合计 1,678 个 package item 已复核，标签目录未创建，provider call、feature 和训练均未开始。
 
 正式标注前的余量是 train 126 对、heldout 32 对，因此 common-accept 最低比例分别为 76.0% 和82.4%。A/B
-现已分别返回 15 个 shard、839 行，待 deterministic post-annotation evaluator 固化结果。标签前已冻结的 raw
-gate 仍是 decision agreement≥95%、review≤2%、每边 60/60 controls、自重复≥95%、common accepts
-train≥400/heldout≥150，且任何失败均不准第三模型救活。
+现已分别返回 15 个 shard、839 行。冻结 raw gate 已通过：agreement=`676/708`，controls=`60/60` 每边，
+self-repeat A/B=`71/71`、`69/71`，common accepts train/heldout=`474/167`。但是冻结 hard-negative 计划只有
+8/150，故整体后置计划停止，不能用 raw PASS 越过这个后置失败。
 
 用户报告两边全部 shard 完成后，独立的
 `configs/data_expansion_scale_v6/post_annotation_authorization.json`（SHA-256 `7dcd096a…ab34`）只解锁
 全量 label/schema 验证、冻结 raw gate、条件式 400/150 选择和原协议 150 hard-negative feasibility。它明确禁止
 provider/第三模型、裁决或修标签、改阈值/分母、feature extraction 和训练；任何后置门失败都只写审计报告，不发布
 relation manifest。
+
+后验只读诊断（不属于 v6 授权结果）：若把 hard-negative 来源扩大到现有 heldout 的 2,178 条 numeric-match
+可监督视图，并保持所有 edge 阈值不变，则有 605 条 eligible edge、maximum matching=167；选 150 条约新增
+257 个 trajectory 与101 个 prompt，额外约 21.3 GiB，总预算约 98.9 GiB（106.2 GB）。采用这条路必须另发 v6.1
+hard-negative-only amendment；不得把该诊断冒充 v6 已通过，也不得静默从 greedy 改 maximum matching。

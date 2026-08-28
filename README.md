@@ -274,7 +274,7 @@ hidden controls 各 4/4，A self-repeats=3/3，理由前缀和 schema 全部合�
 允许另写正式 Consistency 扩量协议。v5 自身仍 `eligible_for_training=false`、禁止第三模型补救，不抽 hidden
 state、不训练，也不产生 Consistency efficacy 或 Best-of-N 结论。
 
-## 数据扩容主协议 v6：A/B 全部 15 个盲标 shard 已返回
+## 数据扩容主协议 v6：raw 标注门通过，hard-negative 计划停止
 
 用户已确认先完成正式扩容准备，不直接继续旧 Full 或在旧小数据上增加 epoch。新的
 [`docs/data_expansion_scale_protocol_v6.md`](docs/data_expansion_scale_protocol_v6.md) 与
@@ -346,8 +346,23 @@ row 全部不可监督。原样 v5 机械阈值最终留下 708 个 query-distin
 `shard-000` 的 hash，并把模型证据标为 user-reported、精确 revision/temperature 未验证。708 对、包顺序、
 控制/重复项和 raw gate 均未改变。A/B 现已分别完成 15 个 shard、839 行；使用的启动词是
 [`launch_prompt_a_5_6.txt`](configs/data_expansion_scale_v6/launch_prompt_a_5_6.txt) /
-[`launch_prompt_b.txt`](configs/data_expansion_scale_v6/launch_prompt_b.txt)。下一步是用已冻结的纯机械 evaluator 做全量 schema、
-agreement、controls、self-repeat 和 common-accept gate；在结果固化前仍未发布可训练的 400/150 对，也未抽 feature 或训练。
+[`launch_prompt_b.txt`](configs/data_expansion_scale_v6/launch_prompt_b.txt)。全量 schema、agreement、controls、
+self-repeat 和 common-accept gate 已由 commit `657d471` 上的冻结 evaluator 执行；raw report SHA-256 是
+`4c80626e…a598`，终态 `PASS_SCALE_V6_RAW_ANNOTATION_GATES`：自然 decision agreement 为
+`676/708=95.48%`，A/B controls 都是 `60/60`，A self-repeat `71/71`、B `69/71=97.18%`，A/B review
+分别为 `7/708=.99%` 与 `0`。双方非 low 共同 accept 为 train `474`、heldout `167`，均超过 `400/150`。
+
+按冻结顺序取前 N 个时，400 个 train 正关系和 150 个 heldout 正关系都能形成，query 跨 split overlap=0、
+template-cluster 跨 split overlap=0；对应有序行 hash 为 `079d014b…f9d2` / `704a8317…73b6`。但原协议还要求
+用这 300 个 heldout 正视图配出 150 个 different-answer/similar-surface hard negatives。保持 response-surface
+Jaccard `[.10,.40]`、长度 `[.8,1.25]` 和所有分离条件不变，只得到 10 条 eligible edge，greedy 不复用视图
+只能选 8/150。因此 post plan 终态是 `STOP_SCALE_V6_POST_ANNOTATION_PLAN`，报告 SHA-256
+`42052c40…bb0`；没有 relation manifest 被发布，feature extraction 与训练仍为 false。
+
+只读的后验可行性诊断显示，无需重新 rollout：现有 heldout 中 2,178 条数值正确可监督视图可形成 605 条同阈值
+负边，maximum matching 可达 167；若选 150 条，约新增 257 个未复用 trajectory、101 个 prompt，估算再占
+21.3 GiB，全套约 98.9 GiB（106.2 GB），与旧 105.5 GB 规划量基本相当但略高约 0.7 GB。这不是已授权改动；若采用，必须先冻结一个只修改
+hard-negative 来源池/匹配器与存储计数的 v6.1 amendment。
 [`post_annotation_authorization.json`](configs/data_expansion_scale_v6/post_annotation_authorization.json)（SHA-256
 `7dcd096a…ab34`）只解锁这次 deterministic audit、条件式正关系选择和 frozen hard-negative feasibility；provider、
 第三模型、改标签/阈值、feature extraction 与训练仍为 false。

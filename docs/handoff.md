@@ -319,7 +319,7 @@ controls 均被正确 reject，排除了“所有输入都 accept”的简单退
 `eligible_for_training=false`、`third_model_allowed=false`，不发布训练 manifest、不抽 hidden state、不训练，
 也不支持 Consistency 改善 Best-of-N 的结论。
 
-## 2026-08-26/28 数据扩容主协议 v6：A/B 15 个 shard 已全部返回
+## 2026-08-26/29 数据扩容主协议 v6：raw PASS，hard-negative STOP
 
 用户确认采用中档 Consistency 扩量方案。canonical 文档是
 [`data_expansion_scale_protocol_v6.md`](data_expansion_scale_protocol_v6.md)，机器契约是
@@ -400,8 +400,20 @@ heldout 150/182（82.4%），另需自然 decision agreement≥95%、review≤2%
 未验证。B 仍为 Claude Opus 5/high，包和 gate 都不变。两边分别重复使用
 [`../configs/data_expansion_scale_v6/launch_prompt_a_5_6.txt`](../configs/data_expansion_scale_v6/launch_prompt_a_5_6.txt) 和
 [`../configs/data_expansion_scale_v6/launch_prompt_b.txt`](../configs/data_expansion_scale_v6/launch_prompt_b.txt)，每次在全新会话中启动；
-两边现均为 15 shard/839 行。raw gate 与 150 个 hard negatives 尚未固化前，仍不能发布 400/150 训练/heldout
-关系、抽 feature 或训练。
+两边现均为 15 shard/839 行。commit `657d471` 上的冻结 raw evaluator 已完成：自然 agreement
+`676/708=95.48%`，A/B controls=`60/60`，self-repeat=`71/71`/`69/71`，review=`7/708`/`0`，共同 accept
+train/heldout=`474/167`；raw report SHA-256 为 `4c80626e…a598`，终态
+`PASS_SCALE_V6_RAW_ANNOTATION_GATES`。
+
+按冻结顺序选择的 400 train +150 heldout 正关系可行，source 分别为 train GSM8K/MATH=`210/190`、heldout
+`85/65`，query 与 template cluster 跨 split overlap 都是 0。但 frozen hard-negative 阶段在 300 个 heldout
+正视图上只有 10 条 eligible response-surface edge，greedy 只能选 8/150。因此 plan report SHA-256
+`42052c40…bb0`，终态 `STOP_SCALE_V6_POST_ANNOTATION_PLAN`；没有发布任何 relation manifest，也没有抽
+feature 或训练。raw PASS 只能证明 Silver 标注流程达到冻结一致性门，不能证明 C 有效，更不能覆盖后置 STOP。
+
+只读后验诊断表明，现有 2,178 条 heldout numeric-match 可监督视图有 605 条同阈值 edge，maximum matching
+为167；做满150 条预计增加 257 个 trajectory、101 个 prompt、约21.3 GiB，总 selected feature 约98.9 GiB（106.2 GB）。
+这需要一个显式 v6.1 hard-negative-only amendment，不能在 v6 中静默改来源池或 greedy 算法。
 用户报告全部 shard 完成后，
 [`../configs/data_expansion_scale_v6/post_annotation_authorization.json`](../configs/data_expansion_scale_v6/post_annotation_authorization.json)
 （SHA-256 `7dcd096a…ab34`）只解锁 deterministic label audit、条件式 400/150 选择和 frozen hard-negative
@@ -600,9 +612,10 @@ hallucination_onset = k
 1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
    失败作为 pipeline-smoke 诊断。
 2. C prompt-v4 已失败；v5 的机械筛选与双盲事实审计已通过；v6 的 40 个 rollout shard、16,000 条
-   exact-token 材料化、708 对机械候选和 15 个 A/B 盲标 shard 已冻结并复核；两边 839 行标注现已全部返回。
-   下一步只运行冻结 raw gate 和 deterministic hard-negative feasibility，失败不准用第三模型补救或改阈值；
-   在完整 post-annotation plan 通过前，不发布 relations、不抽 feature、不训练。
+   exact-token 材料化、708 对机械候选和 15 个 A/B 盲标 shard 已冻结并复核；两边 839 行已返回，raw gates
+   全通过，但 frozen hard-negative 只有 8/150，使整体 post plan fail-closed。下一步由用户决定是否授权一个
+   狭窄 v6.1：只把负样本来源扩到现有 heldout numeric-match 池并预注册 deterministic maximum matching；
+   在新协议通过前，不发布 relations、不抽 feature、不训练。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
 4. Prior 先用 40–60 条全新轨迹标显式 dependency edges，由确定性传递闭包得到 Complete、再选 Key；只有

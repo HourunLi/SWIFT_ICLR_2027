@@ -7,6 +7,9 @@
 `configs/data_expansion_scale_v6/rollout_authorization.json`。该覆盖只允许 40 个 frozen shard 的生成、复核和
 合并，不允许 checker/unitizer materialization、AI 标注、抽特征或训练。
 
+执行结果状态（2026-08-28）：`PASS_ALL_16000_RAW_ROLLOUTS_VERIFIED_V6`。基础状态是生成前冻结时的不可变
+记录，执行覆盖和结果是后加的 hash-bound 审计层；三者不是矛盾，也不能用 rollout PASS 解锁后续阶段。
+
 冻结日期：2026-08-26
 
 机器契约：`configs/data_expansion_scale_v6/protocol.json`
@@ -28,7 +31,9 @@ v6 把下一步固定为一个中等规模、可承受的 Consistency 扩容：
            + 150 个确定性 hard-negative held-out 关系
 ```
 
-这里“冻结”指预算、来源、拆分、筛选、双标、失败门和最终入选顺序已经写死；**不代表数据已经生成**。本提交不启动 rollout、不标注、不抽 hidden state、不训练。下一道门是先发布 query、排除表、近重复 cluster、split 和 40 个 rollout shard 的 hash，再向用户确认是否真的开始约 16,000 条生成。
+这里“冻结”指预算、来源、拆分、筛选、双标、失败门和最终入选顺序已经写死。协议冻结提交本身没有生成
+数据；随后用户通过独立授权只解锁了 rollout。该阶段现已完成，但仍未标注、未抽 hidden state、未训练，
+也尚未产生任何可训练 Consistency relation。
 
 ## 2. 为什么先扩 Consistency
 
@@ -184,9 +189,9 @@ Consistency v6 通过也只解锁 C 数据，不自动解锁其他模块或 Full
 
 数据门通过后，先完整重跑 `C0/C1/H0/CH0`，至少 3 个、优先 5 个 seed，报告 paired query bootstrap。Full 只能在 C、H、Prior 各自数据与机制门通过后运行。下降的辅助 loss、通过的 smoke 或单个 seed 都不能替代 held-out Best-of-N。
 
-## 10. 当前唯一下一步
+## 10. 当前完成状态与唯一下一步
 
-目前处于**数据扩容准备阶段**。2026-08-27 的生成前澄清已经在机器契约中补齐并冻结：长链 GSM 的统计口径、
+2026-08-27 的生成前澄清已经在机器契约中补齐并冻结：长链 GSM 的统计口径、
 数字/实体模板算法、64-permutation/16-band MinHash、token/trigram Jaccard 阈值、历史排除项向整个 cluster
 传播、MATH 学科×难度与 GSM 四分位分层、3,072-token prompt 上限，以及每个 shard 固定
 `35 MATH +15 GSM8K`。这些都发生在任何 v6 rollout 之前，不是看过 yield 后调规则。
@@ -207,7 +212,7 @@ python prepare_clir_scale.py merge-rollouts
 文件则停止，不自动覆盖。`merge-rollouts` 只有在全部 40 个 shard 逐一重新通过时才发布 16,000 行总表。
 入口仍刻意没有标注、抽特征或训练子命令。
 
-生成前必须用该入口发布并核对：
+生成前用该入口发布并核对的项目为：
 
 1. 两个来源的完整 inventory 和许可字段；
 2. 历史 query 永久排除表；
@@ -217,7 +222,27 @@ python prepare_clir_scale.py merge-rollouts
 6. 根据实际选中题目的 token 长度重算 GPU/磁盘预算；
 7. 在干净 commit 上发布上述 manifest hash。
 
-这些清单已经通过，用户也已给出 rollout 授权。当前下一步是先在 clean commit 上运行 `train-000` 校准；
-400 行、candidate 0–7、prompt ID、模型 revision、vLLM 版本与 hash 全部通过后，按授权最多 8 个 shard 并行。
-在 40 个 shard 合并报告出现之前仍不能写“扩容数据已完成”；在后续材料化和双 AI 门通过之前更不能写
-“Consistency 已经有 400 对训练数据”。
+六份清单已经通过。用户只授权 rollout 后，入口在 clean commit
+`078eb6b1c3d1aa8c1c950030e4aeff496ea1f342` 上先完成 `train-000` 校准，再完成全部 40 个 shard。独立
+`verify-rollouts --require-complete` 与 `merge-rollouts` 均通过，结果如下：
+
+- 2,000 个 query、16,000 条 row、每题 candidate 0–7，ID 全部唯一；
+- 合并文件 `run_artifacts/data_expansion_scale_v6/rollouts/combined_raw.jsonl` 的 SHA-256 为
+  `f538373b3d99791001cbe2119466b0bd52e23a8337223053920371cda7e75139`；
+- 15,393 条 `finish_reason=stop`，607 条 `finish_reason=length`，截断率 3.79375%；
+- output token 共 7,187,789，长度 min/median/mean/max 为 `87/392/449.2368/1024`；
+- train-acquisition 为 12,000 行、453 条截断（3.775%）；heldout-acquisition 为 4,000 行、154 条截断
+  （3.85%）；
+- MATH 为 11,200 行、599 条截断（5.3482%）；GSM8K 为 4,800 行、8 条截断（0.1667%）；
+- 1,999/2,000 个 query 至少有两条未截断候选；唯一不足者按冻结规则排除，不放松筛选阈值；
+- vLLM 的 `backend_response_text` 对全部 16,000 行统一比 token-ID decode 多一个前导空格；strip 后 16,000
+  行全部相等，因此这是展示层差异，不是 token 漂移。后续只认保存的 token IDs。
+
+raw artifact 与完成报告均在 Git 忽略目录，远端只保存执行代码、授权、协议和交接文档。原先按 420 output
+token 估计的 105.23 GB 选中-view feature 预算，因 raw 实测均值为 449.24，必须等最终 1,100 个 views
+确定后按实际长度重算；全部 16,000 条抽 feature 的禁令不变。
+
+当前授权在 merge 报告处终止。607 条截断输出必须在下一阶段排除；checker、
+`clir_material_claim_unitizer_v2`、机械候选筛选、双 AI 审计、feature extraction 和训练均未启动。因此现在
+只能写“raw acquisition 完成”，不能写“训练数据扩容完成”或“已有 400 对训练数据”。唯一下一步是先冻结并
+复核 materialization-only 入口及其输出契约，再取得明确授权后运行；不得把本次 rollout 授权自动扩展到该阶段。

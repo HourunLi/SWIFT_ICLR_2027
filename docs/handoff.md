@@ -319,7 +319,7 @@ controls 均被正确 reject，排除了“所有输入都 accept”的简单退
 `eligible_for_training=false`、`third_model_allowed=false`，不发布训练 manifest、不抽 hidden state、不训练，
 也不支持 Consistency 改善 Best-of-N 的结论。
 
-## 2026-08-26 数据扩容主协议 v6：准备已冻结，rollout 未启动
+## 2026-08-26/28 数据扩容主协议 v6：raw rollout 已完成，材料化未启动
 
 用户确认采用中档 Consistency 扩量方案。canonical 文档是
 [`data_expansion_scale_protocol_v6.md`](data_expansion_scale_protocol_v6.md)，机器契约是
@@ -339,7 +339,8 @@ material claims、长度比 `[1.15,3]`、math trace≥`.60`、numeric trace≥`.
 
 预算按真实 v3/v5 token 长度估算：全层 BF16 每 token `33×3072×2=202,752` bytes。2,000×8 若全部抽
 feature 约 1.42 TB，因此 v6 明确先 rollout/check/unitize/filter/双标，最后只抽入选的 1,100 条 views 与
-550 个共享 prompt，保守估计约 105.5 GB。独立 ranking pool 的 TB 级 feature 另算，不能混入本轮预算。
+550 个共享 prompt。原先按 420 output token 估计约 105.23 GB；raw rollout 实测均值为 449.24，最终预算
+必须等入选 views 确定后按真实长度重算。独立 ranking pool 的 TB 级 feature 另算，不能混入本轮预算。
 
 2026-08-27 已补齐生成前执行契约和独立的 [`../prepare_clir_scale.py`](../prepare_clir_scale.py)；核心逻辑在
 [`../src/clir_scale.py`](../src/clir_scale.py)。生成前版本只允许在 clean commit 上执行 `freeze/verify`，负责来源过滤、
@@ -351,7 +352,25 @@ feature 约 1.42 TB，因此 v6 明确先 rollout/check/unitize/filter/双标，
 [`../configs/data_expansion_scale_v6/rollout_authorization.json`](../configs/data_expansion_scale_v6/rollout_authorization.json)：
 只允许 frozen rollout，materialization、标注、抽特征和训练仍为 false。`prepare_clir_scale.py` 因此新增逐
 shard 原子生成、completion marker、只读复核和 40-shard fail-closed 合并；先用 `train-000` 校准，再在机械
-运行门通过时最多 8 卡并行。当前仍不能写成“扩容数据已完成”或“Consistency 已经有 400 对训练数据”。
+运行门通过时最多 8 卡并行。
+
+该 rollout 授权现已完整执行，生成代码与授权的 clean commit 是
+`078eb6b1c3d1aa8c1c950030e4aeff496ea1f342`。40/40 shard、2,000/2,000 query、16,000/16,000 raw rows
+通过独立 `verify-rollouts --require-complete` 和 `merge-rollouts`，终态为
+`PASS_ALL_16000_RAW_ROLLOUTS_VERIFIED_V6`。合并文件 SHA-256 为
+`f538373b3d99791001cbe2119466b0bd52e23a8337223053920371cda7e75139`，raw artifact 只留在 Git 忽略目录，
+没有推到远端。
+
+运行健康统计：15,393 条自然停止，607 条达到 1,024-token 上限（3.79%）；MATH/GSM8K 截断率分别为
+5.35%/0.17%，train/heldout acquisition 分别为 3.78%/3.85%。1,999/2,000 个 query 至少有两条未截断
+候选；另 1 个 query 以后按冻结规则排除，不能为凑数放松阈值。vLLM 展示文本统一比 token-ID decode 多一个
+前导空格，strip 后 16,000/16,000 相等；保存的 token IDs 是唯一权威，没有发现 token 漂移。
+
+这里完成的是 raw acquisition，不是可训练数据扩容。607 条截断输出尚未由材料化阶段排除，checker、
+`clir_material_claim_unitizer_v2`、机械筛选、双 AI 审计、hidden-state extraction 和训练全部未启动，当前也
+不能写“Consistency 已经有 400 对训练数据”。下一步需先冻结/复核 materialization-only 入口并取得新的明确
+授权；本次 rollout 授权不能自动沿用。当前不再占用 GPU，后续 checker/unitizer 主要走 CPU，直到 feature
+extraction 和训练才重新需要 GPU。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 

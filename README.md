@@ -274,7 +274,7 @@ hidden controls 各 4/4，A self-repeats=3/3，理由前缀和 schema 全部合�
 允许另写正式 Consistency 扩量协议。v5 自身仍 `eligible_for_training=false`、禁止第三模型补救，不抽 hidden
 state、不训练，也不产生 Consistency efficacy 或 Best-of-N 结论。
 
-## 数据扩容主协议 v6：六清单已通过，rollout 已获授权
+## 数据扩容主协议 v6：16,000 条 raw rollout 已完成，材料化未启动
 
 用户已确认先完成正式扩容准备，不直接继续旧 Full 或在旧小数据上增加 epoch。新的
 [`docs/data_expansion_scale_protocol_v6.md`](docs/data_expansion_scale_protocol_v6.md) 与
@@ -291,7 +291,8 @@ v6 原样保留 v5 的 numeric/path/surface 机械阈值，不允许看完新 ro
 `silver_dual_ai_consistency_v6`，不能叫 Gold。
 
 存储顺序也已固定：16,000 条只先保存文本和 token IDs，完成机械筛选与双标后只给最终 550 对、1,100 条
-view 抽全层 feature，按 420 output token 的保守均值估计约 105.5 GB；若先给全部 rollout 抽
+view 抽全层 feature；原先按 420 output token 估计约 105.23 GB，但本次 raw rollout 实测均值是 449.24，
+因此必须等最终入选 views 确定后按其真实长度重算，不能继续把 105.23 GB 当成实际占用。若先给全部 rollout 抽
 `33×3072` BF16 feature，预计约 1.42 TB，协议明确禁止。H 仍需全新 `30 positive +30 clean` 的 H-only
 确认；Prior 仍需先标 dependency edges、由程序做传递闭包得到 Complete；独立 1,500–2,000×16 ranking
 pool 另行冻结预算。
@@ -307,6 +308,19 @@ checker/unitizer materialization、标注、抽特征和训练仍关闭。入口
 `train-000` 校准，机械运行门通过后最多 8 张 L20Z 并行完成其余 shard。任何已有完整 shard 只复核跳过，
 不完整 artifact 默认停止且不覆盖。
 
+该授权现已执行完毕：40/40 shard、2,000/2,000 query、16,000/16,000 raw rows 通过独立复核与全量合并，
+终态为 `PASS_ALL_16000_RAW_ROLLOUTS_VERIFIED_V6`。合并文件 SHA-256 是
+`f538373b…5139`，有 15,393 条自然停止，607 条因达到 1,024-token 上限而以 `length` 结束（3.79%）；后者
+必须在材料化阶段排除。1,999/2,000 个 query 至少有两条未截断输出，剩余 1 个 query 不能组成正 pair，按
+冻结规则排除，不能据此放松阈值。MATH 截断率为 5.35%，GSM8K 为 0.17%；train/heldout acquisition
+分别为 3.78%/3.85%，没有异常 split 偏移。vLLM 返回的展示文本统一比 token-ID 解码多一个前导空格，
+16,000 条去掉首尾空白后全部相等；保存的 `output_token_ids` 仍是唯一权威，没有 token 漂移。
+
+raw 文件和完成报告只保存在被 Git 忽略的 `run_artifacts/data_expansion_scale_v6/rollouts/`，不会推到远端。
+这只表示生成阶段完成，不表示已经得到 400 个可训练 Consistency pair：checker、
+`clir_material_claim_unitizer_v2`、机械筛选、双 AI 审计、feature 和训练均未启动。下一道门必须另行冻结并授权
+“材料化 + 候选生成”，不能沿用 rollout 授权越权执行。
+
 ## 目录
 
 ```text
@@ -318,7 +332,7 @@ configs/data_expansion_smoke_v2/      双审查后多题源扩量 smoke 的机�
 configs/data_expansion_smoke_v3/      当前 MATH 扩量 smoke 的机器协议与标注语义
 configs/data_expansion_smoke_v4/      Consistency 提示词修复、14-ID 回放清单与机器门
 configs/data_expansion_smoke_v5/      Consistency 机械筛选与双 AI 事实审计协议/启动提示词
-configs/data_expansion_scale_v6/      正式扩容准备：数量、split、分片、双标门与预算
+configs/data_expansion_scale_v6/      正式扩容：协议、冻结分片、rollout 授权与后续双标门
 prepare_clir_smoke.py                  v2/v3 数据管线与 v4/v5 Consistency gate 入口
 prepare_clir_scale.py                  v6 六清单、授权后原子 rollout、复核与合并；不含标注/抽取/训练
 src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约

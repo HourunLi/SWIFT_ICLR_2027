@@ -2,6 +2,11 @@
 
 状态：`FROZEN_PREPARATION_ROLLOUT_NOT_STARTED`
 
+执行覆盖状态（2026-08-28）：`AUTHORIZED_ROLLOUT_ONLY`。基础协议与六份清单保持原 hash；用户在看过清单、
+规模和预算汇总后明确回复“开始”，授权记录见
+`configs/data_expansion_scale_v6/rollout_authorization.json`。该覆盖只允许 40 个 frozen shard 的生成、复核和
+合并，不允许 checker/unitizer materialization、AI 标注、抽特征或训练。
+
 冻结日期：2026-08-26
 
 机器契约：`configs/data_expansion_scale_v6/protocol.json`
@@ -191,10 +196,18 @@ Consistency v6 通过也只解锁 C 数据，不自动解锁其他模块或 Full
 ```bash
 python prepare_clir_scale.py freeze
 python prepare_clir_scale.py verify
+CUDA_VISIBLE_DEVICES=0 python prepare_clir_scale.py rollout --shard-id train-000
+python prepare_clir_scale.py verify-rollouts --shard-id train-000 --require-complete
+python prepare_clir_scale.py merge-rollouts
 ```
 
-它刻意没有 rollout、标注、抽特征或训练子命令；`freeze` 还会拒绝 dirty worktree 和覆盖已有冻结目录。
-下一步不是启动训练，而是用该入口发布并核对：
+`freeze` 会拒绝 dirty worktree 和覆盖已有冻结目录。授权后的 `rollout` 每次只接受一个已冻结 shard，要求
+进程只看见一张 GPU，逐题保留独立 seed、原始 prompt/output token IDs、模型/环境/commit/hash provenance，
+完成后写 hash sidecar 和 completion marker。已有完整 shard 只复核并跳过；发现无 completion marker 的残留
+文件则停止，不自动覆盖。`merge-rollouts` 只有在全部 40 个 shard 逐一重新通过时才发布 16,000 行总表。
+入口仍刻意没有标注、抽特征或训练子命令。
+
+生成前必须用该入口发布并核对：
 
 1. 两个来源的完整 inventory 和许可字段；
 2. 历史 query 永久排除表；
@@ -204,4 +217,7 @@ python prepare_clir_scale.py verify
 6. 根据实际选中题目的 token 长度重算 GPU/磁盘预算；
 7. 在干净 commit 上发布上述 manifest hash。
 
-这些都通过后，再向用户确认是否开始约 16,000 条 rollout。在那之前，v6 的准确状态是“协议已冻结、正在准备扩容”，不是“扩容数据已完成”。
+这些清单已经通过，用户也已给出 rollout 授权。当前下一步是先在 clean commit 上运行 `train-000` 校准；
+400 行、candidate 0–7、prompt ID、模型 revision、vLLM 版本与 hash 全部通过后，按授权最多 8 个 shard 并行。
+在 40 个 shard 合并报告出现之前仍不能写“扩容数据已完成”；在后续材料化和双 AI 门通过之前更不能写
+“Consistency 已经有 400 对训练数据”。

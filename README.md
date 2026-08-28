@@ -274,7 +274,7 @@ hidden controls 各 4/4，A self-repeats=3/3，理由前缀和 schema 全部合�
 允许另写正式 Consistency 扩量协议。v5 自身仍 `eligible_for_training=false`、禁止第三模型补救，不抽 hidden
 state、不训练，也不产生 Consistency efficacy 或 Best-of-N 结论。
 
-## 数据扩容主协议 v6：协议已冻结，尚未启动生成
+## 数据扩容主协议 v6：六清单已通过，rollout 已获授权
 
 用户已确认先完成正式扩容准备，不直接继续旧 Full 或在旧小数据上增加 epoch。新的
 [`docs/data_expansion_scale_protocol_v6.md`](docs/data_expansion_scale_protocol_v6.md) 与
@@ -296,12 +296,16 @@ view 抽全层 feature，按 420 output token 的保守均值估计约 105.5 GB�
 确认；Prior 仍需先标 dependency edges、由程序做传递闭包得到 Complete；独立 1,500–2,000×16 ranking
 pool 另行冻结预算。
 
-当前状态准确写作 `FROZEN_PREPARATION_ROLLOUT_NOT_STARTED`：协议、预算和失败门已写好，但没有新
-rollout、标注、hidden state 或训练结果。2026-08-27 又在生成前冻结了长链 GSM 统计、实体/数字模板、
+基础协议仍准确写作 `FROZEN_PREPARATION_ROLLOUT_NOT_STARTED`：它本身不授权任何生成、标注、hidden
+state 或训练。2026-08-27 又在生成前冻结了长链 GSM 统计、实体/数字模板、
 MinHash/Jaccard 阈值、历史排除传播、分层配额、prompt 上限与每 shard `35 MATH +15 GSM8K` 等执行细节。
-独立入口 [`prepare_clir_scale.py`](prepare_clir_scale.py) 只提供 `freeze/verify`，刻意没有 rollout 命令；它先
-发布来源 inventory、永久排除表、近重复 cluster、1,500/500 query split、40 个原子 shard 和实际预算 hash，
-全部核对后仍须再次取得用户确认，才可真正启动约 16,000 条生成。
+来源 inventory、永久排除表、近重复 cluster、1,500/500 query split、40 个原子 shard 和实际预算 hash 已
+全部通过。2026-08-28 用户明确回复“开始”，单独的
+[`rollout_authorization.json`](configs/data_expansion_scale_v6/rollout_authorization.json) 因此只解锁 rollout；
+checker/unitizer materialization、标注、抽特征和训练仍关闭。入口
+[`prepare_clir_scale.py`](prepare_clir_scale.py) 现支持逐 shard 原子生成、完成标记、复核和全量合并；先跑
+`train-000` 校准，机械运行门通过后最多 8 张 L20Z 并行完成其余 shard。任何已有完整 shard 只复核跳过，
+不完整 artifact 默认停止且不覆盖。
 
 ## 目录
 
@@ -316,7 +320,7 @@ configs/data_expansion_smoke_v4/      Consistency 提示词修复、14-ID 回放
 configs/data_expansion_smoke_v5/      Consistency 机械筛选与双 AI 事实审计协议/启动提示词
 configs/data_expansion_scale_v6/      正式扩容准备：数量、split、分片、双标门与预算
 prepare_clir_smoke.py                  v2/v3 数据管线与 v4/v5 Consistency gate 入口
-prepare_clir_scale.py                  v6 扩量前六清单冻结与只读复核；不包含 rollout
+prepare_clir_scale.py                  v6 六清单、授权后原子 rollout、复核与合并；不含标注/抽取/训练
 src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约
 src/clir_scale.py                      v6 来源过滤、历史排除、模板分簇、split/shard/预算契约
 src/clir_features.py                  identity/layer-axis 特征编码器

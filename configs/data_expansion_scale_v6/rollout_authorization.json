@@ -1,0 +1,54 @@
+{
+  "schema_version": "clir-consistency-scale-v6-rollout-authorization",
+  "status": "AUTHORIZED_ROLLOUT_ONLY",
+  "authorized_at_utc": "2026-08-28T03:29:40Z",
+  "authorization_source": {
+    "kind": "explicit_user_confirmation_in_active_codex_thread",
+    "user_instruction": "开始",
+    "confirmation_follows_pre_rollout_summary": true
+  },
+  "frozen_parent": {
+    "protocol_path": "configs/data_expansion_scale_v6/protocol.json",
+    "protocol_file_sha256": "92c44defb551d814a548c1404cc79b2f89f4a63b2727c7335e2858d71cbd0cab",
+    "preparation_code_commit": "21445396bf4ae9e8ffc0f56d10d76158db91f097",
+    "pre_rollout_directory": "run_artifacts/data_expansion_scale_v6/pre_rollout",
+    "manifest_registry_file_sha256": "7e6d6da9570221ef46425fd68952db7335aad7d7670ebdef8c52b35075e68352",
+    "pre_rollout_report_file_sha256": "5f8ce7e9c40d2dfdf886ed8598f8cba2f9baec202ad58ab65bad27e7e4cecde2",
+    "pre_rollout_status": "PASS_PRE_ROLLOUT_MANIFEST_FREEZE"
+  },
+  "authorized_scope": {
+    "rollout": true,
+    "checker_and_unitizer_materialization": false,
+    "annotation": false,
+    "feature_extraction": false,
+    "training": false,
+    "threshold_or_query_manifest_change": false
+  },
+  "runtime_contract": {
+    "first_calibration_shard": "train-000",
+    "continue_after_calibration_if_all_mechanical_runtime_checks_pass": true,
+    "maximum_concurrent_shards": 8,
+    "cuda_devices_per_shard": 1,
+    "tensor_parallel_size": 1,
+    "dtype": "bfloat16",
+    "max_num_seqs": 32,
+    "gpu_memory_utilization": 0.9,
+    "cache_dir": "run_artifacts/model_cache",
+    "output_root": "run_artifacts/data_expansion_scale_v6",
+    "existing_complete_shard_policy": "verify_and_skip",
+    "existing_incomplete_shard_policy": "stop_without_overwrite",
+    "merge_requires_all_40_verified_shards": true
+  },
+  "calibration_gate": {
+    "query_count": 50,
+    "candidate_rows": 400,
+    "candidate_indices_per_query": "exact_0_through_7",
+    "exact_prompt_id_parity_required": true,
+    "nonempty_output_token_ids_required": true,
+    "model_revision_match_required": true,
+    "backend_version_match_required": true,
+    "clean_git_commit_required": true,
+    "finish_reason_length_is_retained_for_later_ineligibility_not_a_rollout_failure": true
+  },
+  "next_gate_after_rollout": "verify_and_merge_all_16000_raw_rows_then_report_yield_inputs_before_materialization"
+}

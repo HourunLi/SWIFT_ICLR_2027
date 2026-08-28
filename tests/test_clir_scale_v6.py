@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from prepare_clir_scale import _derive_query_seed, _validate_shard_rows
 from src.clir_scale import (
     build_rollout_shards,
     build_source_candidates,
@@ -11,6 +14,7 @@ from src.clir_scale import (
     entity_template_signature,
     gsm8k_long_chain_metrics,
 )
+from src.clir_smoke import file_sha256
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +22,9 @@ PROTOCOL = json.loads(
     (ROOT / "configs/data_expansion_scale_v6/protocol.json").read_text(
         encoding="utf-8"
     )
+)
+AUTHORIZATION_PATH = (
+    ROOT / "configs/data_expansion_scale_v6/rollout_authorization.json"
 )
 
 
@@ -136,3 +143,96 @@ def test_rollout_shards_are_source_balanced_and_exact_partition() -> None:
     query_ids = [query_id for shard in shards for query_id in shard["query_ids"]]
     assert len(query_ids) == len(set(query_ids)) == 2000
     assert all(row["expected_candidate_rows"] == 400 for row in shards)
+
+
+def test_rollout_authorization_is_rollout_only() -> None:
+    authorization = json.loads(AUTHORIZATION_PATH.read_text(encoding="utf-8"))
+    assert authorization["status"] == "AUTHORIZED_ROLLOUT_ONLY"
+    assert authorization["authorized_scope"] == {
+        "rollout": True,
+        "checker_and_unitizer_materialization": False,
+        "annotation": False,
+        "feature_extraction": False,
+        "training": False,
+        "threshold_or_query_manifest_change": False,
+    }
+    assert authorization["runtime_contract"]["first_calibration_shard"] == (
+        "train-000"
+    )
+
+
+def test_rollout_shard_row_contract_rejects_prompt_drift() -> None:
+    query_id = "math:train:algebra:99993"
+    query = {
+        "query_id": query_id,
+        "source": "math",
+        "question": "What is 2 plus 3?",
+        "reference_answer": "5",
+        "cluster_id": "cluster-1",
+        "acquisition_split": "train_acquisition",
+        "prompt_token_count": 3,
+    }
+    shard = {
+        "shard_id": "train-test",
+        "query_ids": [query_id],
+        "expected_candidate_rows": 8,
+    }
+    authorization_sha = file_sha256(AUTHORIZATION_PATH)
+    protocol_sha = file_sha256(
+        ROOT / "configs/data_expansion_scale_v6/protocol.json"
+    )
+    provenance = {
+        "protocol_file_sha256": protocol_sha,
+        "pre_rollout_registry_file_sha256": "registry-sha",
+        "authorization_file_sha256": authorization_sha,
+        "code_commit": "test-commit",
+        "model_revision": PROTOCOL["generation"]["model_revision"],
+        "tokenizer_revision": PROTOCOL["generation"]["tokenizer_revision"],
+        "vllm_version": PROTOCOL["generation"]["backend_version"],
+    }
+    seed = _derive_query_seed(PROTOCOL["generation"]["seed"], query_id)
+    rows = [
+        {
+            "id": f"{query_id}:cand:{index:03d}",
+            "query_id": query_id,
+            "candidate_index": index,
+            "shard_id": "train-test",
+            "acquisition_split": "train_acquisition",
+            "cluster_id": "cluster-1",
+            "source": "math",
+            "question": query["question"],
+            "reference_answer": "5",
+            "prompt_token_ids": [1, 2, 3],
+            "output_token_ids": [100 + index],
+            "response": str(index),
+            "sampling_seed": seed,
+            "decode_matches_backend_text": True,
+            "finish_reason": "stop",
+            "provenance": provenance,
+        }
+        for index in range(8)
+    ]
+    report = _validate_shard_rows(
+        rows,
+        shard=shard,
+        query_by_id={query_id: query},
+        protocol=PROTOCOL,
+        protocol_file_sha256=protocol_sha,
+        authorization_file_sha256=authorization_sha,
+        registry_file_sha256="registry-sha",
+    )
+    assert report["rows"] == 8
+    assert report["total_output_tokens"] == 8
+    assert report["finish_reason_counts"] == {"stop": 8}
+
+    drifted = [dict(row, prompt_token_ids=[1, 2]) for row in rows]
+    with pytest.raises(ValueError, match="prompt token count differs"):
+        _validate_shard_rows(
+            drifted,
+            shard=shard,
+            query_by_id={query_id: query},
+            protocol=PROTOCOL,
+            protocol_file_sha256=protocol_sha,
+            authorization_file_sha256=authorization_sha,
+            registry_file_sha256="registry-sha",
+        )

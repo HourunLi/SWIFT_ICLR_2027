@@ -3,6 +3,9 @@ torch==2.3.1
 # vLLM 0.5.3.post1 requires the 1.26 NumPy ABI; 2.x is not a valid rollout env.
 numpy==1.26.4
 pytest==8.3.3
+# Pinned for the deterministic general-graph maximum matching used only by the
+# CPU-only Consistency scale-v6.1 post-annotation planner.
+networkx==3.6.1
 
 # Required only by extract_hidden_states.py. Kept explicit because exact-token,
 # all-layer extraction is part of the real-data path, but it is not imported by

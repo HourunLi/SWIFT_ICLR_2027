@@ -302,5 +302,30 @@ relation manifest。
 
 后验只读诊断（不属于 v6 授权结果）：若把 hard-negative 来源扩大到现有 heldout 的 2,178 条 numeric-match
 可监督视图，并保持所有 edge 阈值不变，则有 605 条 eligible edge、maximum matching=167；选 150 条约新增
-257 个 trajectory 与101 个 prompt，额外约 21.3 GiB，总预算约 98.9 GiB（106.2 GB）。采用这条路必须另发 v6.1
-hard-negative-only amendment；不得把该诊断冒充 v6 已通过，也不得静默从 greedy 改 maximum matching。
+257 个 trajectory；当时按 view 粗估为101 个新 prompt、额外约21.3 GiB、总预算约98.9 GiB（106.2 GB）。
+采用这条路必须另发 v6.1 hard-negative-only amendment；不得把该诊断冒充 v6 已通过，也不得静默从 greedy
+改 maximum matching。
+
+### v6.1 hard-negative-only 修订（执行前冻结）
+
+用户已在看到上述后验可行性诊断后明确同意这条窄修订。因此 v6.1 是
+`post-failure engineering amendment`，不是盲预注册结果。机器契约是
+`configs/data_expansion_scale_v6/hard_negative_amendment_v6_1.json`；它绑定原 v6 protocol、raw PASS 报告、
+STOP 报告、proposal、materialized rows 和 PRIVATE manifest 的文件哈希，原文件一律不覆盖。
+
+不变项是：A/B 标签、raw gate 与分母、400/150 first-N 正关系顺序、different query/cluster/answer、长度
+`[.8,1.25]`、response-surface Jaccard `[.10,.40]`、view 不复用以及 hard negative 只用于 held-out 诊断。
+唯一算法改动是把负例端点池从 300 个已选正视图扩大到所有现有 heldout `numeric_match +
+eligible_for_supervision` 视图，并用固定 NetworkX `3.6.1` 的 maximum-cardinality matching；最大基数之后按
+同 source、同 source+subject、更接近的长度、SHA-256 顺序偏好，再取前150 条。
+
+v6.1 只能在 clean commit 上运行，写入新的 `post_annotation_v6_1` 目录。全门通过时才允许同时发布
+400 train positives、150 heldout positives、150 heldout hard negatives 和精确 feature inventory；随后必须再跑
+独立重算核验。该授权不包含新 rollout、新 AI 标注、特征抽取或训练。即使核验通过，下一门仍是单独授权只抽取
+inventory 中列出的视图，绝不能抽16,000 条全池。
+
+执行代码落盘前的只读实现预检复现了 2,178/605/167/150。它同时发现上面的101 个 prompt 是按新 view
+估算而没有跨正负关系按 query 去重：150 个负关系实际涉及106 道题，其中44 道的 prompt 已包含在正关系预算，
+所以只新增62 个 prompt。精确 inventory 预算为：正关系77.574 GiB；新增257 个 trajectory +62 个 prompt 为
+20.636 GiB；合计1,357 个 trajectory、612 个 prompt、98.210 GiB（105.452 GB）。这些数字同样是修订后的
+工程预检，不是模块效果证据；正式关系清单仍须等冻结提交上的 plan 与独立 verifier 都通过。

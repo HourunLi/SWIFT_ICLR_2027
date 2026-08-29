@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from prepare_clir_scale import (
+    load_hard_negative_amendment_v6_1,
     load_post_annotation_authorization,
     verify_annotation_model_amendment,
 )
@@ -389,5 +390,37 @@ def test_post_annotation_authorization_stays_audit_only() -> None:
     assert scope["attempt_frozen_150_heldout_hard_negative_plan"] is True
     assert scope["provider_or_third_model_call"] is False
     assert scope["threshold_or_denominator_change"] is False
+    assert scope["feature_extraction"] is False
+    assert scope["training"] is False
+
+
+def test_v6_1_amendment_changes_only_negative_pool_and_matcher() -> None:
+    amendment = load_hard_negative_amendment_v6_1(
+        ROOT
+        / "configs/data_expansion_scale_v6/hard_negative_amendment_v6_1.json",
+        protocol_path=ROOT / "configs/data_expansion_scale_v6/protocol.json",
+        post_annotation_authorization_path=(
+            ROOT
+            / "configs/data_expansion_scale_v6/post_annotation_authorization.json"
+        ),
+        post_annotation_root=(
+            ROOT / "run_artifacts/data_expansion_scale_v6/post_annotation"
+        ),
+        pre_annotation_root=(
+            ROOT / "run_artifacts/data_expansion_scale_v6/pre_annotation"
+        ),
+    )
+    assert amendment["evidence_tier"] == (
+        "post_failure_engineering_amendment_not_blind_preregistration"
+    )
+    assert amendment["hard_negative_contract"]["source_pool"] == (
+        "all_existing_heldout_numeric_match_supervision_eligible_views"
+    )
+    assert amendment["unchanged_contract"][
+        "first_400_train_and_150_heldout_positive_selection_order"
+    ] is True
+    scope = amendment["authorized_scope"]
+    assert scope["new_rollout"] is False
+    assert scope["new_AI_annotation_or_provider_call"] is False
     assert scope["feature_extraction"] is False
     assert scope["training"] is False

@@ -44,7 +44,13 @@ from src.clir_scale_pre_annotation import (
     validate_scale_package_labels,
     validate_scale_materialized_rows,
 )
-from src.clir_scale_post_annotation import build_scale_post_annotation_plan
+from src.clir_scale_post_annotation import (
+    FEATURE_INVENTORY_SCHEMA_V6_1,
+    HARD_NEGATIVE_RELATION_SCHEMA_V6_1,
+    POSITIVE_RELATION_SCHEMA,
+    build_scale_post_annotation_plan,
+    build_scale_post_annotation_plan_v6_1,
+)
 from src.clir_smoke import (
     atomic_write_json,
     canonical_sha256,
@@ -81,6 +87,13 @@ DEFAULT_PRE_ANNOTATION_ROOT = (
 )
 DEFAULT_POST_ANNOTATION_ROOT = (
     PROJECT_ROOT / "run_artifacts/data_expansion_scale_v6/post_annotation"
+)
+DEFAULT_HARD_NEGATIVE_AMENDMENT_V6_1 = (
+    PROJECT_ROOT
+    / "configs/data_expansion_scale_v6/hard_negative_amendment_v6_1.json"
+)
+DEFAULT_POST_ANNOTATION_ROOT_V6_1 = (
+    PROJECT_ROOT / "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1"
 )
 REQUIRED_FILES = (
     "source_inventory.json",
@@ -2377,6 +2390,222 @@ def load_post_annotation_authorization(
     return authorization
 
 
+def load_hard_negative_amendment_v6_1(
+    path: Path,
+    *,
+    protocol_path: Path,
+    post_annotation_authorization_path: Path,
+    post_annotation_root: Path,
+    pre_annotation_root: Path,
+) -> dict[str, Any]:
+    amendment = json.loads(path.read_text(encoding="utf-8"))
+    if amendment.get("schema_version") != (
+        "clir-consistency-scale-v6.1-hard-negative-amendment"
+    ):
+        raise ValueError("unsupported scale-v6.1 hard-negative amendment")
+    if amendment.get("status") != (
+        "AUTHORIZED_POST_FAILURE_ENGINEERING_AMENDMENT"
+    ):
+        raise ValueError("scale-v6.1 hard-negative amendment is not authorized")
+    expected_scope = {
+        "new_rollout": False,
+        "new_AI_annotation_or_provider_call": False,
+        "label_repair_or_adjudication": False,
+        "threshold_or_raw_gate_change": False,
+        "recompute_v6_1_hard_negative_graph_and_matching": True,
+        "publish_400_train_150_heldout_positive_and_150_heldout_hard_negative_relations_only_if_all_gates_pass": True,
+        "publish_exact_selected_feature_inventory_only_if_all_gates_pass": True,
+        "run_independent_recomputation_verifier": True,
+        "feature_extraction": False,
+        "training": False,
+        "gpu_required": False,
+    }
+    if amendment.get("authorized_scope") != expected_scope:
+        raise ValueError("scale-v6.1 authorization scope drift")
+    expected_unchanged = {
+        "raw_A_and_B_labels_and_all_raw_annotation_denominators": True,
+        "raw_annotation_gates": True,
+        "first_400_train_and_150_heldout_positive_selection_order": True,
+        "positive_relation_counts": True,
+        "different_query_and_template_cluster_required": True,
+        "different_normalized_final_answer_required": True,
+        "view_token_length_ratio_min": 0.8,
+        "view_token_length_ratio_max": 1.25,
+        "surface_bigram_jaccard_min": 0.1,
+        "surface_bigram_jaccard_max": 0.4,
+        "hard_negative_endpoint_reuse_allowed": False,
+        "hard_negatives_remain_evaluation_only": True,
+        "checker_unitizer_rollouts_and_saved_token_ids": True,
+    }
+    if amendment.get("unchanged_contract") != expected_unchanged:
+        raise ValueError("scale-v6.1 unchanged-contract declaration drift")
+    expected_negative_contract = {
+        "count": 150,
+        "source_pool": (
+            "all_existing_heldout_numeric_match_supervision_eligible_views"
+        ),
+        "required_pool_predicates": {
+            "acquisition_split": "heldout_acquisition",
+            "checker_status": "numeric_match",
+            "numeric_value_match": 1,
+            "eligible_for_supervision": True,
+            "unitization_status": "ok",
+            "finish_reason_may_not_equal": "length",
+        },
+        "different_query_and_template_cluster_required": True,
+        "different_normalized_final_answer_required": True,
+        "view_token_length_ratio_min": 0.8,
+        "view_token_length_ratio_max": 1.25,
+        "surface_bigram_jaccard_min": 0.1,
+        "surface_bigram_jaccard_max": 0.4,
+        "candidate_retrieval": (
+            "exact_frozen_surface_bigram_inverted_index_lossless_because_"
+            "jaccard_min_is_positive"
+        ),
+        "preference_order": [
+            "same_source",
+            "same_source_and_subject",
+            "smaller_relative_token_length_distance",
+            "sha256_of_ordered_trajectory_ids",
+        ],
+        "matching": (
+            "networkx_max_weight_matching_maxcardinality_then_preference_v1"
+        ),
+        "networkx_version": "3.6.1",
+        "node_order": "trajectory_id_lexicographic",
+        "edge_insertion_order": "frozen_preference_order",
+        "edge_weight": (
+            "eligible_edge_count_minus_zero_based_preference_rank"
+        ),
+        "maximum_cardinality_primary": True,
+        "final_selection": (
+            "sort_maximum_matching_edges_by_frozen_preference_then_take_first_150"
+        ),
+        "endpoint_reuse_allowed": False,
+        "negative_pairs_are_evaluation_only": True,
+    }
+    if amendment.get("hard_negative_contract") != expected_negative_contract:
+        raise ValueError("scale-v6.1 hard-negative contract drift")
+    expected_storage = {
+        "feature_shape": "T_x_101376_bfloat16",
+        "full_feature_bytes_per_token": 202752,
+        "count_each_selected_trajectory_output_once": True,
+        "count_one_prompt_condition_per_unique_query_across_all_positive_and_negative_views": True,
+        "publish_exact_selected_feature_inventory": True,
+        "extract_all_16000_rollouts": False,
+    }
+    if amendment.get("storage_contract") != expected_storage:
+        raise ValueError("scale-v6.1 storage contract drift")
+    expected_output = {
+        "root": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1",
+        "must_not_overwrite_v6_reports": True,
+        "plan_report": "post_annotation_plan_report_v6_1.json",
+        "verification_report": "independent_verification_report_v6_1.json",
+        "train_positive_manifest": "train_positive_relations.jsonl",
+        "heldout_positive_manifest": "heldout_positive_relations.jsonl",
+        "heldout_hard_negative_manifest": (
+            "heldout_hard_negative_relations.jsonl"
+        ),
+        "selected_feature_inventory": "selected_feature_inventory.jsonl",
+    }
+    if amendment.get("output_contract") != expected_output:
+        raise ValueError("scale-v6.1 output contract drift")
+
+    parent = amendment["frozen_parent"]
+    bindings = (
+        (
+            "protocol_path",
+            "protocol_file_sha256",
+            protocol_path.resolve(),
+        ),
+        (
+            "post_annotation_authorization_path",
+            "post_annotation_authorization_file_sha256",
+            post_annotation_authorization_path.resolve(),
+        ),
+        (
+            "raw_annotation_gate_report_path",
+            "raw_annotation_gate_report_file_sha256",
+            (post_annotation_root / "raw_annotation_gate_report.json").resolve(),
+        ),
+        (
+            "stopped_post_annotation_plan_path",
+            "stopped_post_annotation_plan_file_sha256",
+            (post_annotation_root / "post_annotation_plan_report.json").resolve(),
+        ),
+        (
+            "proposal_path",
+            "proposal_file_sha256",
+            (
+                pre_annotation_root
+                / "proposals/mechanically_admitted_pairs.jsonl"
+            ).resolve(),
+        ),
+        (
+            "materialized_path",
+            "materialized_file_sha256",
+            (pre_annotation_root / "materialized/combined_rows.jsonl").resolve(),
+        ),
+        (
+            "private_manifest_path",
+            "private_manifest_file_sha256",
+            (pre_annotation_root / "packages/PRIVATE_manifest.json").resolve(),
+        ),
+    )
+    for path_key, hash_key, expected_path in bindings:
+        bound_path = _project_path(parent[path_key]).resolve()
+        if bound_path != expected_path:
+            raise ValueError(f"scale-v6.1 parent path drift: {path_key}")
+        if file_sha256(bound_path) != parent[hash_key]:
+            raise ValueError(f"scale-v6.1 parent hash drift: {path_key}")
+
+    raw_report = json.loads(
+        (post_annotation_root / "raw_annotation_gate_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    stopped_plan = json.loads(
+        (post_annotation_root / "post_annotation_plan_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    if raw_report.get("status") != "PASS_SCALE_V6_RAW_ANNOTATION_GATES":
+        raise ValueError("scale-v6.1 parent raw annotation gate did not pass")
+    if stopped_plan.get("status") != "STOP_SCALE_V6_POST_ANNOTATION_PLAN":
+        raise ValueError("scale-v6.1 parent plan is not the frozen v6 stop")
+    if stopped_plan.get("published_manifests") != {}:
+        raise ValueError("scale-v6 parent unexpectedly published relation manifests")
+
+    protocol = load_protocol(protocol_path)
+    base_negative = protocol["heldout_hard_negatives"]
+    v6_1_negative = amendment["hard_negative_contract"]
+    for key in (
+        "count",
+        "different_query_and_template_cluster_required",
+        "different_normalized_final_answer_required",
+        "view_token_length_ratio_min",
+        "view_token_length_ratio_max",
+        "surface_bigram_jaccard_min",
+        "surface_bigram_jaccard_max",
+        "negative_pairs_are_evaluation_only",
+    ):
+        if v6_1_negative.get(key) != base_negative.get(key):
+            raise ValueError(f"scale-v6.1 changed frozen edge contract: {key}")
+    positive = protocol["final_positive_selection"]
+    if (
+        int(positive["train_select_first_by_frozen_annotation_order"]) != 400
+        or int(positive["heldout_select_first_by_frozen_annotation_order"]) != 150
+    ):
+        raise ValueError("scale-v6.1 parent positive-selection contract drift")
+    if amendment["storage_contract"].get("full_feature_bytes_per_token") != (
+        protocol["pre_rollout_implementation"]["budget_assumptions"][
+            "full_feature_bytes_per_token"
+        ]
+    ):
+        raise ValueError("scale-v6.1 feature-byte contract drift")
+    return amendment
+
+
 def _load_validated_scale_label_population(
     *,
     pre_annotation_root: Path,
@@ -2666,6 +2895,354 @@ def command_plan_final_relations(args: argparse.Namespace) -> None:
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
+_RAW_REPORT_STABLE_FIELDS = (
+    "status",
+    "failed_gate_names",
+    "natural_agreement",
+    "natural_agreement_rate",
+    "annotators",
+    "common_accept_count",
+    "common_accept_by_split",
+    "common_accept_by_source",
+    "common_accept_item_ids",
+    "gates",
+    "protocol_file_sha256",
+    "post_annotation_authorization_file_sha256",
+    "annotation_model_amendment_file_sha256",
+    "private_manifest_file_sha256",
+    "label_provenance",
+)
+
+
+def _load_recomputed_raw_annotation_report(
+    args: argparse.Namespace, *, code_commit: str
+) -> tuple[dict[str, Any], Path]:
+    post_root = Path(args.post_annotation_root).resolve()
+    raw_report_path = post_root / "raw_annotation_gate_report.json"
+    raw_report = json.loads(raw_report_path.read_text(encoding="utf-8"))
+    current = _evaluate_current_scale_labels(
+        protocol_path=Path(args.protocol).resolve(),
+        post_annotation_authorization_path=Path(
+            args.post_annotation_authorization
+        ).resolve(),
+        pre_annotation_authorization_path=Path(
+            args.pre_annotation_authorization
+        ).resolve(),
+        annotation_model_amendment_path=Path(
+            args.annotation_model_amendment
+        ).resolve(),
+        pre_annotation_root=Path(args.output_root).resolve(),
+        labels_root=Path(args.rollout_root).resolve(),
+        code_commit=code_commit,
+    )
+    for field in _RAW_REPORT_STABLE_FIELDS:
+        if raw_report.get(field) != current.get(field):
+            raise ValueError(f"raw annotation report drift: {field}")
+    return raw_report, raw_report_path
+
+
+def _load_v6_1_inputs(
+    args: argparse.Namespace,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], Path, Path]:
+    pre_root = Path(args.output_root).resolve()
+    proposal_path = pre_root / "proposals/mechanically_admitted_pairs.jsonl"
+    materialized_path = pre_root / "materialized/combined_rows.jsonl"
+    proposals, _ = _read_published_jsonl(
+        proposal_path, expected_schema=PROPOSAL_SCHEMA
+    )
+    materialized, _ = _read_published_jsonl(
+        materialized_path, expected_schema=MATERIALIZED_SCHEMA
+    )
+    return proposals, materialized, proposal_path, materialized_path
+
+
+def command_plan_final_relations_v6_1(args: argparse.Namespace) -> None:
+    code_commit = _require_clean_execution()
+    protocol_path = Path(args.protocol).resolve()
+    post_root = Path(args.post_annotation_root).resolve()
+    pre_root = Path(args.output_root).resolve()
+    amendment_path = Path(args.hard_negative_amendment).resolve()
+    output_root = Path(args.v6_1_output_root).resolve()
+    amendment = load_hard_negative_amendment_v6_1(
+        amendment_path,
+        protocol_path=protocol_path,
+        post_annotation_authorization_path=Path(
+            args.post_annotation_authorization
+        ).resolve(),
+        post_annotation_root=post_root,
+        pre_annotation_root=pre_root,
+    )
+    authorized_output = _project_path(
+        amendment["output_contract"]["root"]
+    ).resolve()
+    if output_root != authorized_output:
+        raise ValueError(
+            f"scale-v6.1 output root drift: {output_root} != {authorized_output}"
+        )
+    if output_root.exists() and any(output_root.iterdir()):
+        raise FileExistsError(
+            f"scale-v6.1 output root is not empty: {output_root}"
+        )
+
+    raw_report, raw_report_path = _load_recomputed_raw_annotation_report(
+        args, code_commit=code_commit
+    )
+    stopped_plan_path = post_root / "post_annotation_plan_report.json"
+    stopped_plan = json.loads(stopped_plan_path.read_text(encoding="utf-8"))
+    proposals, materialized, proposal_path, materialized_path = _load_v6_1_inputs(
+        args
+    )
+    protocol = load_protocol(protocol_path)
+    artifacts, report = build_scale_post_annotation_plan_v6_1(
+        proposals=proposals,
+        materialized_rows=materialized,
+        raw_gate_report=raw_report,
+        protocol=protocol,
+        amendment=amendment,
+    )
+    if report["positive_selection"] != stopped_plan.get("positive_selection"):
+        raise ValueError("scale-v6.1 changed the frozen v6 positive selection")
+    report.update(
+        {
+            "planned_at_utc": _utc_now(),
+            "code_commit": code_commit,
+            "protocol_file_sha256": file_sha256(protocol_path),
+            "hard_negative_amendment_file_sha256": file_sha256(amendment_path),
+            "post_annotation_authorization_file_sha256": file_sha256(
+                Path(args.post_annotation_authorization).resolve()
+            ),
+            "raw_annotation_gate_report_file_sha256": file_sha256(
+                raw_report_path
+            ),
+            "stopped_v6_plan_report_file_sha256": file_sha256(
+                stopped_plan_path
+            ),
+            "proposal_file_sha256": file_sha256(proposal_path),
+            "materialized_file_sha256": file_sha256(materialized_path),
+        }
+    )
+    output_root.mkdir(parents=True, exist_ok=True)
+    if report["publishable_relation_manifests_allowed"]:
+        manifests = {
+            "train": publish_manifest(
+                output_root / "train_positive_relations.jsonl",
+                artifacts["train"],
+                schema_version=(
+                    "clir-consistency-scale-train-positive-manifest-v6.1"
+                ),
+            ),
+            "heldout": publish_manifest(
+                output_root / "heldout_positive_relations.jsonl",
+                artifacts["heldout"],
+                schema_version=(
+                    "clir-consistency-scale-heldout-positive-manifest-v6.1"
+                ),
+            ),
+            "hard_negatives": publish_manifest(
+                output_root / "heldout_hard_negative_relations.jsonl",
+                artifacts["negatives"],
+                schema_version=(
+                    "clir-consistency-scale-heldout-hard-negative-manifest-v6.1"
+                ),
+            ),
+            "feature_inventory": publish_manifest(
+                output_root / "selected_feature_inventory.jsonl",
+                artifacts["inventory"],
+                schema_version=(
+                    "clir-consistency-scale-feature-inventory-manifest-v6.1"
+                ),
+            ),
+        }
+        report["published_manifests"] = manifests
+    else:
+        report["published_manifests"] = {}
+    plan_path = output_root / "post_annotation_plan_report_v6_1.json"
+    atomic_write_json(plan_path, report)
+    summary = {
+        "status": report["status"],
+        "report_path": str(plan_path),
+        "report_file_sha256": file_sha256(plan_path),
+        "positive_selection": report["positive_selection"],
+        "heldout_hard_negatives": report["heldout_hard_negatives"],
+        "selected_feature_inventory": report["selected_feature_inventory"],
+        "published_manifests": report["published_manifests"],
+        "feature_extraction_allowed": report["feature_extraction_allowed"],
+        "training_allowed": report["training_allowed"],
+        "next_gate": report["next_gate"],
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
+def command_verify_final_relations_v6_1(args: argparse.Namespace) -> None:
+    code_commit = _require_clean_execution()
+    protocol_path = Path(args.protocol).resolve()
+    post_root = Path(args.post_annotation_root).resolve()
+    pre_root = Path(args.output_root).resolve()
+    amendment_path = Path(args.hard_negative_amendment).resolve()
+    output_root = Path(args.v6_1_output_root).resolve()
+    verification_path = output_root / "independent_verification_report_v6_1.json"
+    if verification_path.exists():
+        raise FileExistsError(
+            f"scale-v6.1 verification report already exists: {verification_path}"
+        )
+    amendment = load_hard_negative_amendment_v6_1(
+        amendment_path,
+        protocol_path=protocol_path,
+        post_annotation_authorization_path=Path(
+            args.post_annotation_authorization
+        ).resolve(),
+        post_annotation_root=post_root,
+        pre_annotation_root=pre_root,
+    )
+    authorized_output = _project_path(
+        amendment["output_contract"]["root"]
+    ).resolve()
+    if output_root != authorized_output:
+        raise ValueError("scale-v6.1 verification output root drift")
+    plan_path = output_root / "post_annotation_plan_report_v6_1.json"
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    if plan.get("status") != "PASS_SCALE_V6_1_POST_ANNOTATION_PLAN":
+        raise ValueError("scale-v6.1 plan did not pass")
+    if plan.get("code_commit") != code_commit:
+        raise ValueError("scale-v6.1 plan commit differs from verification commit")
+
+    raw_report, raw_report_path = _load_recomputed_raw_annotation_report(
+        args, code_commit=code_commit
+    )
+    proposals, materialized, proposal_path, materialized_path = _load_v6_1_inputs(
+        args
+    )
+    artifacts, recomputed = build_scale_post_annotation_plan_v6_1(
+        proposals=proposals,
+        materialized_rows=materialized,
+        raw_gate_report=raw_report,
+        protocol=load_protocol(protocol_path),
+        amendment=amendment,
+    )
+    for field in (
+        "schema_version",
+        "status",
+        "amendment_evidence_tier",
+        "positive_selection",
+        "positive_selection_contract_changed",
+        "heldout_hard_negatives",
+        "selected_feature_inventory",
+        "negative_endpoint_cross_split_query_overlap",
+        "negative_endpoint_cross_split_cluster_overlap",
+        "publishable_relation_manifests_allowed",
+        "feature_extraction_allowed",
+        "training_allowed",
+        "next_gate",
+        "provider_or_third_model_call_used",
+        "threshold_changes_applied",
+        "raw_annotation_gates_reinterpreted",
+    ):
+        if plan.get(field) != recomputed.get(field):
+            raise ValueError(f"scale-v6.1 recomputed plan drift: {field}")
+
+    manifest_specs = {
+        "train": (
+            "train_positive_relations.jsonl",
+            "clir-consistency-scale-train-positive-manifest-v6.1",
+            "train",
+            POSITIVE_RELATION_SCHEMA,
+        ),
+        "heldout": (
+            "heldout_positive_relations.jsonl",
+            "clir-consistency-scale-heldout-positive-manifest-v6.1",
+            "heldout",
+            POSITIVE_RELATION_SCHEMA,
+        ),
+        "hard_negatives": (
+            "heldout_hard_negative_relations.jsonl",
+            "clir-consistency-scale-heldout-hard-negative-manifest-v6.1",
+            "negatives",
+            HARD_NEGATIVE_RELATION_SCHEMA_V6_1,
+        ),
+        "feature_inventory": (
+            "selected_feature_inventory.jsonl",
+            "clir-consistency-scale-feature-inventory-manifest-v6.1",
+            "inventory",
+            FEATURE_INVENTORY_SCHEMA_V6_1,
+        ),
+    }
+    verified_manifests: dict[str, Any] = {}
+    for label, (filename, sidecar_schema, artifact_key, row_schema) in (
+        manifest_specs.items()
+    ):
+        rows, sidecar = _read_published_jsonl(
+            output_root / filename, expected_schema=sidecar_schema
+        )
+        if rows != artifacts[artifact_key]:
+            raise ValueError(f"scale-v6.1 published {label} rows drift")
+        if any(row.get("schema_version") != row_schema for row in rows):
+            raise ValueError(f"scale-v6.1 published {label} row schema drift")
+        if plan["published_manifests"].get(label) != sidecar:
+            raise ValueError(f"scale-v6.1 published {label} sidecar drift")
+        verified_manifests[label] = sidecar
+
+    expected_hashes = {
+        "protocol_file_sha256": file_sha256(protocol_path),
+        "hard_negative_amendment_file_sha256": file_sha256(amendment_path),
+        "raw_annotation_gate_report_file_sha256": file_sha256(raw_report_path),
+        "stopped_v6_plan_report_file_sha256": file_sha256(
+            post_root / "post_annotation_plan_report.json"
+        ),
+        "proposal_file_sha256": file_sha256(proposal_path),
+        "materialized_file_sha256": file_sha256(materialized_path),
+    }
+    for field, expected in expected_hashes.items():
+        if plan.get(field) != expected:
+            raise ValueError(f"scale-v6.1 plan input hash drift: {field}")
+
+    verification = {
+        "schema_version": (
+            "clir-consistency-scale-post-annotation-verification-v6.1"
+        ),
+        "status": "PASS_SCALE_V6_1_INDEPENDENT_RECOMPUTATION",
+        "verified_at_utc": _utc_now(),
+        "code_commit": code_commit,
+        "plan_report_path": str(plan_path),
+        "plan_report_file_sha256": file_sha256(plan_path),
+        "hard_negative_amendment_file_sha256": file_sha256(amendment_path),
+        "positive_selection": recomputed["positive_selection"],
+        "heldout_hard_negatives": recomputed["heldout_hard_negatives"],
+        "selected_feature_inventory": recomputed[
+            "selected_feature_inventory"
+        ],
+        "verified_manifests": verified_manifests,
+        "v6_parent_reports_unchanged": True,
+        "feature_extraction_allowed": False,
+        "training_allowed": False,
+        "next_gate": "SEPARATE_FEATURE_EXTRACTION_AUTHORIZATION",
+    }
+    atomic_write_json(verification_path, verification)
+    print(
+        json.dumps(
+            {
+                "status": verification["status"],
+                "verification_report_path": str(verification_path),
+                "verification_report_file_sha256": file_sha256(
+                    verification_path
+                ),
+                "plan_report_file_sha256": verification[
+                    "plan_report_file_sha256"
+                ],
+                "heldout_hard_negatives": verification[
+                    "heldout_hard_negatives"
+                ],
+                "selected_feature_inventory": verification[
+                    "selected_feature_inventory"
+                ],
+                "feature_extraction_allowed": False,
+                "training_allowed": False,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 def command_verify(args: argparse.Namespace) -> None:
     result = verify_pre_rollout(
         Path(args.output_dir).resolve(), Path(args.protocol).resolve()
@@ -2696,6 +3273,18 @@ def _add_post_annotation_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--post-annotation-root",
         default=str(DEFAULT_POST_ANNOTATION_ROOT),
+    )
+
+
+def _add_v6_1_arguments(parser: argparse.ArgumentParser) -> None:
+    _add_post_annotation_arguments(parser)
+    parser.add_argument(
+        "--hard-negative-amendment",
+        default=str(DEFAULT_HARD_NEGATIVE_AMENDMENT_V6_1),
+    )
+    parser.add_argument(
+        "--v6-1-output-root",
+        default=str(DEFAULT_POST_ANNOTATION_ROOT_V6_1),
     )
 
 
@@ -2795,6 +3384,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_post_annotation_arguments(plan_relations)
     plan_relations.set_defaults(func=command_plan_final_relations)
+    plan_relations_v6_1 = subparsers.add_parser(
+        "plan-final-relations-v6-1",
+        help=(
+            "apply the authorized hard-negative-only v6.1 amendment and publish "
+            "relations only on a full pass"
+        ),
+    )
+    _add_v6_1_arguments(plan_relations_v6_1)
+    plan_relations_v6_1.set_defaults(func=command_plan_final_relations_v6_1)
+    verify_relations_v6_1 = subparsers.add_parser(
+        "verify-final-relations-v6-1",
+        help=(
+            "independently recompute and hash-verify every published v6.1 relation"
+        ),
+    )
+    _add_v6_1_arguments(verify_relations_v6_1)
+    verify_relations_v6_1.set_defaults(func=command_verify_final_relations_v6_1)
     return parser
 
 

@@ -1471,6 +1471,21 @@ def _bigram_jaccard(left: Sequence[str], right: Sequence[str]) -> float:
     return len(left_bigrams & right_bigrams) / len(union) if union else 1.0
 
 
+def consistency_surface_bigrams(text: str) -> frozenset[tuple[str, str]]:
+    """Return the exact frozen v5 non-math surface-bigram set.
+
+    Scale-v6.1 uses this public helper only as a lossless candidate-retrieval
+    index.  Final edge admission still calls ``consistency_mechanical_metrics``
+    so the metric and thresholds remain unchanged.
+    """
+
+    tokens = _consistency_surface_tokens(text)
+    return frozenset(
+        (tokens[index], tokens[index + 1])
+        for index in range(max(0, len(tokens) - 1))
+    )
+
+
 def consistency_mechanical_metrics(
     left_response: str,
     right_response: str,
@@ -2351,6 +2366,7 @@ __all__ = [
     "check_numeric_response",
     "cohen_kappa",
     "consistency_mechanical_metrics",
+    "consistency_surface_bigrams",
     "consistency_item",
     "extract_math_numeric_reference",
     "file_sha256",

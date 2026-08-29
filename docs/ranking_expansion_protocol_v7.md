@@ -1,7 +1,10 @@
 # CLIR 排序评测与 H0 扩量协议 v7
 
-状态：准备协议已冻结，尚未生成、标注、抽特征或训练。机器可执行的唯一权威版本是
-`configs/ranking_expansion_v7/protocol.json`；本文只解释设计，不替代 JSON 契约。
+状态：32,000 条原始回复已经生成并通过哈希校验，checker/unitizer 已完成；H0 proposal
+首次冻结因目标回复产率不足而停止，尚未送给 AI 标注，也未抽特征或训练。机器可执行的
+权威契约是 `configs/ranking_expansion_v7/protocol.json` 和一次性补采样修订
+`configs/ranking_expansion_v7/yield_rescue_amendment_v7_1.json`；本文只解释设计，不替代
+JSON 契约。
 
 ## 1. 这一轮要回答什么
 
@@ -61,6 +64,19 @@ smoke 通过后，最终目标是：
 | mechanism dev | 100 | 100 |
 
 只接收两 AI exact agreement 且都不是 low confidence 的行，再按预冻结哈希顺序取数。共同不确定或分歧行不进入训练标签。
+
+### 4.1 首次 FAIL-yield 与一次性补采样
+
+每题最初 8 条回复做完机械筛选后，有 4 个预分配格子凑不满：MATH 的 numeric-match
+train/dev 分别只有 51/100 和 29/50 道题存活；GSM8K 的 numeric-mismatch train/dev
+分别只有 16/17 和 13/33 道题存活。这不是标注一致性失败，也不是 unitizer 故障，而是
+部分题目的 8 次采样里没有出现目标 checker 结果。
+
+v7.1 只允许一次补采样：固定上述短缺格子中全部 191 道零产出题，每题再生成 24 条，
+候选编号固定为 8–31，共 4,584 条。题目、query split、模板簇、checker、unitizer、至少
+5 个 material units 的门槛、800 条配额和哈希选择规则都不变；仍然是每题最多入选一条。
+补采样前没有查看任何 AI 标签。若这一轮后仍凑不满，必须以 FAIL-yield 停止并另建新题池，
+不能继续追采样或降低门槛。
 
 ## 5. 后续训练与允许的结论
 

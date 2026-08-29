@@ -1865,6 +1865,31 @@ def _verify_materialized_h(
         or report["h"].get("file_sha256") != h_sidecar["file_sha256"]
     ):
         raise ValueError("materialization report does not bind current rows")
+    rescue_path = output_root / "yield_rescue/materialized/rescue_rows.jsonl"
+    if rescue_path.exists():
+        rescue_rows, rescue_sidecar = _read_published_jsonl(
+            rescue_path,
+            expected_schema="clir-h0-v7.1-yield-rescue-materialized",
+        )
+        rescue_report_path = (
+            output_root / "yield_rescue/materialized/materialization_report.json"
+        )
+        rescue_report = json.loads(rescue_report_path.read_text(encoding="utf-8"))
+        if (
+            rescue_report.get("status")
+            != "PASS_H0_V7_1_YIELD_RESCUE_MATERIALIZATION"
+            or rescue_report.get("file_sha256") != rescue_sidecar["file_sha256"]
+            or int(rescue_report.get("rows", -1)) != len(rescue_rows)
+            or rescue_report.get("parent_h_materialized_file_sha256")
+            != file_sha256(h_path)
+        ):
+            raise ValueError("yield-rescue materialization report drift")
+        parent_query_ids = {str(row["query_id"]) for row in h_rows}
+        if not {str(row["query_id"]) for row in rescue_rows}.issubset(
+            parent_query_ids
+        ):
+            raise ValueError("yield-rescue rows contain a non-parent query")
+        h_rows = [*h_rows, *rescue_rows]
     return protocol, output_root, ranking, h_rows, h_validation
 
 

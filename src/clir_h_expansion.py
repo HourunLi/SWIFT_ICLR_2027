@@ -48,8 +48,11 @@ def build_h_proposals(
     eligible_candidates_by_cell: Counter[str] = Counter()
     query_count_by_cell: Counter[str] = Counter()
     for query_id, candidates in sorted(by_query.items()):
-        if len(candidates) != 8:
-            raise ValueError(f"{query_id}: expected exactly eight H candidates")
+        indices = sorted(int(row["candidate_index"]) for row in candidates)
+        if indices not in (list(range(8)), list(range(32))):
+            raise ValueError(
+                f"{query_id}: expected original 0..7 or rescued 0..31 candidates"
+            )
         frozen = {
             (
                 str(row["source"]),

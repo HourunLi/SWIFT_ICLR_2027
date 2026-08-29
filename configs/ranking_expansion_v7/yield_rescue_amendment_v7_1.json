@@ -1,0 +1,64 @@
+{
+  "schema_version": "clir-h0-yield-rescue-v7.1",
+  "status": "FROZEN_ONE_SHOT_RESCUE_NOT_STARTED",
+  "reason": "pre_registered_FAIL_yield_not_pipeline_or_label_failure",
+  "frozen_at_utc": "2026-08-29T17:10:00Z",
+  "parent": {
+    "protocol_file_sha256": "1e9de5d1c6d23c63a7ed6a501440329ce78cdfdb0e26ade2e2189dad56440155",
+    "pre_annotation_authorization_file_sha256": "b48db0dcf33edc83ac69d74752769b78ce1baec9304aa478926f4be0e883bfd0",
+    "materialization_report_file_sha256": "83d3c62c2123408cd04e619ee9584360262277bb1273913bbc80d8f23d58eb54",
+    "h_materialized_file_sha256": "f62f534fc5600ba436117620aced8fb2bebbbdfda94fcffcbab0f5ca23b7a185",
+    "h_materialized_sidecar_file_sha256": "37d462a55a89bfb4237646926d8361826efaba814d28c0e2d678c5025233b100",
+    "h_materialized_row_count": 8000,
+    "parent_query_count": 1000
+  },
+  "observed_fail_yield": {
+    "shortages": {
+      "numeric_match|dev|math": {"target": 50, "available": 29, "shortage": 21},
+      "numeric_match|train|math": {"target": 100, "available": 51, "shortage": 49},
+      "numeric_mismatch|dev|gsm8k": {"target": 33, "available": 13, "shortage": 20},
+      "numeric_mismatch|train|gsm8k": {"target": 17, "available": 16, "shortage": 1}
+    },
+    "failure_class": "FAIL-yield",
+    "checker_unitizer_or_schema_definition_changed": false,
+    "ai_labels_seen": false
+  },
+  "rescue_rule": "all_and_only_zero_yield_queries_in_short_quota_cells",
+  "rescue_query_count": 191,
+  "parent_candidate_count": 8,
+  "additional_candidates_per_query": 24,
+  "candidate_index_start": 8,
+  "candidate_index_end_exclusive": 32,
+  "expected_additional_candidate_rows": 4584,
+  "rollout_shards": 8,
+  "generation": {
+    "inherits_parent_model_revision_prompt_temperature_top_p_and_max_new_tokens": true,
+    "independent_seed_namespace": "clir-H-v7.1-yield-rescue-query-seed",
+    "same_query_prompt_ids_required": true,
+    "same_checker_unitizer_and_minimum_five_material_units_required": true
+  },
+  "selection_after_rescue": {
+    "one_proposal_per_original_query": true,
+    "candidate_choice": "minimum_clir-H-v7-candidate-within-query_hash_over_original_and_rescue_eligible_candidates",
+    "original_cell_quotas_unchanged": true,
+    "original_train_dev_and_source_assignments_unchanged": true,
+    "second_adaptive_rescue_round_allowed": false,
+    "if_still_short": "stop_as_FAIL-yield_and_freeze_new_query_pool_in_a_new_protocol"
+  },
+  "authorized_scope": {
+    "freeze_rescue_query_manifest": true,
+    "one_rescue_rollout_round": true,
+    "checker_and_unitizer_on_rescue_rows": true,
+    "ai_annotation": false,
+    "query_role_or_split_change": false,
+    "checker_unitizer_threshold_or_quota_change": false,
+    "feature_extraction": false,
+    "training": false
+  },
+  "claim_boundary": {
+    "amendment_is_post_yield_but_pre_ai_label": true,
+    "rescued_data_may_be_used_for_training_acquisition": true,
+    "amendment_does_not_make_the_H_labels_gold": true,
+    "amendment_does_not_touch_the_fresh_ranking_population": true
+  }
+}

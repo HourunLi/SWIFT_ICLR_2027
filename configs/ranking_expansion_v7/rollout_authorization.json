@@ -1,0 +1,57 @@
+{
+  "schema_version": "clir-ranking-v7-rollout-authorization",
+  "status": "AUTHORIZED_ROLLOUT_ONLY",
+  "authorized_at_utc": "2026-08-29T16:31:40Z",
+  "authorization_source": {
+    "kind": "explicit_user_confirmation_in_active_codex_thread",
+    "user_instruction": "可以，你按照我们之前的计划做就行",
+    "confirmation_follows_v7_expansion_plan": true
+  },
+  "frozen_parent": {
+    "protocol_path": "configs/ranking_expansion_v7/protocol.json",
+    "protocol_file_sha256": "1e9de5d1c6d23c63a7ed6a501440329ce78cdfdb0e26ade2e2189dad56440155",
+    "preparation_code_commit": "85de1a6e58cd1d1f2caa60d46ea55fd7fe32e249",
+    "pre_rollout_directory": "run_artifacts/ranking_expansion_v7/pre_rollout",
+    "manifest_registry_file_sha256": "15192ccd36268aaf8a48b1d056414be775b6a96405b376661df486363ecc4f34",
+    "pre_rollout_report_file_sha256": "3f2aa5485545873ec873e0dcb48f06a9e4f06894a5624df29016b1f6866ac7aa",
+    "independent_verification_file_sha256": "ed8070580c18365eb6472c49e87d854350fd4a62f96f14d204e98f7aa574ed1e",
+    "pre_rollout_status": "PASS_RANKING_V7_PRE_ROLLOUT_MANIFEST_FREEZE",
+    "independent_verification_status": "PASS_RANKING_V7_PRE_ROLLOUT_INDEPENDENT_RECOMPUTE"
+  },
+  "authorized_scope": {
+    "rollout": true,
+    "checker_and_unitizer_materialization": false,
+    "annotation": false,
+    "feature_extraction": false,
+    "training": false,
+    "threshold_or_query_manifest_change": false
+  },
+  "runtime_contract": {
+    "first_calibration_shard": "h-000",
+    "continue_after_calibration_if_all_mechanical_runtime_checks_pass": true,
+    "maximum_concurrent_shards": 8,
+    "cuda_devices_per_shard": 1,
+    "tensor_parallel_size": 1,
+    "dtype": "bfloat16",
+    "max_num_seqs": 32,
+    "gpu_memory_utilization": 0.9,
+    "cache_dir": "run_artifacts/model_cache",
+    "output_root": "run_artifacts/ranking_expansion_v7",
+    "existing_complete_shard_policy": "verify_and_skip",
+    "existing_incomplete_shard_policy": "stop_without_overwrite",
+    "merge_requires_all_50_verified_shards": true
+  },
+  "calibration_gate": {
+    "shard_id": "h-000",
+    "query_count": 50,
+    "candidate_rows": 400,
+    "candidate_indices_per_query": "exact_0_through_7",
+    "exact_prompt_id_parity_required": true,
+    "nonempty_output_token_ids_required": true,
+    "model_revision_match_required": true,
+    "backend_version_match_required": true,
+    "clean_git_commit_required": true,
+    "finish_reason_length_is_retained_for_later_ineligibility_not_a_rollout_failure": true
+  },
+  "next_gate_after_rollout": "verify_and_merge_all_32000_raw_rows_then_freeze_checker_unitizer_and_h_proposals"
+}

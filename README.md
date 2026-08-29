@@ -274,7 +274,7 @@ hidden controls 各 4/4，A self-repeats=3/3，理由前缀和 schema 全部合�
 允许另写正式 Consistency 扩量协议。v5 自身仍 `eligible_for_training=false`、禁止第三模型补救，不抽 hidden
 state、不训练，也不产生 Consistency efficacy 或 Best-of-N 结论。
 
-## 数据扩容主协议 v6：raw 标注门通过，hard-negative 计划停止
+## 数据扩容主协议 v6/v6.1：关系清单已通过双重核验
 
 用户已确认先完成正式扩容准备，不直接继续旧 Full 或在旧小数据上增加 epoch。新的
 [`docs/data_expansion_scale_protocol_v6.md`](docs/data_expansion_scale_protocol_v6.md) 与
@@ -290,9 +290,9 @@ v6 原样保留 v5 的 numeric/path/surface 机械阈值，不允许看完新 ro
 400/150 都直接停止，不由第三模型补救。没有人工复核，因此未来标签只叫
 `silver_dual_ai_consistency_v6`，不能叫 Gold。
 
-存储顺序也已固定：16,000 条只先保存文本和 token IDs，完成机械筛选与双标后只给最终 550 对、1,100 条
-view 抽全层 feature；原先按 420 output token 估计约 105.23 GB，但本次 raw rollout 实测均值是 449.24，
-因此必须等最终入选 views 确定后按其真实长度重算，不能继续把 105.23 GB 当成实际占用。若先给全部 rollout 抽
+存储顺序也已固定：16,000 条只先保存文本和 token IDs；原 v6 正关系部分是550 对、1,100 条 view，v6.1
+再按 hard-negative 实际端点做 query 级去重并发布精确 inventory。原先按420 output token 估计约105.23 GB，
+不能继续把它当成实际占用。若先给全部 rollout 抽
 `33×3072` BF16 feature，预计约 1.42 TB，协议明确禁止。H 仍需全新 `30 positive +30 clean` 的 H-only
 确认；Prior 仍需先标 dependency edges、由程序做传递闭包得到 Complete；独立 1,500–2,000×16 ranking
 pool 另行冻结预算。
@@ -359,10 +359,25 @@ Jaccard `[.10,.40]`、长度 `[.8,1.25]` 和所有分离条件不变，只得到
 只能选 8/150。因此 post plan 终态是 `STOP_SCALE_V6_POST_ANNOTATION_PLAN`，报告 SHA-256
 `42052c40…bb0`；没有 relation manifest 被发布，feature extraction 与训练仍为 false。
 
-只读的后验可行性诊断显示，无需重新 rollout：现有 heldout 中 2,178 条数值正确可监督视图可形成 605 条同阈值
-负边，maximum matching 可达 167；若选 150 条，约新增 257 个未复用 trajectory、101 个 prompt，估算再占
-21.3 GiB，全套约 98.9 GiB（106.2 GB），与旧 105.5 GB 规划量基本相当但略高约 0.7 GB。这不是已授权改动；若采用，必须先冻结一个只修改
-hard-negative 来源池/匹配器与存储计数的 v6.1 amendment。
+随后用户明确同意一个只改 hard-negative 来源池、匹配器和存储重算的
+[`hard_negative_amendment_v6_1.json`](configs/data_expansion_scale_v6/hard_negative_amendment_v6_1.json)
+（SHA-256 `8cbcf62b…20b3`）。它如实标为看过 v6 失败和可行性诊断后的工程修订，不是盲预注册；A/B 标签、raw
+gate/分母、400/150 正关系顺序、Jaccard `[.10,.40]`、长度 `[.8,1.25]` 和 query/cluster/answer 分离条件都没改。
+唯一数据改动是从所有现有 heldout `numeric_match + eligible_for_supervision` 视图取负例端点，唯一算法改动是
+固定 NetworkX 3.6.1 的 maximum-cardinality/preference matching。
+
+正式 plan 在 clean commit `bb99261` 上通过：端点池2,178 条，shared-bigram pair 331,122 条，同阈值 eligible
+edge 605 条，maximum matching 167，最终不复用300 个端点选满150 条 hard negatives。400 train positives、
+150 heldout positives 和150 heldout negatives 均已发布到 Git 忽略的 `post_annotation_v6_1/`；plan report
+SHA-256 为 `71a470e6…bb75`。第二次从父级标签、proposal 和 materialized rows 独立重算逐行一致，终态
+`PASS_SCALE_V6_1_INDEPENDENT_RECOMPUTATION`，verification report SHA-256 为 `48d69371…2756`。
+
+精确 inventory 是1,357 个 trajectory、612 个 query prompt，共520,103 个 feature token，按 `101376×BF16`
+为98.210 GiB（105.452 GB）。其中 hard negatives 与正关系重叠43 个 view，真正新增257 个 trajectory 和62 个
+prompt；早先“101 个新 prompt”的只读估算没有扣掉44 个已随正关系保存的 query prompt，现已纠正。这个 PASS
+只说明 Consistency 扩量关系构造闭环，不证明模块提高 Best-of-N。feature extraction 和训练仍为 false，下一门
+必须单独授权且只能抽 inventory 中的视图，不能抽16,000 条全池。
+
 [`post_annotation_authorization.json`](configs/data_expansion_scale_v6/post_annotation_authorization.json)（SHA-256
 `7dcd096a…ab34`）只解锁这次 deterministic audit、条件式正关系选择和 frozen hard-negative feasibility；provider、
 第三模型、改标签/阈值、feature extraction 与训练仍为 false。
@@ -378,11 +393,12 @@ configs/data_expansion_smoke_v2/      双审查后多题源扩量 smoke 的机�
 configs/data_expansion_smoke_v3/      当前 MATH 扩量 smoke 的机器协议与标注语义
 configs/data_expansion_smoke_v4/      Consistency 提示词修复、14-ID 回放清单与机器门
 configs/data_expansion_smoke_v5/      Consistency 机械筛选与双 AI 事实审计协议/启动提示词
-configs/data_expansion_scale_v6/      正式扩容：协议、冻结分片、rollout 授权与后续双标门
+configs/data_expansion_scale_v6/      正式扩容：v6 基础协议、授权与 v6.1 hard-negative 修订
 prepare_clir_smoke.py                  v2/v3 数据管线与 v4/v5 Consistency gate 入口
-prepare_clir_scale.py                  v6 rollout 及 CPU 材料化/候选/盲标包；在 AI 标注前停止
+prepare_clir_scale.py                  v6 rollout/材料化/标注审计及 v6.1 关系规划与独立核验
 src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约
 src/clir_scale.py                      v6 来源过滤、历史排除、模板分簇、split/shard/预算契约
+src/clir_scale_post_annotation.py      v6/v6.1 raw gate 后的正负关系与精确 inventory 契约
 src/clir_scale_pre_annotation.py       v6 exact-token 材料化、机械 pair 和隔离盲标包契约
 src/clir_features.py                  identity/layer-axis 特征编码器
 src/clir_data.py                      JSONL 数据、严格 token 对齐、collate、sampler

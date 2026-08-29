@@ -319,7 +319,7 @@ controls 均被正确 reject，排除了“所有输入都 accept”的简单退
 `eligible_for_training=false`、`third_model_allowed=false`，不发布训练 manifest、不抽 hidden state、不训练，
 也不支持 Consistency 改善 Best-of-N 的结论。
 
-## 2026-08-26/29 数据扩容主协议 v6：raw PASS，hard-negative STOP
+## 2026-08-26/29 数据扩容主协议 v6/v6.1：关系清单 PASS，抽特征仍待授权
 
 用户确认采用中档 Consistency 扩量方案。canonical 文档是
 [`data_expansion_scale_protocol_v6.md`](data_expansion_scale_protocol_v6.md)，机器契约是
@@ -411,9 +411,29 @@ train/heldout=`474/167`；raw report SHA-256 为 `4c80626e…a598`，终态
 `42052c40…bb0`，终态 `STOP_SCALE_V6_POST_ANNOTATION_PLAN`；没有发布任何 relation manifest，也没有抽
 feature 或训练。raw PASS 只能证明 Silver 标注流程达到冻结一致性门，不能证明 C 有效，更不能覆盖后置 STOP。
 
-只读后验诊断表明，现有 2,178 条 heldout numeric-match 可监督视图有 605 条同阈值 edge，maximum matching
-为167；做满150 条预计增加 257 个 trajectory、101 个 prompt、约21.3 GiB，总 selected feature 约98.9 GiB（106.2 GB）。
-这需要一个显式 v6.1 hard-negative-only amendment，不能在 v6 中静默改来源池或 greedy 算法。
+用户在看到 v6 STOP 和只读可行性诊断后，明确同意
+[`../configs/data_expansion_scale_v6/hard_negative_amendment_v6_1.json`](../configs/data_expansion_scale_v6/hard_negative_amendment_v6_1.json)
+（SHA-256 `8cbcf62b…20b3`）。这是 post-failure engineering amendment，不是盲预注册：它不动任何 A/B 标签、raw
+gate/分母、400/150 first-N 正关系顺序或 edge 阈值，只把负例来源从300 个正视图扩到所有现有 heldout
+numeric-match 可监督视图，并把 greedy 换成固定 NetworkX 3.6.1 的 maximum-cardinality/preference matching。
+
+实现与契约先冻结在 clean commit `bb992614319993617777a114645c2d0c871c7d7e`，再运行正式 plan。结果为
+`PASS_SCALE_V6_1_POST_ANNOTATION_PLAN`：2,178 个端点、331,122 个 shared-bigram pair、605 条同阈值 edge、
+maximum matching=167，最终选满150 条且300 个 endpoint 无复用；hard-negative source pair 为 MATH/MATH
+138、GSM8K/GSM8K 12。原400/150 正关系有序 hash 仍是 `079d014b…f9d2` / `704a8317…73b6`，没有发生
+post-hoc 重选。plan report SHA-256 为 `71a470e6…bb75`。
+
+独立 `verify-final-relations-v6-1` 随后从父级标签、proposal 和16,000 条 materialized rows 重建图、匹配、
+relation 与 inventory，逐行和 sidecar hash 全部相同，终态 `PASS_SCALE_V6_1_INDEPENDENT_RECOMPUTATION`，
+verification report SHA-256 为 `48d69371…2756`。本地 Git-ignored manifest 文件 hash 为 train positives
+`4709b143…009d`、heldout positives `fc88a094…96d1`、heldout hard negatives `fad547c5…48f2`、inventory
+`0e3c796d…28db`。
+
+精确 inventory 为1,357 trajectory +612 prompt，输出/提示 token=`460151/59952`，共520,103 feature token，
+预算98.210 GiB（105.452 GB）。负例端点与正关系重叠43 个 view，故真正新增257 trajectory +62 prompt；旧的
+101-prompt 粗估没有按 query 扣除已随正关系保存的44 个 prompt，现已纠正。这个结果只把 Consistency 数据构造
+推进到“已发布并复核关系清单”，不是可学习性或 Best-of-N 证据。plan 和 verifier 都明确
+`feature_extraction_allowed=false`、`training_allowed=false`；下一步需单独授权只抽 inventory，禁止抽全16,000 条。
 用户报告全部 shard 完成后，
 [`../configs/data_expansion_scale_v6/post_annotation_authorization.json`](../configs/data_expansion_scale_v6/post_annotation_authorization.json)
 （SHA-256 `7dcd096a…ab34`）只解锁 deterministic label audit、条件式 400/150 选择和 frozen hard-negative
@@ -611,11 +631,10 @@ hallucination_onset = k
 
 1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
    失败作为 pipeline-smoke 诊断。
-2. C prompt-v4 已失败；v5 的机械筛选与双盲事实审计已通过；v6 的 40 个 rollout shard、16,000 条
-   exact-token 材料化、708 对机械候选和 15 个 A/B 盲标 shard 已冻结并复核；两边 839 行已返回，raw gates
-   全通过，但 frozen hard-negative 只有 8/150，使整体 post plan fail-closed。下一步由用户决定是否授权一个
-   狭窄 v6.1：只把负样本来源扩到现有 heldout numeric-match 池并预注册 deterministic maximum matching；
-   在新协议通过前，不发布 relations、不抽 feature、不训练。
+2. C prompt-v4 已失败；v5 机械筛选/双盲事实审计通过；v6 raw gate 通过但旧 hard-negative 仅8/150；用户批准的
+   v6.1 已在不改阈值和正关系的前提下发布并独立复核400 train positives、150 heldout positives、150 heldout
+   hard negatives 及1,357-view inventory。下一步不是继续改负例或直接训练，而是另发 exact selected-view
+   feature-extraction 授权；只抽 inventory，完成逐文件 shape/BF16/finiteness/hash 核验后再申请 C-only 训练。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
 4. Prior 先用 40–60 条全新轨迹标显式 dependency edges，由确定性传递闭包得到 Complete、再选 Key；只有

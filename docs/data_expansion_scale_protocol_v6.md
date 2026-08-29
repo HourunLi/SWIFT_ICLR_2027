@@ -32,6 +32,11 @@ common accepts train/heldout=`474/167`。这些只证明双 AI Silver 操作一�
 只能选 8/150。post-plan report SHA-256 为 `42052c40…bb0`，终态
 `STOP_SCALE_V6_POST_ANNOTATION_PLAN`；按 fail-closed 规则没有发布 relation manifest、没有抽 feature、没有训练。
 
+v6.1 修订结果（2026-08-29）：用户在看过上述失败与可行性诊断后批准仅修改 hard-negative 来源池、匹配器和
+精确存储重算。commit `bb99261` 上的 plan 与独立 verifier 分别以
+`PASS_SCALE_V6_1_POST_ANNOTATION_PLAN` / `PASS_SCALE_V6_1_INDEPENDENT_RECOMPUTATION` 结束，发布本地
+400/150/150 关系和1,357-view inventory。该覆盖不改基础 v6 历史状态，也不授权 feature extraction 或训练。
+
 冻结日期：2026-08-26
 
 机器契约：`configs/data_expansion_scale_v6/protocol.json`
@@ -329,3 +334,20 @@ inventory 中列出的视图，绝不能抽16,000 条全池。
 所以只新增62 个 prompt。精确 inventory 预算为：正关系77.574 GiB；新增257 个 trajectory +62 个 prompt 为
 20.636 GiB；合计1,357 个 trajectory、612 个 prompt、98.210 GiB（105.452 GB）。这些数字同样是修订后的
 工程预检，不是模块效果证据；正式关系清单仍须等冻结提交上的 plan 与独立 verifier 都通过。
+
+### v6.1 正式执行结果
+
+实现、测试和上述修订先提交到 clean commit `bb992614319993617777a114645c2d0c871c7d7e`，之后才运行正式
+`plan-final-relations-v6-1`。结果为 `PASS_SCALE_V6_1_POST_ANNOTATION_PLAN`：端点/eligible edge/maximum
+matching/最终负关系=`2178/605/167/150`，300 个选中 endpoint 无复用；400/150 正关系的有序 hash 与 v6
+STOP 报告完全相同。plan report SHA-256 为 `71a470e6b3b34f59906eca84502f685858e088ac444b445f5bd4087b208ebb75`。
+
+随后 `verify-final-relations-v6-1` 从冻结父级文件独立重算并逐行核对4 个 manifest，终态
+`PASS_SCALE_V6_1_INDEPENDENT_RECOMPUTATION`，verification report SHA-256 为
+`48d6937183eceed07d99e76d1409f27c26228d1076c682d410b4442666fb2756`。最终 inventory 是1,357 个
+trajectory、612 个 prompt、520,103 个 feature token，即98.210 GiB（105.452 GB）。所有 relation、inventory
+和报告只在 Git-ignored artifact 目录；远端只保留实现与关键协议。
+
+这个 PASS 关闭的是 Consistency 数据构造门，不是训练或效果门。两个报告都固定
+`feature_extraction_allowed=false`、`training_allowed=false`；下一动作必须是新的 selected-view extraction
+授权和核验协议，且只能消费 inventory，不得把 v6.1 当成 H/Prior/ranking 扩容或 Best-of-N 增益证据。

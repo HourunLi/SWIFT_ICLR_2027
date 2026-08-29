@@ -662,8 +662,9 @@ hallucination_onset = k
 2. C prompt-v4 已失败；v5 机械筛选/双盲事实审计通过；v6 raw gate 通过但旧 hard-negative 仅8/150；用户批准的
    v6.1 已在不改阈值和正关系的前提下发布并独立复核400 train positives、150 heldout positives、150 heldout
    hard negatives 及1,357-view inventory。selected-view feature extraction 也已对1,969个 payload 全量通过独立
-   核验。下一步不是继续改负例、抽全池或直接沿用旧配置训练，而是另发 hash-bound C-only 训练/heldout 机制评估
-   协议与授权；当前 `training_allowed=false`。
+   核验。用户随后明确授权独立的 hash-bound C-only C0/C1 训练与 held-out 机制评估；冻结协议见
+   `docs/consistency_training_protocol_v6_1.md`。授权只覆盖共享 4,768-row manifest、C0/C1、seeds 42/43/44、
+   3 epochs 和150+150 relation evaluator；H/P/Full、新 feature 和 ranking efficacy 仍不在范围内。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
 4. Prior 先用 40–60 条全新轨迹标显式 dependency edges，由确定性传递闭包得到 Complete、再选 Key；只有

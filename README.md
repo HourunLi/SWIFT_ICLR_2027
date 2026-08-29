@@ -675,6 +675,20 @@ correctness、scored-input hash 和 checkpoint hash，再对同 query outcome �
 bootstrap；预声明 cells 见 `configs/clean_ablation_v1/`，已完成结果和结论见
 [`docs/handoff.md`](docs/handoff.md)。
 
+### Consistency v6.1 扩量复测
+
+扩充后的 400 个训练正对、150 个 held-out 正对、150 个 held-out hard negative
+和 1,357 条 exact-ID 全层 feature 已完成独立核验。用户已单独授权 C-only 的
+C0/C1 matched 复测；冻结设计和证据边界见
+[`docs/consistency_training_protocol_v6_1.md`](docs/consistency_training_protocol_v6_1.md)。
+
+本轮会确定性构造一份 C0/C1 共用的 4,768-row 训练清单：3,968 条历史
+correctness 行加 400 个新 relation 的 800 个 endpoint。C0/C1 只差
+`consistency_weight=0/1`，固定 seeds 42/43/44、3 epochs；150+150 关系只做
+机制留出评估。新增入口分别是 `prepare_clir_consistency_training.py`、
+`evaluate_clir_consistency.py` 和 `summarize_clir_consistency.py`。这轮不训练 H、
+Dual Prior 或 Full，也没有新的 ranking population，因此不能给 Best-of-N 效果结论。
+
 ## Toy smoke test
 
 Toy 数据只验证代码路径，不能证明方法有效：
@@ -716,14 +730,16 @@ pytest -q
 
 - 仓库已有 v2 rollout、numeric checker、first-bad-unit/dual-prior Silver 标注包与盲裁管线，但没有人工
   标注或人工复核；它不生成 Gold。
-- 多题源管线不仅通过了 8-query/64-row deterministic fixture，也完成了真实 100-query/800-row Phi
-  rollout、checker/unitizer audit 和 40 C/60 H/P proposal 冻结；双 AI C/H/P 标签、triage/finalize 与全部
-  annotation-quality 硬门仍未完成。不得把 rollout 或 proposal yield 当作标签质量、训练效果证据。
+- 多题源管线已完成 2,000-query/16,000-row Phi rollout；v6.1 的 400/150/150
+  Consistency 关系和 1,357-view feature 已发布并独立复核。它们仍是双 AI Silver，
+  不能称为 Gold 或人工验证。
 - 默认仍使用预抽取全层 feature，真实数据的磁盘开销很大；没有集成 batch-local online extraction。
 - 当前 objective 是 pointwise correctness BCE 加可用 auxiliary supervision，尚无 pairwise/listwise reward objective。
 - clean integration 已在现有小数据上完成三 seed matched matrix，但没有扩充独立机制标签或 protected test；full 没有优于 correctness-only。
 - 历史 consistency、hallucination 和 prior 标签规模都很小，不能支持跨域或正式机制结论。
 - clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代缺失的数据 provenance 上游与 protected-test protocol。
-- clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired summarizer；尚未重建 strict/encoded SWIFT 等预算 baseline，也没有单独的 held-out consistency evaluator。
+- clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired
+  summarizer；v6.1 新增了单独的 held-out consistency relation evaluator，但尚未重建
+  strict/encoded SWIFT 等预算 baseline。
 
 研究假设、已有证据与未验证部分见 [`docs/proposal.md`](docs/proposal.md)；迁移依据和历史负结果见 [`docs/handoff.md`](docs/handoff.md)。

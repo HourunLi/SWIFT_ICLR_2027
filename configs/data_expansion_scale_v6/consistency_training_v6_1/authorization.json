@@ -1,0 +1,128 @@
+{
+  "schema_version": "clir-consistency-scale-v6.1-c-only-training-authorization",
+  "status": "AUTHORIZED_C0_C1_MECHANISM_REPLICATION",
+  "authorized_at_utc": "2026-08-29T13:49:17Z",
+  "authorization_source": {
+    "kind": "explicit_user_confirmation_in_active_codex_thread",
+    "user_instruction": "可以，你按照我们之前的计划做就行",
+    "confirmation_follows_offer_to_run_hash_bound_c_only_training_and_heldout_relation_evaluation": true
+  },
+  "frozen_parent_commit": "eb460a8b1168b2e81bce278301bcc4c92cd26464",
+  "frozen_inputs": {
+    "historical_correctness_train": {
+      "path": "run_artifacts/joint_training_pilot_v1/data_v1/train3968_joint_v1.jsonl",
+      "file_sha256": "dc868b60494c0417902f4f4679d24771a75cd5c9f51107104bb365579a0f4d48",
+      "row_count": 3968
+    },
+    "extracted_selected_features": {
+      "path": "run_artifacts/data_expansion_scale_v6/features_v6_1_run3/final/extracted_selected_features.jsonl",
+      "file_sha256": "ac1f35ff124f05caebd1676fdb29cb299f6f169a6bb2007b0133c124d8a47a8b",
+      "row_count": 1357
+    },
+    "feature_extraction_report": {
+      "path": "run_artifacts/data_expansion_scale_v6/features_v6_1_run3/final/feature_extraction_report.json",
+      "file_sha256": "a1ce2d9b2023f97497714977a2faac3e926f5d9a34a397bb63c249c837848daa"
+    },
+    "feature_extraction_completion": {
+      "path": "configs/data_expansion_scale_v6/feature_extraction_completion_v6_1.json",
+      "file_sha256": "7f1b4b60f568051c0c9e4619706e124f48024b4083ddf8a7b2e76eb294a449b2"
+    },
+    "train_positive_relations": {
+      "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/train_positive_relations.jsonl",
+      "file_sha256": "4709b14357ed71432c6cf93a8a0357c4a7fb3f4043e0131738829ee2ba56009d",
+      "row_count": 400
+    },
+    "heldout_positive_relations": {
+      "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/heldout_positive_relations.jsonl",
+      "file_sha256": "fc88a094e9daced8528349d6d199da1e6277bd5180bd3ad62f0c8b09d47e96d1",
+      "row_count": 150
+    },
+    "heldout_hard_negative_relations": {
+      "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/heldout_hard_negative_relations.jsonl",
+      "file_sha256": "fad547c547fdf635b5f7b0973f624d2657365633cf2c48ffd42d136ccbd448f2",
+      "row_count": 150
+    },
+    "independent_relation_verification": {
+      "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/independent_verification_report_v6_1.json",
+      "file_sha256": "48d6937183eceed07d99e76d1409f27c26228d1076c682d410b4442666fb2756"
+    }
+  },
+  "execution_configs": {
+    "c0": {
+      "path": "configs/data_expansion_scale_v6/consistency_training_v6_1/c0_correctness_only.json",
+      "file_sha256": "8de1b4720f319a08447a17e5b11fd0081c25f31c6b635cbc877ba58f96e74f89"
+    },
+    "c1": {
+      "path": "configs/data_expansion_scale_v6/consistency_training_v6_1/c1_consistency.json",
+      "file_sha256": "b3943379c4f97e44aa5b3dbdce0ea38b884b9f201601d5c64975e7973dc4142a"
+    }
+  },
+  "authorized_scope": {
+    "deterministic_manifest_construction": true,
+    "full_width_preflight": true,
+    "seed_42_one_epoch_pilot": true,
+    "c0_c1_three_seed_three_epoch_training": true,
+    "heldout_relation_evaluation": true,
+    "hallucination_training": false,
+    "dual_prior_training": false,
+    "full_integration_training": false,
+    "new_feature_extraction": false,
+    "new_rollout_or_ai_annotation": false,
+    "ranking_efficacy_claim": false
+  },
+  "data_contract": {
+    "shared_train_manifest_for_c0_and_c1": true,
+    "historical_correctness_rows": 3968,
+    "new_train_positive_relations": 400,
+    "new_train_endpoint_rows": 800,
+    "expected_total_train_rows": 4768,
+    "historical_auxiliary_labels_are_omitted": true,
+    "new_endpoint_correctness": 1,
+    "semantic_id": "frozen_relation_id",
+    "style_id": "relative_compact_or_relative_expanded_from_saved_output_token_count_with_trajectory_id_tiebreak",
+    "heldout_positive_relations": 150,
+    "heldout_hard_negative_relations": 150,
+    "heldout_relations_are_training_forbidden": true,
+    "train_heldout_query_and_cluster_overlap_must_be_zero": true
+  },
+  "training_contract": {
+    "cells": ["c0", "c1"],
+    "only_model_config_difference": "consistency_weight_0.0_vs_1.0",
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.0,
+    "max_grad_norm": 1.0,
+    "amp_dtype": "bfloat16",
+    "group_by_semantic_id": true,
+    "pilot": "seed_42_both_cells_one_epoch_then_resume_same_full_state_checkpoints_to_epoch_3",
+    "pilot_continuation_gate": "data_provenance_finite_loss_finite_gradients_checkpoint_and_evaluator_execution_only",
+    "pilot_metric_selection_forbidden": true
+  },
+  "evaluation_contract": {
+    "primary_metric": "heldout_positive_mean_cosine_minus_heldout_negative_mean_cosine",
+    "secondary_metrics": [
+      "cosine_relation_auroc",
+      "cosine_relation_average_precision",
+      "positive_cosine",
+      "negative_cosine",
+      "positive_score_gap",
+      "negative_score_gap",
+      "score_gap_relation_auroc",
+      "collapse_diagnostics"
+    ],
+    "comparison": "paired_c1_minus_c0_within_each_seed",
+    "uncertainty": "positive_and_negative_relations_bootstrapped_separately_plus_across_seed_summary",
+    "endpoint_query_reuse_warning_required": true,
+    "effect_result_does_not_gate_completion": true
+  },
+  "runtime_contract": {
+    "output_root": "run_artifacts/data_expansion_scale_v6/consistency_training_v6_1",
+    "require_clean_committed_implementation_before_full_width_preflight": true,
+    "large_manifests_checkpoints_and_reports_remain_git_ignored": true,
+    "resume_seed_42_checkpoint_in_place_after_pilot": true
+  },
+  "claim_boundary": "C_only_heldout_relation_mechanism_replication_not_Best_of_N_or_reward_ranking_efficacy",
+  "failure_rule": "any_hash_split_endpoint_config_full_width_finiteness_or_checkpoint_provenance_failure_stops_the_run_without_substituting_data_or_changing_thresholds"
+}

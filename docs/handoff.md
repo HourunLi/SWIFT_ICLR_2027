@@ -1,6 +1,6 @@
 # CLIR clean integration 交接说明
 
-本分支从 `main` 的十余文件结构重新出发，只整合 `panzhixin` 分支中可复用的工程进展和通过相应门的模块部分。它不是对 `panzhixin` 的压缩复制，也没有继承其大量标注流水账、版本化 runner 或失败实现。当前远端顶端只保留训练/打分/评测代码、测试、可运行配置、README、本 handoff、核心方法说明、关键 smoke 协议和当前 v6 扩容主协议；阶段报告、PDF、v1 协议及审查过程材料的最后完整快照是提交 `596a5e4`，需要时可从 Git 历史恢复。Consistency-v5 的 rollout、双盲包和标签继续只留在被忽略的 `run_artifacts/`；2026-08-26 重新生成的阶段 PDF 也只作为本地产物交付，不进入精简远端。
+本分支从 `main` 的十余文件结构重新出发，只整合 `panzhixin` 分支中可复用的工程进展和通过相应门的模块部分。它不是对 `panzhixin` 的压缩复制，也没有继承其大量标注流水账、版本化 runner 或失败实现。当前远端顶端只保留训练/打分/评测代码、测试、可运行配置、README、本 handoff、核心方法说明、关键 smoke 协议，以及 v6 Consistency 和 v7 排序/H0 扩量主协议；阶段报告、PDF、v1 协议及审查过程材料的最后完整快照是提交 `596a5e4`，需要时可从 Git 历史恢复。rollout、双盲包、原始标签、feature 和 checkpoint 继续只留在被忽略的 `run_artifacts/`；2026-08-26 重新生成的阶段 PDF 也只作为本地产物交付，不进入精简远端。
 
 当前唯一运行配置是 `configs/best_current.json`。这里的 “best current” 指当前最清晰、最可维护的**整合方案**；历史上最高的单次联合矩阵 BoN@16 是 correctness-only J0 `.920`，不是三模块联合成功。
 
@@ -702,20 +702,23 @@ hallucination_onset = k
 
 ## 下一步
 
-1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
-   失败作为 pipeline-smoke 诊断。
-2. C prompt-v4 已失败；v5 机械筛选/双盲事实审计、v6.1 关系/feature 和 C-only C0/C1 三 seed
-   复测均已完成。C1 在冻结主 relation separation 上三个 seed 都改善，平均 `+.1760`、区间
-   `[+.1389,+.2155]`，score-gap 结构也改善；但正对 cosine 下降、cosine AUROC 方向混合。
-   将结论固定为“hard-negative separation/去塌缩的部分机制证据”，不继续在同一 relation set 调参。
-3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
-   v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
-4. Prior 先用 40–60 条全新轨迹标显式 dependency edges，由确定性传递闭包得到 Complete、再选 Key；只有
-   exact-set 分歧和裁决负担降下来才扩为 train 300–500/dev 100–200。H 通过后目标仍是 train
-   200+200/dev 100+100；统一 checker 的 1500–2000 independent queries ×16 ranking validation 另发协议。
-5. 下一大门先构造新的 query-disjoint ranking population，再完整重跑 `C0/C1/H0/CH0`；不能用这次
-   150+150 relation 结果代替 Best-of-N。H 先过 boundary/calibration，当前 gold-tail、MIL、pseudo-tail
-   不进核心矩阵。prior 先复核 direct target，再在新 ranking population 上固定 `.25` 做 gate off/on，
-   不再调权重。若要归因 encoder，补 strict/encoded SWIFT 等预算 baseline。
+1. 按 [`ranking_expansion_protocol_v7.md`](ranking_expansion_protocol_v7.md) 冻结并独立复算
+   1,500-query 排序池和 1,000-query H0 采集池。只读容量审计已经确认 4,062 条可选题，
+   两池 query/template-cluster overlap 均为 0。
+2. 用 8 张 L20Z 分 50 个可恢复 shard 生成 32,000 条 Phi 候选，先校验每片 token IDs、
+   候选编号、模型/代码版本和哈希，再合并；原始数据不进 Git。
+3. checker/unitizer 后确定性冻结 800 条 H proposal。先只开放 80 条 smoke 给互盲的
+   GPT-5.6-sol xhigh 与 Claude Opus 5 high；通过 path/onset/control/self-repeat 门后才开放
+   reserve。最终目标为 train 200 positive + 200 clean、dev 100 + 100，统一称无人工复核
+   Dual-AI Silver。
+4. 只为冻结的 24,000 条排序候选、800 条 H proposal 和每题 condition 抽全层 feature；
+   禁止把全部 32,000 条 rollout 都物化成 33×3072 feature。
+5. 固定运行 `C0/C1/H0/CH0 × seeds 42/43/44 × 3 epochs`。H1 negative-tail、Dual Prior
+   和 Full 本轮关闭；不根据结果追加 epoch 或调 loss。用新排序池报告 Best-of-16、各 K、
+   random/oracle、题源分层、seed 区间及 `CH0-C1-H0+C0` 交互。
+
+完整 v7 结果出现前，当前裁决仍是：Consistency 有部分 held-out relation 机制证据；H0、
+H1、Prior 的历史 Best-of-N 都只是小样本筛选信号；C+H0 有负交互迹象；Full 没有建立增益。
+不得把“扩量正在执行”写成模块已经通过确认。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

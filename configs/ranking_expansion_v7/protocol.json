@@ -1,0 +1,256 @@
+{
+  "schema_version": "clir-ranking-h-expansion-v7",
+  "status": "FROZEN_PREPARATION_ROLLOUT_NOT_STARTED",
+  "frozen_at_utc": "2026-08-30",
+  "purpose": "fresh_query_disjoint_ranking_population_and_h0_expansion_for_matched_c0_c1_h0_ch0",
+  "sources": {
+    "math": {
+      "dataset_id": "EleutherAI/hendrycks_math",
+      "revision": "21a5633873b6a120296cce3e2df9d5550074f4a3",
+      "allowed_split": "train_only",
+      "license": "MIT",
+      "allowed_subjects": [
+        "algebra",
+        "counting_and_probability",
+        "geometry",
+        "intermediate_algebra",
+        "number_theory",
+        "prealgebra",
+        "precalculus"
+      ],
+      "allowed_levels": [3, 4, 5],
+      "minimum_official_solution_words": 45,
+      "reference_filter": "final_boxed_single_scalar_numeric_v1",
+      "exclude_asymptote": true,
+      "train_files": {
+        "algebra": {
+          "path": "algebra/train-00000-of-00001.parquet",
+          "row_count": 1744,
+          "sha256": "73347f5b55869f21ff094361025dbd12d291e971aa4d72142eacee10438e449f"
+        },
+        "counting_and_probability": {
+          "path": "counting_and_probability/train-00000-of-00001.parquet",
+          "row_count": 771,
+          "sha256": "d37ae017930df41678edee50dcde18c17fb06afaff9eb505c1b95f1002bfcb31"
+        },
+        "geometry": {
+          "path": "geometry/train-00000-of-00001.parquet",
+          "row_count": 870,
+          "sha256": "9dbf5e5b55499e696e0ba72da9d85d4f0be3acbf7eaa6cb014b0fc78bb63784f"
+        },
+        "intermediate_algebra": {
+          "path": "intermediate_algebra/train-00000-of-00001.parquet",
+          "row_count": 1295,
+          "sha256": "0c87f3798ebdfb915b1f9b6fc13c1a8d064c3cb91631ccbe85b83ed5d71150f6"
+        },
+        "number_theory": {
+          "path": "number_theory/train-00000-of-00001.parquet",
+          "row_count": 869,
+          "sha256": "81c08649149b39811f2d1d7ddf5dfccf6c4c8044a2e169cfb24db09160c941f4"
+        },
+        "prealgebra": {
+          "path": "prealgebra/train-00000-of-00001.parquet",
+          "row_count": 1205,
+          "sha256": "765b526fb5c0b8385cb7be2c16bf4f6f28cf71f2bc15c826abfbb5fa7f8616cc"
+        },
+        "precalculus": {
+          "path": "precalculus/train-00000-of-00001.parquet",
+          "row_count": 746,
+          "sha256": "28bb1ff95525c8d32521509bef91de76339659f5467a381e6e8deea204538f0e"
+        }
+      }
+    },
+    "gsm8k": {
+      "dataset_id": "openai/gsm8k",
+      "revision": "740312add88f781978c0658806c59bc2815b9866",
+      "allowed_split": "train_only",
+      "license": "MIT",
+      "long_chain_filter": {
+        "minimum_reference_reasoning_words": 45,
+        "minimum_reference_calculation_markers": 2,
+        "minimum_distinct_intermediate_numeric_values": 3
+      }
+    },
+    "protected_splits": {
+      "gsm8k_test": "no_training_selection_tuning_or_protocol_debug",
+      "math_test": "no_training_selection_tuning_or_protocol_debug",
+      "svamp": "protected_asdiv_derived_challenge_set_not_independent_source_holdout"
+    }
+  },
+  "pinned_inputs": {
+    "v3_source_corpus": {
+      "path": "run_artifacts/data_expansion_smoke_v3/sources/all.jsonl",
+      "row_count": 10543,
+      "file_sha256": "ea079ed1d096ebccd8b10a17da270989e7da27b0786c75dafa5c8131afa47841",
+      "ordered_rows_sha256": "baf525a509bd983faf72f22ef208ff9f0e214499d490a6e16ef568b3574619ac",
+      "sidecar_file_sha256": "cbc636250f3a67812a0821de49c7fa7e08cc8f84273b905eee17179b33157b69"
+    },
+    "v6_permanent_exclusions": {
+      "path": "run_artifacts/data_expansion_scale_v6/pre_rollout/permanent_exclusions.jsonl",
+      "row_count": 1316,
+      "file_sha256": "a1b559c3f6ab7be833108e1946cc375993429f468ae1e9bf3ea302ecdda3b358",
+      "ordered_rows_sha256": "e3f1e492c7280e0a239a7c92afcd514578a67c61b511214bce57dcb70049e152",
+      "sidecar_file_sha256": "ec81cacf72c7be562ce7f0629a4c027c2421c65be8005713f3c7fbbaca1ce93a"
+    },
+    "v6_train_queries": {
+      "path": "run_artifacts/data_expansion_scale_v6/pre_rollout/train_acquisition_queries.jsonl",
+      "row_count": 1500,
+      "file_sha256": "a1bef054754366d8246e52df7e0bf9d3a527db1446e0ad362b4a55aad5f49cda",
+      "ordered_rows_sha256": "397f73f9ec8ea068a08b66214bb5eb75211eb31756a5161db4ec9a25e050599f",
+      "sidecar_file_sha256": "85eb1af9fbd8941adf84466cda2fdfb269d60d373dddd43c8dcd4650b41e26b7"
+    },
+    "v6_heldout_queries": {
+      "path": "run_artifacts/data_expansion_scale_v6/pre_rollout/heldout_acquisition_queries.jsonl",
+      "row_count": 500,
+      "file_sha256": "769bff57d0266b9e0f9daa5e4a6907f25204cba0d4587da974ce9adc6a9bfc73",
+      "ordered_rows_sha256": "56d9b2a374cf0fe1c251227b88ef16dd44bbd1e15c12a1fb25de8e907ed58c71",
+      "sidecar_file_sha256": "bfae09fd03ddc698d432f37c673fd16c93c32638704e6db2c982b6c7ee14bb17"
+    }
+  },
+  "template_clustering": {
+    "namespace": "clir-ranking-v7",
+    "entity_template_version": "clir_entity_template_v1",
+    "cluster_version": "clir_template_cluster_v1",
+    "minhash_permutations": 64,
+    "minhash_bands": 16,
+    "token_set_jaccard_min": 0.82,
+    "token_trigram_jaccard_min": 0.72,
+    "excluded_anchor_cluster_is_fully_excluded": true,
+    "one_selected_query_per_cluster": true
+  },
+  "roles": {
+    "ranking_evaluation": {
+      "query_count": 1500,
+      "source_counts": {"math": 700, "gsm8k": 800},
+      "candidate_count": 16,
+      "rollout_shards": 30,
+      "queries_per_shard": 50,
+      "evaluation_only": true,
+      "may_be_used_for_tuning": false
+    },
+    "hallucination_acquisition": {
+      "query_count": 1000,
+      "source_counts": {"math": 600, "gsm8k": 400},
+      "candidate_count": 8,
+      "rollout_shards": 20,
+      "queries_per_shard": 50,
+      "train_only_or_mechanism_dev_only": true
+    }
+  },
+  "h_acquisition": {
+    "preassigned_cells": {
+      "math": {
+        "numeric_match|dev": 70,
+        "numeric_match|train": 130,
+        "numeric_mismatch|dev": 120,
+        "numeric_mismatch|train": 280
+      },
+      "gsm8k": {
+        "numeric_match|dev": 95,
+        "numeric_match|train": 205,
+        "numeric_mismatch|dev": 45,
+        "numeric_mismatch|train": 55
+      }
+    },
+    "proposal_target": {
+      "numeric_mismatch|train": {"math": 250, "gsm8k": 17},
+      "numeric_mismatch|dev": {"math": 100, "gsm8k": 33},
+      "numeric_match|train": {"math": 100, "gsm8k": 167},
+      "numeric_match|dev": {"math": 50, "gsm8k": 83}
+    },
+    "proposal_target_total": 800,
+    "minimum_material_units": 5,
+    "candidate_selection": "first_checker_eligible_candidate_by_sha256_within_preassigned_query_cell",
+    "smoke": {
+      "train_proposals": 80,
+      "numeric_mismatch": {"math": 35, "gsm8k": 5},
+      "numeric_match": {"math": 15, "gsm8k": 25},
+      "minimum_final_positive": 30,
+      "minimum_final_clean": 30,
+      "reserve_labels_must_remain_unopened_until_smoke_pass": true
+    },
+    "final_target": {
+      "train_positive": 200,
+      "train_clean": 200,
+      "dev_positive": 100,
+      "dev_clean": 100,
+      "selection": "common_exact_non_low_agreement_then_frozen_hash_order",
+      "label_name": "silver_dual_ai_h_onset_v7_no_human_verification"
+    },
+    "annotation": {
+      "annotator_a": "user_reported_gpt_5_6_sol_xhigh",
+      "annotator_b": "user_reported_claude_opus_5_high",
+      "different_non_phi_model_families_required": true,
+      "third_model_or_adjudication_used": false,
+      "temperature": "user_interface_unverified",
+      "blind_packages_required": true,
+      "raw_path_agreement_min": 0.9,
+      "common_positive_exact_onset_agreement_min": 0.75,
+      "common_positive_minimum_support": 30,
+      "controls_per_annotator": 8,
+      "controls_required_correct": 8,
+      "self_repeat_fraction": 0.1,
+      "self_repeat_agreement_min": 0.95
+    }
+  },
+  "generation": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "tokenizer_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "backend": "vllm",
+    "backend_version": "0.5.3.post1",
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "max_new_tokens": 1024,
+    "max_model_length": 4096,
+    "base_seed": 20260830,
+    "prompt_template": "Solve the following math problem step-by-step.\nSimplify your answer as much as possible. Present your final answer as \\boxed{Your Answer}.\n<QUESTION>",
+    "saved_ids_are_axis_truth": true,
+    "bit_exact_regeneration_claimed": false,
+    "maximum_prompt_tokens": 3072,
+    "write_each_shard_atomically": true,
+    "merge_only_complete_verified_shards": true
+  },
+  "checker": {
+    "checker_version": "clir_numeric_multisource_v3",
+    "claim_semantics": "numeric_value_match_not_full_unit_or_entity_correctness",
+    "unitizer_version": "clir_material_claim_unitizer_v2",
+    "truncation_parse_failure_conflicting_answer": "raw_audit_only_not_h_proposal"
+  },
+  "budget": {
+    "expected_output_tokens_per_candidate": {"math": 600, "gsm8k": 300},
+    "full_feature_bytes_per_token": 202752,
+    "gpu_model": "NVIDIA L20Z",
+    "tensor_parallel_size": 1,
+    "maximum_concurrent_l20z_jobs": 8,
+    "feature_scope": "all_24000_ranking_trajectories_plus_only_800_h_proposals_plus_one_condition_per_query",
+    "all_32000_rollout_feature_extraction_forbidden": true
+  },
+  "future_training": {
+    "matrix": ["C0", "C1", "H0", "CH0"],
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "h0_is_onset_bce_only": true,
+    "h1_negative_tail_enabled": false,
+    "prior_or_full_enabled": false,
+    "no_post_hoc_epoch_margin_or_weight_tuning": true,
+    "primary_ranking_metric": "Best_of_N_accuracy_at_K_16",
+    "interaction": "CH0_minus_C1_minus_H0_plus_C0"
+  },
+  "execution_authorization": {
+    "source_audit_allowed": true,
+    "pre_rollout_freeze_allowed": true,
+    "rollout_allowed": false,
+    "annotation_allowed": false,
+    "feature_extraction_allowed": false,
+    "training_allowed": false,
+    "next_gate": "CLEAN_COMMIT_THEN_PRE_ROLLOUT_FREEZE_AND_INDEPENDENT_VERIFY"
+  },
+  "claim_boundary": {
+    "ranking_population_is_protected_test": false,
+    "ranking_population_is_fresh_query_disjoint_validation": true,
+    "h_labels_are_gold": false,
+    "pipeline_pass_implies_module_efficacy": false,
+    "ranking_results_may_be_used_to_retune_v7": false
+  }
+}

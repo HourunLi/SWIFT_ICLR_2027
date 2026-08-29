@@ -17,7 +17,6 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from src.clir_smoke import (
     canonical_sha256,
-    normalize_question,
     stable_priority,
     validate_source_row,
 )
@@ -39,9 +38,7 @@ _CAPITALIZED = re.compile(r"\b[A-Z][A-Za-z'’-]*\b")
 _TEMPLATE_TOKEN = re.compile(r"<num>|<ent>|[a-z]+")
 _WORD = re.compile(r"[A-Za-z0-9]+(?:'[A-Za-z]+)?")
 _CALCULATION = re.compile(r"<<([^<>]+)>>")
-_NUMBER_LITERAL = re.compile(
-    r"[-+]?\d+(?:\.\d+)?(?:/[-+]?\d+(?:\.\d+)?)?"
-)
+_NUMBER_LITERAL = re.compile(r"[-+]?\d+(?:\.\d+)?(?:/[-+]?\d+(?:\.\d+)?)?")
 
 # Capitalized question/function words are not named entities.  Everything else
 # capitalized is conservatively abstracted.  This is deliberately deterministic
@@ -155,7 +152,10 @@ def _prefix_jaccard_candidates(
     """Exact prefix-filter candidates for set Jaccard at ``threshold``."""
 
     frequency = Counter(token for values in token_sets for token in values)
-    ordered = [sorted(values, key=lambda token: (frequency[token], token)) for values in token_sets]
+    ordered = [
+        sorted(values, key=lambda token: (frequency[token], token))
+        for values in token_sets
+    ]
     prefixes = [
         values[: max(0, len(values) - math.ceil(threshold * len(values)) + 1)]
         for values in ordered
@@ -212,12 +212,15 @@ def gsm8k_long_chain_metrics(
 
 
 def build_source_candidates(
-    source_rows: Sequence[Mapping[str, Any]], protocol: Mapping[str, Any]
+    source_rows: Sequence[Mapping[str, Any]],
+    protocol: Mapping[str, Any],
+    *,
+    required_schema: str = SCALE_V6_SCHEMA,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Apply the frozen MATH/GSM8K source filters without reading test data."""
 
-    if protocol.get("schema_version") != SCALE_V6_SCHEMA:
-        raise ValueError("scale source filtering requires the frozen v6 protocol")
+    if protocol.get("schema_version") != required_schema:
+        raise ValueError(f"scale source filtering requires protocol {required_schema}")
     math_cfg = protocol["sources"]["math"]
     gsm_cfg = protocol["sources"]["gsm8k"]
     allowed_subjects = set(math_cfg["allowed_subjects"])
@@ -242,9 +245,7 @@ def build_source_candidates(
                 continue
             row = validate_source_row(raw)
             row["selection_stratum"] = f"{subject}|level_{int(level)}"
-            row["query_priority"] = stable_priority(
-                "clir-C-v6-query", row["query_id"]
-            )
+            row["query_priority"] = stable_priority("clir-C-v6-query", row["query_id"])
             candidates.append(row)
             math_strata[row["selection_stratum"]] += 1
             counts["math_eligible"] += 1
@@ -259,9 +260,7 @@ def build_source_candidates(
                 continue
             row = validate_source_row(raw)
             row.update(metrics)
-            row["query_priority"] = stable_priority(
-                "clir-C-v6-query", row["query_id"]
-            )
+            row["query_priority"] = stable_priority("clir-C-v6-query", row["query_id"])
             candidates.append(row)
             gsm_word_counts.append(int(metrics["reference_reasoning_word_count"]))
             counts["gsm8k_eligible"] += 1
@@ -314,8 +313,13 @@ def build_template_clusters(
     candidate_rows: Sequence[Mapping[str, Any]],
     exclusion_anchor_rows: Sequence[Mapping[str, Any]],
     excluded_query_ids: Iterable[str],
+    *,
+    namespace: str = "clir-C-v6",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """Cluster candidates and exclusion anchors, propagating every exclusion."""
+
+    if not isinstance(namespace, str) or not namespace:
+        raise ValueError("cluster namespace must be a non-empty string")
 
     by_id: dict[str, dict[str, Any]] = {}
     candidate_ids = {str(row["query_id"]) for row in candidate_rows}
@@ -344,7 +348,9 @@ def build_template_clusters(
     exact_removed: set[str] = set()
     exact_edge_count = 0
     for members in exact_groups.values():
-        ordered = sorted(members, key=lambda value: hashlib.sha256(value.encode()).hexdigest())
+        ordered = sorted(
+            members, key=lambda value: hashlib.sha256(value.encode()).hexdigest()
+        )
         for query_id in ordered[1:]:
             exact_removed.add(query_id)
             union.union(ordered[0], query_id)
@@ -360,17 +366,27 @@ def build_template_clusters(
             template_edge_count += 1
 
     token_sets = [set(str(row["template_signature_v6"]).split()) for row in rows]
-    trigram_sets = [template_trigrams(str(row["template_signature_v6"])) for row in rows]
+    trigram_sets = [
+        template_trigrams(str(row["template_signature_v6"])) for row in rows
+    ]
     candidate_pairs = _prefix_jaccard_candidates(token_sets, TOKEN_JACCARD_MIN)
     candidate_pairs.update(_minhash_candidates(trigram_sets))
     near_edges: list[tuple[str, str, float, float]] = []
     for left_index, right_index in sorted(candidate_pairs):
         left_id, right_id = query_ids[left_index], query_ids[right_index]
-        if by_id[left_id]["normalized_question"] == by_id[right_id]["normalized_question"]:
+        if (
+            by_id[left_id]["normalized_question"]
+            == by_id[right_id]["normalized_question"]
+        ):
             continue
         token_similarity = _jaccard(token_sets[left_index], token_sets[right_index])
-        trigram_similarity = _jaccard(trigram_sets[left_index], trigram_sets[right_index])
-        if token_similarity < TOKEN_JACCARD_MIN and trigram_similarity < TRIGRAM_JACCARD_MIN:
+        trigram_similarity = _jaccard(
+            trigram_sets[left_index], trigram_sets[right_index]
+        )
+        if (
+            token_similarity < TOKEN_JACCARD_MIN
+            and trigram_similarity < TRIGRAM_JACCARD_MIN
+        ):
             continue
         union.union(left_id, right_id)
         near_edges.append((left_id, right_id, token_similarity, trigram_similarity))
@@ -387,8 +403,8 @@ def build_template_clusters(
     excluded_cluster_count = 0
     for root, members in members_by_root.items():
         ordered_members = sorted(members)
-        cluster_id = stable_priority("clir-C-v6-cluster", *ordered_members)
-        split_priority = stable_priority("clir-C-v6-split", cluster_id)
+        cluster_id = stable_priority(f"{namespace}-cluster", *ordered_members)
+        split_priority = stable_priority(f"{namespace}-split", cluster_id)
         split = (
             "heldout_acquisition"
             if int(split_priority, 16) < (1 << 254)
@@ -411,7 +427,11 @@ def build_template_clusters(
                 "eligible_candidate_query_ids": eligible_members,
                 "selectable_query_ids": selectable_members,
                 "source_counts": dict(
-                    sorted(Counter(str(by_id[value]["source"]) for value in ordered_members).items())
+                    sorted(
+                        Counter(
+                            str(by_id[value]["source"]) for value in ordered_members
+                        ).items()
+                    )
                 ),
                 "excluded_by_prior_membership": excluded_cluster,
                 "excluded_member_query_ids": excluded_members,
@@ -428,19 +448,22 @@ def build_template_clusters(
             row["cluster_id"] = cluster_id
             row["cluster_split_priority"] = split_priority
             row["acquisition_split"] = split
-            row["query_priority"] = stable_priority("clir-C-v6-query", query_id)
+            row["query_priority"] = stable_priority(f"{namespace}-query", query_id)
             selectable.append(row)
 
+    implementation = {
+        "entity_template_version": ENTITY_TEMPLATE_VERSION,
+        "cluster_version": CLUSTER_VERSION,
+        "minhash_permutations": MINHASH_PERMUTATIONS,
+        "minhash_bands": MINHASH_BANDS,
+        "token_jaccard_min": TOKEN_JACCARD_MIN,
+        "trigram_jaccard_min": TRIGRAM_JACCARD_MIN,
+        "heldout_hash_fraction": HELDOUT_HASH_FRACTION,
+    }
+    if namespace != "clir-C-v6":
+        implementation["namespace"] = namespace
     report = {
-        "implementation": {
-            "entity_template_version": ENTITY_TEMPLATE_VERSION,
-            "cluster_version": CLUSTER_VERSION,
-            "minhash_permutations": MINHASH_PERMUTATIONS,
-            "minhash_bands": MINHASH_BANDS,
-            "token_jaccard_min": TOKEN_JACCARD_MIN,
-            "trigram_jaccard_min": TRIGRAM_JACCARD_MIN,
-            "heldout_hash_fraction": HELDOUT_HASH_FRACTION,
-        },
+        "implementation": implementation,
         "rows_considered": len(rows),
         "candidate_rows": len(candidate_ids),
         "exclusion_anchor_rows": len(set(by_id) - candidate_ids),
@@ -470,7 +493,9 @@ def _assign_gsm_quantiles(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, A
         ),
     )
     for index, row in enumerate(gsm_rows):
-        quantile = min(GSM_LENGTH_QUANTILES - 1, index * GSM_LENGTH_QUANTILES // len(gsm_rows))
+        quantile = min(
+            GSM_LENGTH_QUANTILES - 1, index * GSM_LENGTH_QUANTILES // len(gsm_rows)
+        )
         row["selection_stratum"] = f"reasoning_length_q{quantile + 1}"
     return output
 
@@ -486,7 +511,10 @@ def _proportional_quotas(available: Mapping[str, int], target: int) -> dict[str,
     remainder = target - sum(quotas.values())
     order = sorted(
         available,
-        key=lambda key: (-(raw[key] - quotas[key]), stable_priority("clir-C-v6-quota", key)),
+        key=lambda key: (
+            -(raw[key] - quotas[key]),
+            stable_priority("clir-C-v6-quota", key),
+        ),
     )
     for key in order[:remainder]:
         quotas[key] += 1
@@ -500,17 +528,27 @@ def select_acquisition_queries(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     rows = _assign_gsm_quantiles(selectable_rows)
     targets = {
-        ("math", "train_acquisition"): int(protocol["sources"]["math"]["train_acquisition_queries"]),
-        ("math", "heldout_acquisition"): int(protocol["sources"]["math"]["heldout_acquisition_queries"]),
-        ("gsm8k", "train_acquisition"): int(protocol["sources"]["gsm8k"]["train_acquisition_queries"]),
-        ("gsm8k", "heldout_acquisition"): int(protocol["sources"]["gsm8k"]["heldout_acquisition_queries"]),
+        ("math", "train_acquisition"): int(
+            protocol["sources"]["math"]["train_acquisition_queries"]
+        ),
+        ("math", "heldout_acquisition"): int(
+            protocol["sources"]["math"]["heldout_acquisition_queries"]
+        ),
+        ("gsm8k", "train_acquisition"): int(
+            protocol["sources"]["gsm8k"]["train_acquisition_queries"]
+        ),
+        ("gsm8k", "heldout_acquisition"): int(
+            protocol["sources"]["gsm8k"]["heldout_acquisition_queries"]
+        ),
     }
     selected: list[dict[str, Any]] = []
     availability: dict[str, Any] = {}
     quotas_report: dict[str, Any] = {}
     for (source, split), target in sorted(targets.items()):
         pool = [
-            row for row in rows if row["source"] == source and row["acquisition_split"] == split
+            row
+            for row in rows
+            if row["source"] == source and row["acquisition_split"] == split
         ]
         by_stratum: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in pool:
@@ -537,21 +575,31 @@ def select_acquisition_queries(
     train_clusters = {str(row["cluster_id"]) for row in train}
     heldout_clusters = {str(row["cluster_id"]) for row in heldout}
     if train_ids & heldout_ids or train_clusters & heldout_clusters:
-        raise AssertionError("train and heldout acquisition sets are not cluster-disjoint")
+        raise AssertionError(
+            "train and heldout acquisition sets are not cluster-disjoint"
+        )
     expected_train = int(protocol["consistency_scale"]["train_acquisition_queries"])
     expected_heldout = int(protocol["consistency_scale"]["heldout_acquisition_queries"])
     if len(train) != expected_train or len(heldout) != expected_heldout:
         raise AssertionError("selected acquisition counts do not match v6")
-    return train, heldout, {
-        "available_by_source_split_stratum": availability,
-        "selected_quotas_by_source_split_stratum": quotas_report,
-        "train_source_counts": dict(sorted(Counter(row["source"] for row in train).items())),
-        "heldout_source_counts": dict(sorted(Counter(row["source"] for row in heldout).items())),
-        "train_cluster_count": len(train_clusters),
-        "heldout_cluster_count": len(heldout_clusters),
-        "cluster_overlap": 0,
-        "query_overlap": 0,
-    }
+    return (
+        train,
+        heldout,
+        {
+            "available_by_source_split_stratum": availability,
+            "selected_quotas_by_source_split_stratum": quotas_report,
+            "train_source_counts": dict(
+                sorted(Counter(row["source"] for row in train).items())
+            ),
+            "heldout_source_counts": dict(
+                sorted(Counter(row["source"] for row in heldout).items())
+            ),
+            "train_cluster_count": len(train_clusters),
+            "heldout_cluster_count": len(heldout_clusters),
+            "cluster_overlap": 0,
+            "query_overlap": 0,
+        },
+    )
 
 
 def build_rollout_shards(
@@ -563,25 +611,40 @@ def build_rollout_shards(
     if shard_size != 50:
         raise ValueError("v6 source-balanced sharding is frozen at 50 queries")
     shards: list[dict[str, Any]] = []
-    for split, rows in (("train_acquisition", train_rows), ("heldout_acquisition", heldout_rows)):
+    for split, rows in (
+        ("train_acquisition", train_rows),
+        ("heldout_acquisition", heldout_rows),
+    ):
         math_rows = sorted(
             (dict(row) for row in rows if row["source"] == "math"),
-            key=lambda row: stable_priority("clir-C-v6-shard-order", split, row["query_id"]),
+            key=lambda row: stable_priority(
+                "clir-C-v6-shard-order", split, row["query_id"]
+            ),
         )
         gsm_rows = sorted(
             (dict(row) for row in rows if row["source"] == "gsm8k"),
-            key=lambda row: stable_priority("clir-C-v6-shard-order", split, row["query_id"]),
+            key=lambda row: stable_priority(
+                "clir-C-v6-shard-order", split, row["query_id"]
+            ),
         )
         shard_count = len(rows) // shard_size
-        if len(rows) % shard_size or len(math_rows) != shard_count * 35 or len(gsm_rows) != shard_count * 15:
+        if (
+            len(rows) % shard_size
+            or len(math_rows) != shard_count * 35
+            or len(gsm_rows) != shard_count * 15
+        ):
             raise ValueError("v6 shards require exactly 35 MATH + 15 GSM8K per shard")
         for index in range(shard_count):
             query_rows = [
                 *math_rows[index * 35 : (index + 1) * 35],
                 *gsm_rows[index * 15 : (index + 1) * 15],
             ]
-            query_rows.sort(key=lambda row: stable_priority("clir-C-v6-shard-row", row["query_id"]))
-            shard_id = f"{'train' if split == 'train_acquisition' else 'heldout'}-{index:03d}"
+            query_rows.sort(
+                key=lambda row: stable_priority("clir-C-v6-shard-row", row["query_id"])
+            )
+            shard_id = (
+                f"{'train' if split == 'train_acquisition' else 'heldout'}-{index:03d}"
+            )
             shards.append(
                 {
                     "shard_id": shard_id,
@@ -626,8 +689,12 @@ def storage_and_gpu_budget(
         * int(protocol["generation"]["max_new_tokens"])
     )
     bytes_per_token = int(assumptions["full_feature_bytes_per_token"])
-    selected_trajectories = int(protocol["publication_and_extraction"]["selected_trajectory_count"])
-    selected_prompts = int(protocol["publication_and_extraction"]["selected_unique_prompt_count"])
+    selected_trajectories = int(
+        protocol["publication_and_extraction"]["selected_trajectory_count"]
+    )
+    selected_prompts = int(
+        protocol["publication_and_extraction"]["selected_unique_prompt_count"]
+    )
     output_estimate = int(assumptions["conservative_output_tokens_per_candidate"])
     average_prompt = sum(prompt_counts) / len(prompt_counts)
     selected_feature_bytes = int(
@@ -649,14 +716,17 @@ def storage_and_gpu_budget(
         "conservative_raw_output_tokens": conservative_output_tokens,
         "worst_case_raw_output_tokens": worst_case_output_tokens,
         "selected_only_feature_storage_gb": selected_feature_bytes / 1_000_000_000,
-        "forbidden_all_rollout_feature_storage_tb": all_feature_bytes / 1_000_000_000_000,
+        "forbidden_all_rollout_feature_storage_tb": all_feature_bytes
+        / 1_000_000_000_000,
         "bytes_per_full_feature_token": bytes_per_token,
         "gpu_budget": {
             "gpu_model": assumptions["gpu_model"],
             "tensor_parallel_size": int(assumptions["tensor_parallel_size"]),
             "atomic_shard_jobs": int(protocol["generation"]["planned_rollout_shards"]),
             "queries_per_job": int(protocol["generation"]["rollout_shard_query_count"]),
-            "candidates_per_job": int(protocol["generation"]["rollout_shard_query_count"])
+            "candidates_per_job": int(
+                protocol["generation"]["rollout_shard_query_count"]
+            )
             * candidate_count,
             "maximum_concurrent_jobs": int(assumptions["maximum_concurrent_l20z_jobs"]),
             "minimum_waves_at_maximum_concurrency": math.ceil(

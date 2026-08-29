@@ -33,6 +33,8 @@ __pycache__/
 !/configs/data_expansion_smoke_v5/**
 !/configs/data_expansion_scale_v6/
 !/configs/data_expansion_scale_v6/**
+!/configs/ranking_expansion_v7/
+!/configs/ranking_expansion_v7/**
 
 # The clean integration branch tracks only explicitly added runtime scripts.
 /scripts/*

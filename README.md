@@ -714,6 +714,20 @@ separation 也从 `.18622` 增至 `.42970`。同时，正对 cosine 下降、cos
 `.2` margin。结论是 Consistency 已有“分开 hard negative、打破表示塌缩”的部分机制
 证据，尚未建立完整正对不变性或最终选答案增益。
 
+### 排序评测与 H0 扩量 v7（准备中）
+
+下一阶段已经冻结准备协议，详见
+[`docs/ranking_expansion_protocol_v7.md`](docs/ranking_expansion_protocol_v7.md) 和
+[`configs/ranking_expansion_v7/protocol.json`](configs/ranking_expansion_v7/protocol.json)。
+只读容量审计已通过：排除历史使用题及其近重复簇后还有 4,062 条可选题，足以建立互不
+重叠的 1,500-query 新排序池（700 MATH + 800 长链 GSM8K，每题 16 候选）和
+1,000-query H0 采集池（600 + 400，每题 8 候选），query 与模板簇交叉都为 0。
+
+本轮只扩 H0 的 first-bad-unit Silver 标签；H1 negative-tail、Dual Prior 和 Full 暂不
+进入训练。H0 smoke 与双 AI 门通过后，固定重跑 C0/C1/H0/CH0、seeds 42/43/44、
+3 epochs，并在新排序池上比较 Best-of-16 和二因子交互。当前状态仅表示源数据、隔离、
+预算和执行代码已通过审计；尚未生成候选、标注、抽特征或得到新的模块效果结论。
+
 ## Toy smoke test
 
 Toy 数据只验证代码路径，不能证明方法有效：

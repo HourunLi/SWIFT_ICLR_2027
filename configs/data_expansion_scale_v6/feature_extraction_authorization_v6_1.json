@@ -37,7 +37,7 @@
       "selected_feature_inventory": {
         "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/selected_feature_inventory.jsonl",
         "file_sha256": "0e3c796d62e1b5024ab6619ed7626054a98dec5850c8532b5982f7f9dd4528db",
-        "sidecar_file_sha256": "dcd46194d5e506b06bc705c0e3b8b5de503ead0075325b9eabce5c761bd63c",
+        "sidecar_file_sha256": "dcd46194d5e506b06bc705c0e3b8b5de503ead0075325b9eabceae5c761bd63c",
         "ordered_rows_sha256": "7746ee4bf93ffd3082a83a202bcd1bf7da4ff0cae3de97f5f12c59bc687f5d6a",
         "row_count": 1357
       },

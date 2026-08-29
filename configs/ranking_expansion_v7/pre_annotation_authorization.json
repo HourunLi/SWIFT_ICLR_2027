@@ -1,0 +1,47 @@
+{
+  "schema_version": "clir-ranking-v7-pre-annotation-authorization",
+  "status": "AUTHORIZED_CHECKER_UNITIZER_PROPOSAL_AND_SMOKE_PACKAGE_ONLY",
+  "authorized_at_utc": "2026-08-29T17:00:21Z",
+  "authorization_source": {
+    "kind": "explicit_user_confirmation_in_active_codex_thread",
+    "user_instruction": "可以，你按照我们之前的计划做就行",
+    "scope_is_the_previously_frozen_v7_plan": true
+  },
+  "frozen_parent": {
+    "protocol_path": "configs/ranking_expansion_v7/protocol.json",
+    "protocol_file_sha256": "1e9de5d1c6d23c63a7ed6a501440329ce78cdfdb0e26ade2e2189dad56440155",
+    "rollout_authorization_file_sha256": "87d232f4b454a33faf8741351acc1aa5dbc0015cbee0da7d2f44681c6d66954d",
+    "rollout_completion_report_file_sha256": "a751e917f74daaa847fe8f32c16be8093416e65a04d5a65f89f0e4f348ffcd71",
+    "rollout_status": "PASS_ALL_32000_RAW_ROLLOUTS_VERIFIED_V7",
+    "ranking_combined_file_sha256": "7413cd17487f49e13cecebda3b623d05e102a73b236e480dc8bb391e14c06c69",
+    "ranking_combined_ordered_rows_sha256": "9805cb0025c0120644ad8b16c5ed6664296ff1bb507fdcd69276f5d9d83ddad9",
+    "ranking_combined_row_count": 24000,
+    "h_combined_file_sha256": "d0317e680510e2f828e45d65893c8fda62f1d9d56c6a618155a834ff4f8e0fcd",
+    "h_combined_ordered_rows_sha256": "ca485c3efbed927bbb5f1003b2de748e77d6c77854df1005c1267a45bb7c9235",
+    "h_combined_row_count": 8000,
+    "pre_annotation_code_commit": "35aa55b5950f785916834c97d44c671db7abf30e"
+  },
+  "authorized_scope": {
+    "ranking_checker_materialization": true,
+    "h_checker_and_unitizer_materialization": true,
+    "h_proposal_freeze": true,
+    "smoke_blind_package_construction": true,
+    "ai_annotation_or_provider_call": false,
+    "reserve_package_construction_before_smoke_pass": false,
+    "label_finalization": false,
+    "feature_extraction": false,
+    "training": false,
+    "threshold_or_query_manifest_change": false
+  },
+  "runtime_contract": {
+    "output_root": "run_artifacts/ranking_expansion_v7/pre_annotation",
+    "ranking_checked_path": "run_artifacts/ranking_expansion_v7/pre_annotation/materialized/ranking_checked.jsonl",
+    "h_materialized_path": "run_artifacts/ranking_expansion_v7/pre_annotation/materialized/h_materialized.jsonl",
+    "proposal_target_total": 800,
+    "smoke_proposals": 80,
+    "reserve_proposals_sealed": 720,
+    "existing_artifact_policy": "stop_without_overwrite",
+    "clean_git_commit_required": true
+  },
+  "next_gate": "materialize_then_verify_yield_then_construct_smoke_only_packages"
+}

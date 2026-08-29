@@ -319,7 +319,7 @@ controls 均被正确 reject，排除了“所有输入都 accept”的简单退
 `eligible_for_training=false`、`third_model_allowed=false`，不发布训练 manifest、不抽 hidden state、不训练，
 也不支持 Consistency 改善 Best-of-N 的结论。
 
-## 2026-08-26/29 数据扩容主协议 v6/v6.1：关系清单 PASS，抽特征仍待授权
+## 2026-08-26/29 数据扩容主协议 v6/v6.1：关系与 selected feature 均 PASS
 
 用户确认采用中档 Consistency 扩量方案。canonical 文档是
 [`data_expansion_scale_protocol_v6.md`](data_expansion_scale_protocol_v6.md)，机器契约是
@@ -432,10 +432,11 @@ verification report SHA-256 为 `48d69371…2756`。本地 Git-ignored manifest 
 精确 inventory 为1,357 trajectory +612 prompt，输出/提示 token=`460151/59952`，共520,103 feature token，
 预算98.210 GiB（105.452 GB）。负例端点与正关系重叠43 个 view，故真正新增257 trajectory +62 prompt；旧的
 101-prompt 粗估没有按 query 扣除已随正关系保存的44 个 prompt，现已纠正。这个结果只把 Consistency 数据构造
-推进到“已发布并复核关系清单”，不是可学习性或 Best-of-N 证据。plan 和 verifier 都明确
-`feature_extraction_allowed=false`、`training_allowed=false`；下一步需单独授权只抽 inventory，禁止抽全16,000 条。
+推进到“已发布并复核关系清单”，不是可学习性或 Best-of-N 证据。关系 plan 和 verifier 在其冻结时点明确
+`feature_extraction_allowed=false`、`training_allowed=false`；后续只有新的窄授权才能只抽 inventory，始终禁止
+抽全16,000条。
 
-### Consistency v6.1 selected-inventory feature extraction：已授权，待正式执行
+### Consistency v6.1 selected-inventory feature extraction：已完成并独立核验
 
 用户在关系/inventory 独立复核完成后明确回复“ok，接着做”，授权只推进 exact feature extraction。机器记录
 [`../configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json`](../configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json)
@@ -446,15 +447,25 @@ verification report SHA-256 为 `48d69371…2756`。本地 Git-ignored manifest 
 新入口 `extract_clir_scale_features.py` 不改变通用 exact-ID 数学定义，只补正式规模所需的恢复与审计层：按 query
 的总 feature token 做固定 largest-first 八路均衡；同题所有 view 在同一 GPU worker；tensor 与 query marker
 分别原子发布；无 marker 的现有 payload 必须 reload 验证后才续用；8个 writer 全通过后，再由8个 CPU verifier
-逐个重读1,969个 payload，检查 shape、BF16、contiguous、finiteness 和 SHA-256。最终预期 raw tensor bytes 必须
-精确等于 `105451923456`，且报告继续 `training_allowed=false`。完整执行规则见
-[`feature_extraction_protocol_v6_1.md`](feature_extraction_protocol_v6_1.md)。本段在执行前只表示“授权与实现冻结”，
-不表示 feature 已经完成；只有 finalize PASS 才能改状态。
+逐个重读1,969个 payload，检查 shape、BF16、contiguous、finiteness 和 SHA-256。完整执行规则见
+[`feature_extraction_protocol_v6_1.md`](feature_extraction_protocol_v6_1.md)。
+
+正式 run3 已在 code commit `64470c8c76ffdbeee3c1f810e8d0ea9d86752b95` 上完成：plan hash
+`1a096175…67cf`、全宽 preflight hash `9080bd88…85d3`、最终报告 hash `a1ce2d9b…8daa`，终态
+`PASS_SELECTED_FEATURE_EXTRACTION_AND_VERIFICATION_V6_1`。8个 writer 与8个独立 verifier 均通过；1,357个
+trajectory +612个 condition 的 shape/BF16/contiguous/finiteness/SHA 全量一致，raw/serialized bytes 分别为
+`105451923456` / `105455351485`。最终 extracted manifest hash 为 `ac1f35ff…7a8b`，有序行 hash
+`1901e88c…c50`；`CLIRTrajectoryDataset` 额外成功加载普通行和最长980-token行。两个早期 preflight 停止目录
+均为0 tensor，正式目录无 partial 文件，完整16,000条从未抽取。可提交的机器摘要是
+[`../configs/data_expansion_scale_v6/feature_extraction_completion_v6_1.json`](../configs/data_expansion_scale_v6/feature_extraction_completion_v6_1.json)；
+约102 GiB本地 artifact 保持 Git ignore。这个 PASS 不证明 Consistency 可学或提高 BoN，且最终报告继续
+`training_allowed=false`；下一门是单独的 C-only 训练授权。
 
 用户报告全部 shard 完成后，
 [`../configs/data_expansion_scale_v6/post_annotation_authorization.json`](../configs/data_expansion_scale_v6/post_annotation_authorization.json)
-（SHA-256 `7dcd096a…ab34`）只解锁 deterministic label audit、条件式 400/150 选择和 frozen hard-negative
-feasibility；第三模型、裁决、修标签/阈值、feature extraction 和训练仍全部关闭。
+（SHA-256 `7dcd096a…ab34`）在其阶段只解锁 deterministic label audit、条件式 400/150 选择和 frozen
+hard-negative feasibility；它没有授权第三模型、裁决、修标签/阈值、feature extraction 或训练。后来的 selected
+feature PASS 只来自上面的独立授权；训练至今仍关闭。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -650,8 +661,9 @@ hallucination_onset = k
    失败作为 pipeline-smoke 诊断。
 2. C prompt-v4 已失败；v5 机械筛选/双盲事实审计通过；v6 raw gate 通过但旧 hard-negative 仅8/150；用户批准的
    v6.1 已在不改阈值和正关系的前提下发布并独立复核400 train positives、150 heldout positives、150 heldout
-   hard negatives 及1,357-view inventory。下一步不是继续改负例或直接训练，而是另发 exact selected-view
-   feature-extraction 授权；只抽 inventory，完成逐文件 shape/BF16/finiteness/hash 核验后再申请 C-only 训练。
+   hard negatives 及1,357-view inventory。selected-view feature extraction 也已对1,969个 payload 全量通过独立
+   核验。下一步不是继续改负例、抽全池或直接沿用旧配置训练，而是另发 hash-bound C-only 训练/heldout 机制评估
+   协议与授权；当前 `training_allowed=false`。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
 4. Prior 先用 40–60 条全新轨迹标显式 dependency edges，由确定性传递闭包得到 Complete、再选 Key；只有

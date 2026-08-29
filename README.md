@@ -274,7 +274,7 @@ hidden controls 各 4/4，A self-repeats=3/3，理由前缀和 schema 全部合�
 允许另写正式 Consistency 扩量协议。v5 自身仍 `eligible_for_training=false`、禁止第三模型补救，不抽 hidden
 state、不训练，也不产生 Consistency efficacy 或 Best-of-N 结论。
 
-## 数据扩容主协议 v6/v6.1：关系清单已通过双重核验
+## 数据扩容主协议 v6/v6.1：关系与 selected feature 已通过核验
 
 用户已确认先完成正式扩容准备，不直接继续旧 Full 或在旧小数据上增加 epoch。新的
 [`docs/data_expansion_scale_protocol_v6.md`](docs/data_expansion_scale_protocol_v6.md) 与
@@ -375,21 +375,30 @@ SHA-256 为 `71a470e6…bb75`。第二次从父级标签、proposal 和 material
 精确 inventory 是1,357 个 trajectory、612 个 query prompt，共520,103 个 feature token，按 `101376×BF16`
 为98.210 GiB（105.452 GB）。其中 hard negatives 与正关系重叠43 个 view，真正新增257 个 trajectory 和62 个
 prompt；早先“101 个新 prompt”的只读估算没有扣掉44 个已随正关系保存的 query prompt，现已纠正。这个 PASS
-只说明 Consistency 扩量关系构造闭环，不证明模块提高 Best-of-N。feature extraction 和训练仍为 false，下一门
-必须单独授权且只能抽 inventory 中的视图，不能抽16,000 条全池。
+只说明 Consistency 扩量关系构造闭环，不证明模块提高 Best-of-N。关系报告在其冻结时点正确保持
+`feature_extraction_allowed=false`、`training_allowed=false`；后续特征抽取必须另行授权且只能消费 inventory，
+不能抽16,000 条全池。
 
 用户随后授权只推进这份 inventory 的 exact feature extraction。机器授权
 [`feature_extraction_authorization_v6_1.json`](configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json)
 与人读协议 [`feature_extraction_protocol_v6_1.md`](docs/feature_extraction_protocol_v6_1.md) 把范围固定为：1,357 条
 trajectory、612 份 condition、Phi 固定 revision、33×3072 全层 BF16、8 个 query-balanced GPU worker，再由8个
 CPU verifier 逐文件复核 shape/dtype/finiteness/SHA。新入口 `extract_clir_scale_features.py` 支持原子 tensor、
-query completion marker 和安全续跑；完整16,000条抽取、重生成、改标签/关系/阈值和训练仍禁止。当前只记录
-授权与执行实现已经冻结，正式结果必须等 plan、全宽 preflight、8个 writer、8个 verifier 和 finalize 全部通过后
-再更新，不能预写成完成。
+query completion marker 和安全续跑；完整16,000条抽取、重生成、改标签/关系/阈值和训练仍禁止。
+
+该授权现已完整执行。正式 run3 绑定 code commit `64470c8`，plan、最长样本全宽 preflight、8个 GPU writer、
+8个 CPU independent verifier 和 finalize 全部通过，终态
+`PASS_SELECTED_FEATURE_EXTRACTION_AND_VERIFICATION_V6_1`。1,357个 trajectory 与612个 condition 共1,969个
+BF16 payload 全部逐文件重读，shape/contiguous/finiteness/SHA 与 writer digest 一致；raw/serialized bytes 分别为
+`105451923456` / `105455351485`。最终报告 hash 为 `a1ce2d9b…8daa`，extracted manifest hash 为
+`ac1f35ff…7a8b`，训练读取器也已只读加载普通样本和980-token最长样本。大 artifact 继续 Git ignore；远端只保存
+代码、授权、完成摘要和关键文档。这个 PASS 仍只是 exact feature pipeline 证据，`training_allowed=false`；
+下一门是单独冻结并授权 C-only 训练与 heldout 正/负关系机制评估。
 
 [`post_annotation_authorization.json`](configs/data_expansion_scale_v6/post_annotation_authorization.json)（SHA-256
-`7dcd096a…ab34`）只解锁这次 deterministic audit、条件式正关系选择和 frozen hard-negative feasibility；provider、
-第三模型、改标签/阈值、feature extraction 与训练仍为 false。
+`7dcd096a…ab34`）在其阶段只解锁 deterministic audit、条件式正关系选择和 frozen hard-negative feasibility；
+它没有授权 provider、第三模型、改标签/阈值、feature extraction 或训练。后来的 selected feature 完成状态只来自
+上面的独立 feature authorization；训练至今仍为 false。
 
 ## 目录
 
@@ -402,7 +411,7 @@ configs/data_expansion_smoke_v2/      双审查后多题源扩量 smoke 的机�
 configs/data_expansion_smoke_v3/      当前 MATH 扩量 smoke 的机器协议与标注语义
 configs/data_expansion_smoke_v4/      Consistency 提示词修复、14-ID 回放清单与机器门
 configs/data_expansion_smoke_v5/      Consistency 机械筛选与双 AI 事实审计协议/启动提示词
-configs/data_expansion_scale_v6/      正式扩容：v6 基础协议、授权与 v6.1 hard-negative 修订
+configs/data_expansion_scale_v6/      正式扩容：v6/v6.1 授权、修订与 selected-feature 完成摘要
 prepare_clir_smoke.py                  v2/v3 数据管线与 v4/v5 Consistency gate 入口
 prepare_clir_scale.py                  v6 rollout/材料化/标注审计及 v6.1 关系规划与独立核验
 src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约
@@ -427,7 +436,7 @@ docs/data_expansion_smoke_protocol_v2.md  双审查整合后的 100-query smoke 
 docs/data_expansion_smoke_protocol_v3.md  当前 160-query primary acquisition 与双标协议
 docs/data_expansion_smoke_protocol_v4.md  Consistency 提示词修复与新样本确认门
 docs/data_expansion_smoke_protocol_v5.md  Consistency 机械筛选与新鲜双盲事实审计
-docs/data_expansion_scale_protocol_v6.md  当前数据扩容主协议；已发布 v6.1 关系与 inventory
+docs/data_expansion_scale_protocol_v6.md  当前数据扩容主协议；v6.1 关系与 selected feature 均完成
 docs/feature_extraction_protocol_v6_1.md  v6.1 selected inventory 精确特征抽取协议
 ```
 

@@ -1,6 +1,6 @@
 # CLIR Consistency v6.1 精确特征抽取协议
 
-状态：`AUTHORIZED_SELECTED_INVENTORY_EXTRACTION_ONLY`
+状态：`PASS_SELECTED_FEATURE_EXTRACTION_AND_VERIFICATION_V6_1`
 
 授权日期：2026-08-29。机器授权文件：
 `configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json`。
@@ -106,3 +106,27 @@ tracked 文件会使后续命令 fail closed。
 
 通过只证明“选定关系的 exact-token 全层特征已完整、可读取、可复核”，属于数据/工程 pipeline 证据。它不证明
 Consistency 可学，更不证明 Best-of-N 提升。下一个独立决策门才是 C-only 训练与 heldout 正负关系机制评估。
+
+## 7. 正式执行结果
+
+正式执行绑定 clean code commit `64470c8c76ffdbeee3c1f810e8d0ea9d86752b95`，写入全新的 Git-ignored
+目录 `run_artifacts/data_expansion_scale_v6/features_v6_1_run3/`。plan、全宽 preflight、8 个 GPU writer、
+8 个 CPU independent verifier 和 finalize 依次通过：
+
+- plan SHA-256：`1a0961753e0babcd572a311fb134f97315bd7f29ff8994d0d41a5152b68f67cf`；
+- preflight SHA-256：`9080bd88bca3523c214ea73f1dd050244752cabd9d431a7c93786c4ddad285d3`；
+- 最终报告 SHA-256：`a1ce2d9b2023f97497714977a2faac3e926f5d9a34a397bb63c249c837848daa`；
+- extracted manifest SHA-256：`ac1f35ff124f05caebd1676fdb29cb299f6f169a6bb2007b0133c124d8a47a8b`，
+  有序行 hash `1901e88c214dff5b3755620776b527a2df3a2ed7306812048effb2909ed98c50`；
+- payload 为1,357个 trajectory +612个 condition，共1,969个文件；raw tensor bytes
+  `105451923456`，PyTorch 序列化后 `105455351485` bytes；
+- verifier 逐文件重读并核验全部 shape、BF16、contiguous、finiteness 与 SHA-256；8组 writer/verifier 的
+  payload digest 各自完全一致；
+- `CLIRTrajectoryDataset` 额外只读加载普通行和最长行成功；最长行 trajectory/condition 为
+  `[980,101376]` / `[85,101376]`，dtype 均为 BF16；
+- 两个早期 preflight 目录都没有写入 tensor，正式目录没有临时/partial 文件；完整16,000条 rollout 从未抽取。
+
+机器可提交的结果摘要见
+`configs/data_expansion_scale_v6/feature_extraction_completion_v6_1.json`。大 tensor、worker report 和最终 manifest
+继续只保存在 Git-ignored artifact 目录。终态仍是 `training_allowed=false`；下一门是
+`SEPARATE_C_ONLY_TRAINING_AUTHORIZATION`，本阶段没有启动任何训练。

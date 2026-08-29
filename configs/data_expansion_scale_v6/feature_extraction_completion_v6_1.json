@@ -1,0 +1,66 @@
+{
+  "schema_version": "clir-consistency-scale-v6.1-feature-extraction-completion",
+  "status": "PASS_SELECTED_FEATURE_EXTRACTION_AND_VERIFICATION_V6_1",
+  "completed_at_utc": "2026-08-29T13:22:48Z",
+  "evidence_tier": "pipeline_pilot_exact_feature_publication",
+  "code_commit": "64470c8c76ffdbeee3c1f810e8d0ea9d86752b95",
+  "authorization_file": {
+    "path": "configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json",
+    "file_sha256": "ec1d2d5c613976d088362eb0eb959ae40f6387bc380428669351500d425d4bfc"
+  },
+  "local_artifact_root": "run_artifacts/data_expansion_scale_v6/features_v6_1_run3",
+  "local_artifacts": {
+    "plan": {
+      "path": "plan/extraction_plan.json",
+      "file_sha256": "1a0961753e0babcd572a311fb134f97315bd7f29ff8994d0d41a5152b68f67cf"
+    },
+    "preflight_report": {
+      "path": "preflight/preflight_report.json",
+      "file_sha256": "9080bd88bca3523c214ea73f1dd050244752cabd9d431a7c93786c4ddad285d3"
+    },
+    "final_report": {
+      "path": "final/feature_extraction_report.json",
+      "file_sha256": "a1ce2d9b2023f97497714977a2faac3e926f5d9a34a397bb63c249c837848daa"
+    },
+    "extracted_manifest": {
+      "path": "final/extracted_selected_features.jsonl",
+      "row_count": 1357,
+      "file_sha256": "ac1f35ff124f05caebd1676fdb29cb299f6f169a6bb2007b0133c124d8a47a8b",
+      "ordered_rows_sha256": "1901e88c214dff5b3755620776b527a2df3a2ed7306812048effb2909ed98c50",
+      "sidecar_file_sha256": "8b363f60e90dcf79aadc27a192866c5e4b34cbc51ce190b448b0bf01a13f9299"
+    }
+  },
+  "verified_population": {
+    "trajectory_payload_count": 1357,
+    "condition_payload_count": 612,
+    "payload_count": 1969,
+    "query_count": 612,
+    "output_token_count": 460151,
+    "prompt_token_count": 59952,
+    "total_feature_token_count": 520103,
+    "raw_tensor_bytes": 105451923456,
+    "serialized_bytes": 105455351485
+  },
+  "feature_contract": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "num_feature_layers": 33,
+    "per_layer_dim": 3072,
+    "feature_dim": 101376,
+    "input_axis_truth": "saved_prompt_token_ids_plus_saved_output_token_ids"
+  },
+  "verification": {
+    "extraction_worker_count": 8,
+    "independent_verifier_count": 8,
+    "every_payload_reloaded": true,
+    "all_shapes_dtypes_contiguity_finiteness_and_checksums_verified": true,
+    "writer_verifier_payload_digests_match": true,
+    "clir_trajectory_dataset_read_compatibility_checked": true,
+    "full_16000_rollout_pool_extracted": false
+  },
+  "claim_boundary": "exact_selected_feature_publication_and_readability_only_not_consistency_learnability_or_ranking_efficacy",
+  "training_allowed": false,
+  "next_gate": "SEPARATE_C_ONLY_TRAINING_AUTHORIZATION"
+}

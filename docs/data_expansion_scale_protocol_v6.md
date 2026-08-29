@@ -35,13 +35,19 @@ common accepts train/heldout=`474/167`。这些只证明双 AI Silver 操作一�
 v6.1 修订结果（2026-08-29）：用户在看过上述失败与可行性诊断后批准仅修改 hard-negative 来源池、匹配器和
 精确存储重算。commit `bb99261` 上的 plan 与独立 verifier 分别以
 `PASS_SCALE_V6_1_POST_ANNOTATION_PLAN` / `PASS_SCALE_V6_1_INDEPENDENT_RECOMPUTATION` 结束，发布本地
-400/150/150 关系和1,357-view inventory。该覆盖不改基础 v6 历史状态，也不授权 feature extraction 或训练。
+400/150/150 关系和1,357-view inventory。该“关系修订”本身不改基础 v6 历史状态，也不授权 feature extraction
+或训练；后续抽取由下面的独立覆盖授权。
 
 特征抽取覆盖（2026-08-29）：用户在上述关系与 inventory 独立复核后另行授权只抽 selected inventory。授权与
 执行细则分别见 `configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json` 和
 `docs/feature_extraction_protocol_v6_1.md`。该新覆盖允许1,357 trajectory +612 condition 的 exact-ID 全层 BF16
 抽取、分片续跑和逐文件独立复核；仍禁止完整16,000条抽取及任何训练。基础 v6 与 v6.1 关系报告里的
 `feature_extraction_allowed=false` 是它们各自冻结时点的正确边界，不被事后改写。
+
+该抽取覆盖现已执行完成：code commit `64470c8` 上的 plan、全宽 preflight、8个 writer、8个 independent
+verifier 和 finalize 全部通过，最终报告 SHA-256 为 `a1ce2d9b…8daa`。1,357 trajectory +612 condition 共
+1,969个 payload 的 raw bytes 精确为 `105451923456`，逐文件 shape/BF16/contiguous/finiteness/SHA 均通过；
+extracted manifest SHA-256 为 `ac1f35ff…7a8b`。这只关闭 selected-feature 工程门，训练仍未授权。
 
 冻结日期：2026-08-26
 
@@ -354,6 +360,23 @@ STOP 报告完全相同。plan report SHA-256 为 `71a470e6b3b34f59906eca84502f6
 trajectory、612 个 prompt、520,103 个 feature token，即98.210 GiB（105.452 GB）。所有 relation、inventory
 和报告只在 Git-ignored artifact 目录；远端只保留实现与关键协议。
 
-这个 PASS 关闭的是 Consistency 数据构造门，不是训练或效果门。两个报告都固定
-`feature_extraction_allowed=false`、`training_allowed=false`；下一动作必须是新的 selected-view extraction
-授权和核验协议，且只能消费 inventory，不得把 v6.1 当成 H/Prior/ranking 扩容或 Best-of-N 增益证据。
+这个 PASS 关闭的是 Consistency 数据构造门，不是训练或效果门。两个关系报告都在其冻结时点固定
+`feature_extraction_allowed=false`、`training_allowed=false`；后续特征抽取必须另行授权且只能消费 inventory，
+不得把 v6.1 当成 H/Prior/ranking 扩容或 Best-of-N 增益证据。
+
+### v6.1 selected-inventory 特征抽取正式结果
+
+独立授权、实现和协议先冻结，正式 run3 再绑定 clean code commit
+`64470c8c76ffdbeee3c1f810e8d0ea9d86752b95` 执行。plan SHA-256 为
+`1a0961753e0babcd572a311fb134f97315bd7f29ff8994d0d41a5152b68f67cf`；最长980-token样本的全宽
+preflight 通过；8个 GPU writer 与8个 CPU independent verifier 全部通过。finalize 终态为
+`PASS_SELECTED_FEATURE_EXTRACTION_AND_VERIFICATION_V6_1`，报告 SHA-256 为
+`a1ce2d9b2023f97497714977a2faac3e926f5d9a34a397bb63c249c837848daa`。
+
+最终本地 manifest 有1,357行，SHA-256 为
+`ac1f35ff124f05caebd1676fdb29cb299f6f169a6bb2007b0133c124d8a47a8b`，有序行 hash 为
+`1901e88c214dff5b3755620776b527a2df3a2ed7306812048effb2909ed98c50`。1,357个 trajectory 与612个 condition
+共1,969个 BF16 payload 全量重读通过，raw/serialized bytes 为 `105451923456` / `105455351485`；训练读取器
+额外通过普通样本与最长样本加载检查。约102 GiB artifact 只留在 Git-ignored 目录，机器摘要见
+`configs/data_expansion_scale_v6/feature_extraction_completion_v6_1.json`。完整16,000条没有抽取，训练没有启动，
+终态 `training_allowed=false`；唯一下一门是单独冻结和授权 C-only 训练及 heldout 正/负关系机制评估。

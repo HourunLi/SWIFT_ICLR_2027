@@ -1,0 +1,77 @@
+{
+  "schema_version": "clir-h0-v7.2-fresh-supplement-authorization",
+  "status": "AUTHORIZED_ONE_FRESH_SUPPLEMENT_ROLLOUT_ONLY",
+  "authorized_at_utc": "2026-08-29T17:41:21Z",
+  "authorization_source": {
+    "kind": "explicit_user_confirmation_in_active_codex_thread",
+    "user_instruction": "可以，你按照我们之前的计划做就行",
+    "scope_is_the_preregistered_new_query_pool_after_FAIL_yield": true,
+    "ai_labels_were_not_opened": true
+  },
+  "frozen_parent": {
+    "base_protocol_file_sha256": "1e9de5d1c6d23c63a7ed6a501440329ce78cdfdb0e26ade2e2189dad56440155",
+    "supplement_file_sha256": "728230db164270ac5f0627ebf213f174072bbe59d261c309e480372b1227f09a",
+    "supplement_code_commit": "3521db45e0792960b1499f2d9ad227c5c613851d",
+    "pre_rollout_directory": "run_artifacts/ranking_expansion_v7/pre_annotation/supplement_v7_2/pre_rollout",
+    "pre_rollout_registry_file_sha256": "684a9c8a2f3c5cc7188067cddcf36485c664ef1f89678aa8d61ecc08be5c1eca",
+    "freeze_report_file_sha256": "1f59e8a877ef7c1a1534632ec6de8048218ffc8f2800ad3ee0c88f810274988e",
+    "independent_verification_file_sha256": "6560fe79e17d453872251aef2d14ca1cac7670b336fca5eace4a76fd1ab1d88f",
+    "query_file_sha256": "4f3b18ed21e7b52ae4423453e23dd401db746861678ce5c9f651b59a271c76f7",
+    "query_sidecar_file_sha256": "a938cf63eef0c6bc3374d2dff84e1f23d095f1256f663840bd6136797f6a8211",
+    "shards_file_sha256": "d65ca53bc81e9cb589ba40809aabf3e990cbda73dd72f26624863f6941ad16ca",
+    "source_audit_file_sha256": "c60735d4dac54641207a5cf356ea65945c2ccd649a2626df65fe29789d3d1a1a",
+    "freeze_status": "PASS_H0_V7_2_FRESH_SUPPLEMENT_FREEZE",
+    "verification_status": "PASS_H0_V7_2_FRESH_SUPPLEMENT_INDEPENDENT_RECOMPUTE",
+    "query_count": 180,
+    "candidate_rows": 2880,
+    "query_overlap_with_v7": 0,
+    "cluster_overlap_with_v7": 0
+  },
+  "authorized_scope": {
+    "one_fresh_supplement_rollout": true,
+    "checker_and_unitizer_materialization": true,
+    "rerun_original_proposal_freeze_once": true,
+    "adaptive_additional_sampling": false,
+    "ai_annotation": false,
+    "query_role_or_split_change": false,
+    "threshold_or_quota_change": false,
+    "feature_extraction": false,
+    "training": false
+  },
+  "runtime_contract": {
+    "first_calibration_shard": "supplement-000",
+    "continue_after_calibration_if_all_mechanical_runtime_checks_pass": true,
+    "maximum_concurrent_shards": 8,
+    "cuda_devices_per_shard": 1,
+    "tensor_parallel_size": 1,
+    "dtype": "bfloat16",
+    "max_num_seqs": 32,
+    "gpu_memory_utilization": 0.9,
+    "cache_dir": "run_artifacts/model_cache",
+    "output_root": "run_artifacts/ranking_expansion_v7/pre_annotation/supplement_v7_2",
+    "candidate_count": 16,
+    "candidate_index_start": 0,
+    "candidate_index_end_exclusive": 16,
+    "existing_complete_shard_policy": "verify_and_skip",
+    "existing_incomplete_shard_policy": "stop_without_overwrite",
+    "merge_requires_all_8_verified_shards": true,
+    "clean_git_commit_required": true
+  },
+  "calibration_gate": {
+    "shard_id": "supplement-000",
+    "query_count": 23,
+    "candidate_rows": 368,
+    "candidate_indices_per_query": "exact_0_through_15",
+    "exact_frozen_prompt_id_parity_required": true,
+    "nonempty_output_token_ids_required": true,
+    "model_revision_match_required": true,
+    "backend_version_match_required": true,
+    "clean_git_commit_required": true,
+    "finish_reason_length_is_retained_for_later_ineligibility_not_a_rollout_failure": true
+  },
+  "stop_rule": {
+    "adaptive_sampling_after_this_fresh_pool": "forbidden",
+    "if_the_original_800_proposal_cells_remain_short": "stop_and_report_FAIL_yield_before_any_AI_annotation"
+  },
+  "next_gate": "calibrate_supplement_000_then_generate_remaining_7_shards_then_materialize_and_rerun_the_800_proposal_gate"
+}

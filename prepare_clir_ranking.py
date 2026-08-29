@@ -22,6 +22,15 @@ import subprocess
 import time
 from typing import Any, Mapping, Sequence
 
+from src.clir_h_expansion import (
+    H_PACKAGE_SCHEMA,
+    H_PROPOSAL_SCHEMA,
+    build_h_annotation_packages,
+    build_h_proposals,
+    evaluate_h_package_labels,
+    smoke_gate,
+    split_smoke_and_reserve,
+)
 from src.clir_ranking_scale import (
     H_ROLE,
     RANKING_ROLE,
@@ -35,14 +44,20 @@ from src.clir_scale import (
     build_template_clusters,
 )
 from src.clir_smoke import (
+    UNITIZER_VERSION,
     atomic_write_json,
     canonical_sha256,
+    check_numeric_response,
     extract_math_numeric_reference,
     file_sha256,
     publish_manifest,
     read_jsonl,
     stable_priority,
     validate_rollout_population,
+)
+from src.clir_scale_pre_annotation import (
+    materialize_scale_rows,
+    validate_scale_materialized_rows,
 )
 
 
@@ -53,6 +68,12 @@ DEFAULT_AUTHORIZATION = (
     PROJECT_ROOT / "configs/ranking_expansion_v7/rollout_authorization.json"
 )
 DEFAULT_ROLLOUT_ROOT = PROJECT_ROOT / "run_artifacts/ranking_expansion_v7"
+DEFAULT_PRE_ANNOTATION_AUTHORIZATION = (
+    PROJECT_ROOT / "configs/ranking_expansion_v7/pre_annotation_authorization.json"
+)
+DEFAULT_PRE_ANNOTATION_ROOT = (
+    PROJECT_ROOT / "run_artifacts/ranking_expansion_v7/pre_annotation"
+)
 REQUIRED_FILES = (
     "source_inventory.json",
     "permanent_exclusions.jsonl",
@@ -1494,6 +1515,608 @@ def command_merge_rollouts(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
+def _read_published_jsonl(
+    path: Path, *, expected_schema: str | None = None
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    sidecar_path = path.with_suffix(path.suffix + ".manifest.json")
+    if not path.is_file() or not sidecar_path.is_file():
+        raise FileNotFoundError(f"published JSONL or sidecar is missing: {path}")
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    if expected_schema is not None and sidecar.get("schema_version") != expected_schema:
+        raise ValueError(f"{path}: published schema differs from {expected_schema}")
+    if sidecar.get("file_sha256") != file_sha256(path):
+        raise ValueError(f"{path}: file hash differs from sidecar")
+    rows = read_jsonl(path)
+    if int(sidecar.get("row_count", -1)) != len(rows):
+        raise ValueError(f"{path}: sidecar row count mismatch")
+    if sidecar.get("ordered_rows_sha256") != canonical_sha256(rows):
+        raise ValueError(f"{path}: sidecar ordered-row hash mismatch")
+    return rows, sidecar
+
+
+def _verify_rollout_merge_contract(
+    *,
+    protocol_path: Path,
+    rollout_authorization_path: Path,
+    pre_rollout_dir: Path,
+    rollout_root: Path,
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, Any],
+]:
+    protocol, authorization, _, _ = _load_rollout_contract(
+        protocol_path=protocol_path,
+        authorization_path=rollout_authorization_path,
+        pre_rollout_dir=pre_rollout_dir,
+        rollout_root=rollout_root,
+    )
+    report_path = rollout_root / "rollout_completion_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if report.get("status") != "PASS_ALL_32000_RAW_ROLLOUTS_VERIFIED_V7":
+        raise ValueError("ranking-v7 rollout completion report is not a PASS")
+    if report.get("authorization_file_sha256") != file_sha256(
+        rollout_authorization_path
+    ):
+        raise ValueError("rollout completion report authorization hash mismatch")
+    ranking_path = rollout_root / "rollouts/ranking_combined_raw.jsonl"
+    h_path = rollout_root / "rollouts/h_combined_raw.jsonl"
+    ranking, ranking_sidecar = _read_published_jsonl(
+        ranking_path,
+        expected_schema="clir-ranking-v7-ranking_evaluation-combined-raw-rollouts",
+    )
+    h_rows, h_sidecar = _read_published_jsonl(
+        h_path,
+        expected_schema="clir-ranking-v7-hallucination_acquisition-combined-raw-rollouts",
+    )
+    expected = {
+        RANKING_ROLE: (ranking, ranking_sidecar),
+        H_ROLE: (h_rows, h_sidecar),
+    }
+    for role, (rows, sidecar) in expected.items():
+        record = report["roles"][role]
+        if (
+            record.get("file_sha256") != sidecar["file_sha256"]
+            or record.get("ordered_rows_sha256") != sidecar["ordered_rows_sha256"]
+            or int(record.get("rows", -1)) != len(rows)
+        ):
+            raise ValueError(f"rollout completion report drift for {role}")
+    return protocol, authorization, ranking, h_rows, report
+
+
+def load_pre_annotation_authorization(
+    path: Path,
+    *,
+    protocol_path: Path,
+    rollout_authorization_path: Path,
+    pre_rollout_dir: Path,
+    rollout_root: Path,
+) -> dict[str, Any]:
+    authorization = json.loads(path.read_text(encoding="utf-8"))
+    if authorization.get("schema_version") != (
+        "clir-ranking-v7-pre-annotation-authorization"
+    ):
+        raise ValueError("unsupported ranking-v7 pre-annotation authorization")
+    if authorization.get("status") != (
+        "AUTHORIZED_CHECKER_UNITIZER_PROPOSAL_AND_SMOKE_PACKAGE_ONLY"
+    ):
+        raise ValueError("ranking-v7 pre-annotation stage is not authorized")
+    scope = authorization.get("authorized_scope", {})
+    required_true = {
+        "ranking_checker_materialization",
+        "h_checker_and_unitizer_materialization",
+        "h_proposal_freeze",
+        "smoke_blind_package_construction",
+    }
+    required_false = {
+        "ai_annotation_or_provider_call",
+        "reserve_package_construction_before_smoke_pass",
+        "label_finalization",
+        "feature_extraction",
+        "training",
+        "threshold_or_query_manifest_change",
+    }
+    if any(scope.get(name) is not True for name in required_true) or any(
+        scope.get(name) is not False for name in required_false
+    ):
+        raise ValueError("pre-annotation authorization scope is invalid")
+    protocol, _, ranking, h_rows, report = _verify_rollout_merge_contract(
+        protocol_path=protocol_path,
+        rollout_authorization_path=rollout_authorization_path,
+        pre_rollout_dir=pre_rollout_dir,
+        rollout_root=rollout_root,
+    )
+    parent = authorization["frozen_parent"]
+    expected = {
+        "protocol_file_sha256": file_sha256(protocol_path),
+        "rollout_authorization_file_sha256": file_sha256(rollout_authorization_path),
+        "rollout_completion_report_file_sha256": file_sha256(
+            rollout_root / "rollout_completion_report.json"
+        ),
+        "ranking_combined_file_sha256": file_sha256(
+            rollout_root / "rollouts/ranking_combined_raw.jsonl"
+        ),
+        "ranking_combined_ordered_rows_sha256": canonical_sha256(ranking),
+        "h_combined_file_sha256": file_sha256(
+            rollout_root / "rollouts/h_combined_raw.jsonl"
+        ),
+        "h_combined_ordered_rows_sha256": canonical_sha256(h_rows),
+    }
+    for key, value in expected.items():
+        if parent.get(key) != value:
+            raise ValueError(f"pre-annotation authorization {key} mismatch")
+    if report.get("protocol_file_sha256") != file_sha256(protocol_path):
+        raise ValueError("rollout completion protocol hash mismatch")
+    if protocol["checker"]["unitizer_version"] != UNITIZER_VERSION:
+        raise ValueError("protocol unitizer differs from installed frozen unitizer")
+    return authorization
+
+
+def _load_pre_annotation_contract(
+    args: argparse.Namespace,
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    Path,
+]:
+    protocol_path = Path(args.protocol).resolve()
+    rollout_authorization_path = Path(args.authorization).resolve()
+    pre_authorization_path = Path(args.pre_annotation_authorization).resolve()
+    pre_rollout_dir = Path(args.pre_rollout_dir).resolve()
+    rollout_root = Path(args.rollout_root).resolve()
+    output_root = Path(args.pre_annotation_root).resolve()
+    authorization = load_pre_annotation_authorization(
+        pre_authorization_path,
+        protocol_path=protocol_path,
+        rollout_authorization_path=rollout_authorization_path,
+        pre_rollout_dir=pre_rollout_dir,
+        rollout_root=rollout_root,
+    )
+    expected_root = _project_path(
+        authorization["runtime_contract"]["output_root"]
+    ).resolve()
+    if output_root != expected_root:
+        raise ValueError(
+            f"pre-annotation root differs from authorization: {output_root} != {expected_root}"
+        )
+    protocol, _, ranking, h_rows, _ = _verify_rollout_merge_contract(
+        protocol_path=protocol_path,
+        rollout_authorization_path=rollout_authorization_path,
+        pre_rollout_dir=pre_rollout_dir,
+        rollout_root=rollout_root,
+    )
+    return protocol, authorization, ranking, h_rows, output_root
+
+
+def _require_clean_execution(stage: str) -> str:
+    if _git_dirty():
+        raise RuntimeError(f"{stage} requires a clean Git commit")
+    return _git_head()
+
+
+def command_materialize_h(args: argparse.Namespace) -> None:
+    protocol, _, ranking_raw, h_raw, output_root = _load_pre_annotation_contract(args)
+    code_commit = _require_clean_execution("ranking-v7 materialization")
+    ranking_path = output_root / "materialized/ranking_checked.jsonl"
+    h_path = output_root / "materialized/h_materialized.jsonl"
+    report_path = output_root / "materialized/materialization_report.json"
+    if any(
+        path.exists()
+        for path in (
+            ranking_path,
+            ranking_path.with_suffix(ranking_path.suffix + ".manifest.json"),
+            h_path,
+            h_path.with_suffix(h_path.suffix + ".manifest.json"),
+            report_path,
+        )
+    ):
+        raise FileExistsError("ranking-v7 materialization artifacts already exist")
+    try:
+        from transformers import AutoTokenizer
+    except ImportError as exc:
+        raise SystemExit("ranking-v7 unitization requires transformers") from exc
+    generation = protocol["generation"]
+    tokenizer = AutoTokenizer.from_pretrained(
+        generation["model_id"],
+        revision=generation["tokenizer_revision"],
+        use_fast=True,
+        cache_dir=args.cache_dir,
+    )
+    if not getattr(tokenizer, "is_fast", False):
+        raise ValueError("ranking-v7 unitizer requires a fast tokenizer")
+    checker_version = str(protocol["checker"]["checker_version"])
+    ranking_checked: list[dict[str, Any]] = []
+    for raw in ranking_raw:
+        row = dict(raw)
+        row["raw_reference_answer"] = str(row["reference_answer"])
+        checker = check_numeric_response(
+            response=str(row["response"]),
+            raw_reference=row["raw_reference_answer"],
+            source=str(row["source"]),
+            finish_reason=row.get("finish_reason"),
+            checker_version=checker_version,
+        )
+        if checker.get("checker_status") == "parse_failed":
+            checker["eligible_for_supervision"] = False
+        row.update(checker)
+        ranking_checked.append(row)
+    h_materialized, h_health = materialize_scale_rows(
+        h_raw,
+        tokenizer,
+        checker_version=checker_version,
+        unitizer_version=str(protocol["checker"]["unitizer_version"]),
+    )
+    h_validation = validate_scale_materialized_rows(
+        h_materialized,
+        raw_rows=h_raw,
+        candidate_count=int(protocol["roles"][H_ROLE]["candidate_count"]),
+        checker_version=checker_version,
+        unitizer_version=str(protocol["checker"]["unitizer_version"]),
+    )
+    ranking_population = validate_rollout_population(
+        ranking_checked,
+        candidate_count=int(protocol["roles"][RANKING_ROLE]["candidate_count"]),
+    )
+    ranking_statuses = dict(
+        sorted(Counter(str(row["checker_status"]) for row in ranking_checked).items())
+    )
+    ranking_path.parent.mkdir(parents=True, exist_ok=True)
+    ranking_manifest = publish_manifest(
+        ranking_path,
+        ranking_checked,
+        schema_version="clir-ranking-v7-ranking-checked",
+        metadata={
+            "protocol_file_sha256": file_sha256(Path(args.protocol)),
+            "pre_annotation_authorization_file_sha256": file_sha256(
+                Path(args.pre_annotation_authorization)
+            ),
+            "code_commit": code_commit,
+            "checker_version": checker_version,
+            "checker_statuses": ranking_statuses,
+            **ranking_population,
+        },
+    )
+    h_manifest = publish_manifest(
+        h_path,
+        h_materialized,
+        schema_version="clir-ranking-v7-h-materialized",
+        metadata={
+            "protocol_file_sha256": file_sha256(Path(args.protocol)),
+            "pre_annotation_authorization_file_sha256": file_sha256(
+                Path(args.pre_annotation_authorization)
+            ),
+            "code_commit": code_commit,
+            **h_health,
+        },
+    )
+    report = {
+        "schema_version": "clir-ranking-v7-materialization-report",
+        "status": "PASS_RANKING_V7_CHECKER_UNITIZER_MATERIALIZATION",
+        "annotation_started": False,
+        "feature_extraction_started": False,
+        "training_started": False,
+        "code_commit": code_commit,
+        "protocol_file_sha256": file_sha256(Path(args.protocol)),
+        "pre_annotation_authorization_file_sha256": file_sha256(
+            Path(args.pre_annotation_authorization)
+        ),
+        "ranking": {
+            "rows": len(ranking_checked),
+            "file_sha256": ranking_manifest["file_sha256"],
+            "sidecar_file_sha256": file_sha256(
+                ranking_path.with_suffix(ranking_path.suffix + ".manifest.json")
+            ),
+            "ordered_rows_sha256": ranking_manifest["ordered_rows_sha256"],
+            "checker_statuses": ranking_statuses,
+        },
+        "h": {
+            "rows": len(h_materialized),
+            "file_sha256": h_manifest["file_sha256"],
+            "sidecar_file_sha256": file_sha256(
+                h_path.with_suffix(h_path.suffix + ".manifest.json")
+            ),
+            "ordered_rows_sha256": h_manifest["ordered_rows_sha256"],
+            "health": h_health,
+            "validation": h_validation,
+        },
+        "next_gate": "deterministic_h_proposal_freeze",
+    }
+    atomic_write_json(report_path, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def _verify_materialized_h(
+    args: argparse.Namespace,
+) -> tuple[
+    dict[str, Any],
+    Path,
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, Any],
+]:
+    protocol, _, ranking_raw, h_raw, output_root = _load_pre_annotation_contract(args)
+    ranking_path = output_root / "materialized/ranking_checked.jsonl"
+    h_path = output_root / "materialized/h_materialized.jsonl"
+    ranking, ranking_sidecar = _read_published_jsonl(
+        ranking_path, expected_schema="clir-ranking-v7-ranking-checked"
+    )
+    h_rows, h_sidecar = _read_published_jsonl(
+        h_path, expected_schema="clir-ranking-v7-h-materialized"
+    )
+    if len(ranking) != len(ranking_raw) or len(h_rows) != len(h_raw):
+        raise ValueError("materialized row counts differ from raw rollouts")
+    checker_version = str(protocol["checker"]["checker_version"])
+    h_validation = validate_scale_materialized_rows(
+        h_rows,
+        raw_rows=h_raw,
+        candidate_count=int(protocol["roles"][H_ROLE]["candidate_count"]),
+        checker_version=checker_version,
+        unitizer_version=str(protocol["checker"]["unitizer_version"]),
+    )
+    report_path = output_root / "materialized/materialization_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if (
+        report.get("status") != "PASS_RANKING_V7_CHECKER_UNITIZER_MATERIALIZATION"
+        or report["ranking"].get("file_sha256") != ranking_sidecar["file_sha256"]
+        or report["h"].get("file_sha256") != h_sidecar["file_sha256"]
+    ):
+        raise ValueError("materialization report does not bind current rows")
+    return protocol, output_root, ranking, h_rows, h_validation
+
+
+def command_propose_h(args: argparse.Namespace) -> None:
+    protocol, output_root, _, h_rows, h_validation = _verify_materialized_h(args)
+    code_commit = _require_clean_execution("ranking-v7 H proposal freeze")
+    proposal_dir = output_root / "proposals"
+    paths = {
+        "all": proposal_dir / "h_proposals_all.jsonl",
+        "smoke": proposal_dir / "h_smoke_proposals.jsonl",
+        "reserve": proposal_dir / "h_reserve_proposals.jsonl",
+    }
+    report_path = proposal_dir / "proposal_report.json"
+    if report_path.exists() or any(
+        path.exists() or path.with_suffix(path.suffix + ".manifest.json").exists()
+        for path in paths.values()
+    ):
+        raise FileExistsError("ranking-v7 H proposal artifacts already exist")
+    proposals, proposal_report = build_h_proposals(h_rows, protocol)
+    smoke, reserve, split_report = split_smoke_and_reserve(proposals, protocol)
+    proposal_dir.mkdir(parents=True, exist_ok=True)
+    manifests = {
+        name: publish_manifest(
+            paths[name],
+            rows,
+            schema_version=H_PROPOSAL_SCHEMA + f"-{name}",
+            metadata={
+                "protocol_file_sha256": file_sha256(Path(args.protocol)),
+                "pre_annotation_authorization_file_sha256": file_sha256(
+                    Path(args.pre_annotation_authorization)
+                ),
+                "code_commit": code_commit,
+            },
+        )
+        for name, rows in (("all", proposals), ("smoke", smoke), ("reserve", reserve))
+    }
+    report = {
+        "schema_version": "clir-h0-v7-proposal-freeze-report",
+        "status": "PASS_H0_V7_PROPOSAL_FREEZE",
+        "annotation_started": False,
+        "reserve_opened": False,
+        "feature_extraction_started": False,
+        "training_started": False,
+        "code_commit": code_commit,
+        "protocol_file_sha256": file_sha256(Path(args.protocol)),
+        "pre_annotation_authorization_file_sha256": file_sha256(
+            Path(args.pre_annotation_authorization)
+        ),
+        "materialization_validation": h_validation,
+        "proposal": proposal_report,
+        "split": split_report,
+        "files": {
+            name: {
+                "path": str(path),
+                "file_sha256": manifests[name]["file_sha256"],
+                "ordered_rows_sha256": manifests[name]["ordered_rows_sha256"],
+                "row_count": manifests[name]["row_count"],
+                "sidecar_file_sha256": file_sha256(
+                    path.with_suffix(path.suffix + ".manifest.json")
+                ),
+            }
+            for name, path in paths.items()
+        },
+        "next_gate": "construct_smoke_only_blind_packages",
+    }
+    atomic_write_json(report_path, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def _verify_h_proposals(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], Path, dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    protocol, output_root, _, _, _ = _verify_materialized_h(args)
+    report_path = output_root / "proposals/proposal_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if report.get("status") != "PASS_H0_V7_PROPOSAL_FREEZE":
+        raise ValueError("H proposal report is not a PASS")
+    rows: dict[str, list[dict[str, Any]]] = {}
+    for name in ("all", "smoke", "reserve"):
+        path = output_root / f"proposals/h_{name}_proposals.jsonl"
+        if name == "all":
+            path = output_root / "proposals/h_proposals_all.jsonl"
+        payload, sidecar = _read_published_jsonl(
+            path, expected_schema=H_PROPOSAL_SCHEMA + f"-{name}"
+        )
+        record = report["files"][name]
+        if (
+            record["file_sha256"] != sidecar["file_sha256"]
+            or record["ordered_rows_sha256"] != sidecar["ordered_rows_sha256"]
+            or int(record["row_count"]) != len(payload)
+        ):
+            raise ValueError(f"H {name} proposal record drift")
+        rows[name] = payload
+    if (
+        len(rows["all"]) != 800
+        or len(rows["smoke"]) != 80
+        or len(rows["reserve"]) != 720
+    ):
+        raise ValueError("H proposal partition counts differ from protocol")
+    return protocol, output_root, rows, report
+
+
+def command_package_h(args: argparse.Namespace) -> None:
+    protocol, output_root, proposals, proposal_report = _verify_h_proposals(args)
+    code_commit = _require_clean_execution("ranking-v7 H package construction")
+    stage = str(args.stage)
+    if stage not in {"smoke", "reserve"}:
+        raise ValueError("package stage must be smoke or reserve")
+    if stage == "reserve":
+        smoke_report_path = output_root / "evaluation/smoke_evaluation_report.json"
+        if not smoke_report_path.exists():
+            raise RuntimeError(
+                "reserve package is sealed until the smoke report passes"
+            )
+        smoke_report = json.loads(smoke_report_path.read_text(encoding="utf-8"))
+        if smoke_report.get("status") != "PASS_H0_V7_SMOKE":
+            raise RuntimeError("reserve package is sealed because smoke did not pass")
+    package_dir = output_root / f"packages/{stage}"
+    paths = {
+        "a": package_dir / "annotator_a/hallucination.jsonl",
+        "b": package_dir / "annotator_b/hallucination.jsonl",
+    }
+    private_path = package_dir / "PRIVATE_package_index.jsonl"
+    report_path = package_dir / "package_report.json"
+    if (
+        report_path.exists()
+        or private_path.exists()
+        or any(
+            path.exists() or path.with_suffix(path.suffix + ".manifest.json").exists()
+            for path in paths.values()
+        )
+    ):
+        raise FileExistsError(f"H {stage} package artifacts already exist")
+    packages, private_rows, package_report = build_h_annotation_packages(
+        proposals[stage],
+        stage=stage,
+        repeat_fraction=float(
+            protocol["h_acquisition"]["annotation"]["self_repeat_fraction"]
+        ),
+    )
+    manifests: dict[str, Any] = {}
+    for annotator, path in paths.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        manifests[annotator] = publish_manifest(
+            path,
+            packages[annotator],
+            schema_version=H_PACKAGE_SCHEMA,
+            metadata={
+                "stage": stage,
+                "annotator": annotator,
+                "protocol_file_sha256": file_sha256(Path(args.protocol)),
+                "proposal_report_file_sha256": file_sha256(
+                    output_root / "proposals/proposal_report.json"
+                ),
+                "code_commit": code_commit,
+            },
+        )
+    private_manifest = publish_manifest(
+        private_path,
+        private_rows,
+        schema_version="clir-h0-v7-private-package-index",
+        metadata={"stage": stage, "code_commit": code_commit},
+    )
+    report = {
+        "schema_version": "clir-h0-v7-package-report",
+        "status": f"PASS_H0_V7_{stage.upper()}_PACKAGE",
+        "stage": stage,
+        "annotation_started": False,
+        "code_commit": code_commit,
+        "protocol_file_sha256": file_sha256(Path(args.protocol)),
+        "proposal_report_file_sha256": file_sha256(
+            output_root / "proposals/proposal_report.json"
+        ),
+        "proposal_file_sha256": proposal_report["files"][stage]["file_sha256"],
+        "package": package_report,
+        "public": {
+            annotator: {
+                "path": str(path),
+                "file_sha256": manifests[annotator]["file_sha256"],
+                "ordered_rows_sha256": manifests[annotator]["ordered_rows_sha256"],
+                "row_count": manifests[annotator]["row_count"],
+            }
+            for annotator, path in paths.items()
+        },
+        "private": {
+            "path": str(private_path),
+            "file_sha256": private_manifest["file_sha256"],
+            "ordered_rows_sha256": private_manifest["ordered_rows_sha256"],
+            "row_count": private_manifest["row_count"],
+        },
+        "next_gate": (
+            "dual_ai_smoke_annotation_then_raw_gate"
+            if stage == "smoke"
+            else "dual_ai_reserve_annotation_then_finalization"
+        ),
+    }
+    atomic_write_json(report_path, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def command_evaluate_h_smoke(args: argparse.Namespace) -> None:
+    protocol, output_root, _, _ = _verify_h_proposals(args)
+    package_dir = output_root / "packages/smoke"
+    package_report = json.loads(
+        (package_dir / "package_report.json").read_text(encoding="utf-8")
+    )
+    if package_report.get("status") != "PASS_H0_V7_SMOKE_PACKAGE":
+        raise ValueError("H smoke package report is not a PASS")
+    public = {
+        annotator: _read_published_jsonl(
+            package_dir / f"annotator_{annotator}/hallucination.jsonl",
+            expected_schema=H_PACKAGE_SCHEMA,
+        )[0]
+        for annotator in ("a", "b")
+    }
+    private_rows = _read_published_jsonl(
+        package_dir / "PRIVATE_package_index.jsonl",
+        expected_schema="clir-h0-v7-private-package-index",
+    )[0]
+    labels = {
+        "a": read_jsonl(Path(args.labels_a)),
+        "b": read_jsonl(Path(args.labels_b)),
+    }
+    _, evaluation = evaluate_h_package_labels(
+        public_by_annotator=public,
+        private_rows=private_rows,
+        labels_by_annotator=labels,
+    )
+    gate = smoke_gate(evaluation, protocol)
+    report = {
+        "schema_version": "clir-h0-v7-smoke-evaluation-report",
+        "status": gate["status"],
+        "protocol_file_sha256": file_sha256(Path(args.protocol)),
+        "package_report_file_sha256": file_sha256(package_dir / "package_report.json"),
+        "labels_a_path": str(Path(args.labels_a).resolve()),
+        "labels_a_file_sha256": file_sha256(Path(args.labels_a)),
+        "labels_b_path": str(Path(args.labels_b).resolve()),
+        "labels_b_file_sha256": file_sha256(Path(args.labels_b)),
+        "evaluation": evaluation,
+        "gate": gate,
+        "reserve_annotation_allowed": gate["pass"],
+        "feature_extraction_allowed": False,
+        "training_allowed": False,
+    }
+    report_path = output_root / "evaluation/smoke_evaluation_report.json"
+    if report_path.exists():
+        raise FileExistsError("H smoke evaluation report already exists")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--protocol", default=str(DEFAULT_PROTOCOL))
@@ -1535,6 +2158,68 @@ def build_parser() -> argparse.ArgumentParser:
     merge.add_argument("--pre-rollout-dir", default=str(DEFAULT_OUTPUT))
     merge.add_argument("--rollout-root", default=str(DEFAULT_ROLLOUT_ROOT))
     merge.set_defaults(func=command_merge_rollouts)
+    materialize_h = subparsers.add_parser(
+        "materialize-h",
+        help="apply the authorized checker and exact-token H unitizer",
+    )
+    materialize_h.add_argument("--authorization", default=str(DEFAULT_AUTHORIZATION))
+    materialize_h.add_argument(
+        "--pre-annotation-authorization",
+        default=str(DEFAULT_PRE_ANNOTATION_AUTHORIZATION),
+    )
+    materialize_h.add_argument("--pre-rollout-dir", default=str(DEFAULT_OUTPUT))
+    materialize_h.add_argument("--rollout-root", default=str(DEFAULT_ROLLOUT_ROOT))
+    materialize_h.add_argument(
+        "--pre-annotation-root", default=str(DEFAULT_PRE_ANNOTATION_ROOT)
+    )
+    materialize_h.add_argument("--cache-dir")
+    materialize_h.set_defaults(func=command_materialize_h)
+    propose_h = subparsers.add_parser(
+        "propose-h", help="freeze deterministic H0 proposals and smoke/reserve split"
+    )
+    propose_h.add_argument("--authorization", default=str(DEFAULT_AUTHORIZATION))
+    propose_h.add_argument(
+        "--pre-annotation-authorization",
+        default=str(DEFAULT_PRE_ANNOTATION_AUTHORIZATION),
+    )
+    propose_h.add_argument("--pre-rollout-dir", default=str(DEFAULT_OUTPUT))
+    propose_h.add_argument("--rollout-root", default=str(DEFAULT_ROLLOUT_ROOT))
+    propose_h.add_argument(
+        "--pre-annotation-root", default=str(DEFAULT_PRE_ANNOTATION_ROOT)
+    )
+    propose_h.set_defaults(func=command_propose_h)
+    package_h = subparsers.add_parser(
+        "package-h", help="construct a blind H0 smoke or authorized reserve package"
+    )
+    package_h.add_argument("--authorization", default=str(DEFAULT_AUTHORIZATION))
+    package_h.add_argument(
+        "--pre-annotation-authorization",
+        default=str(DEFAULT_PRE_ANNOTATION_AUTHORIZATION),
+    )
+    package_h.add_argument("--pre-rollout-dir", default=str(DEFAULT_OUTPUT))
+    package_h.add_argument("--rollout-root", default=str(DEFAULT_ROLLOUT_ROOT))
+    package_h.add_argument(
+        "--pre-annotation-root", default=str(DEFAULT_PRE_ANNOTATION_ROOT)
+    )
+    package_h.add_argument("--stage", choices=("smoke", "reserve"), required=True)
+    package_h.set_defaults(func=command_package_h)
+    evaluate_h_smoke = subparsers.add_parser(
+        "evaluate-h-smoke",
+        help="validate dual-AI H0 smoke labels and apply frozen gates",
+    )
+    evaluate_h_smoke.add_argument("--authorization", default=str(DEFAULT_AUTHORIZATION))
+    evaluate_h_smoke.add_argument(
+        "--pre-annotation-authorization",
+        default=str(DEFAULT_PRE_ANNOTATION_AUTHORIZATION),
+    )
+    evaluate_h_smoke.add_argument("--pre-rollout-dir", default=str(DEFAULT_OUTPUT))
+    evaluate_h_smoke.add_argument("--rollout-root", default=str(DEFAULT_ROLLOUT_ROOT))
+    evaluate_h_smoke.add_argument(
+        "--pre-annotation-root", default=str(DEFAULT_PRE_ANNOTATION_ROOT)
+    )
+    evaluate_h_smoke.add_argument("--labels-a", required=True)
+    evaluate_h_smoke.add_argument("--labels-b", required=True)
+    evaluate_h_smoke.set_defaults(func=command_evaluate_h_smoke)
     return parser
 
 

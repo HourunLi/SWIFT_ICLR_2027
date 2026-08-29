@@ -378,6 +378,15 @@ prompt；早先“101 个新 prompt”的只读估算没有扣掉44 个已随正
 只说明 Consistency 扩量关系构造闭环，不证明模块提高 Best-of-N。feature extraction 和训练仍为 false，下一门
 必须单独授权且只能抽 inventory 中的视图，不能抽16,000 条全池。
 
+用户随后授权只推进这份 inventory 的 exact feature extraction。机器授权
+[`feature_extraction_authorization_v6_1.json`](configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json)
+与人读协议 [`feature_extraction_protocol_v6_1.md`](docs/feature_extraction_protocol_v6_1.md) 把范围固定为：1,357 条
+trajectory、612 份 condition、Phi 固定 revision、33×3072 全层 BF16、8 个 query-balanced GPU worker，再由8个
+CPU verifier 逐文件复核 shape/dtype/finiteness/SHA。新入口 `extract_clir_scale_features.py` 支持原子 tensor、
+query completion marker 和安全续跑；完整16,000条抽取、重生成、改标签/关系/阈值和训练仍禁止。当前只记录
+授权与执行实现已经冻结，正式结果必须等 plan、全宽 preflight、8个 writer、8个 verifier 和 finalize 全部通过后
+再更新，不能预写成完成。
+
 [`post_annotation_authorization.json`](configs/data_expansion_scale_v6/post_annotation_authorization.json)（SHA-256
 `7dcd096a…ab34`）只解锁这次 deterministic audit、条件式正关系选择和 frozen hard-negative feasibility；provider、
 第三模型、改标签/阈值、feature extraction 与训练仍为 false。
@@ -404,6 +413,7 @@ src/clir_features.py                  identity/layer-axis 特征编码器
 src/clir_data.py                      JSONL 数据、严格 token 对齐、collate、sampler
 src/consistency_localized_reward.py   reward model、三模块和 loss
 extract_hidden_states.py              exact-ID teacher-forced 全层特征抽取
+extract_clir_scale_features.py        v6.1 inventory-only 分片抽取、续跑与独立逐文件核验
 train_clir.py                         训练、验证、原子 checkpoint、精确续训
 score_clir.py                         打分、定位诊断、Best-of-N 选择
 evaluate_clir.py                      query-level Best-of-N 与 pairwise 评估
@@ -417,7 +427,8 @@ docs/data_expansion_smoke_protocol_v2.md  双审查整合后的 100-query smoke 
 docs/data_expansion_smoke_protocol_v3.md  当前 160-query primary acquisition 与双标协议
 docs/data_expansion_smoke_protocol_v4.md  Consistency 提示词修复与新样本确认门
 docs/data_expansion_smoke_protocol_v5.md  Consistency 机械筛选与新鲜双盲事实审计
-docs/data_expansion_scale_protocol_v6.md  当前数据扩容主协议；已到双 AI 标注门
+docs/data_expansion_scale_protocol_v6.md  当前数据扩容主协议；已发布 v6.1 关系与 inventory
+docs/feature_extraction_protocol_v6_1.md  v6.1 selected inventory 精确特征抽取协议
 ```
 
 当前分支顶端只保留训练/打分/评测代码、测试、可运行配置、README、handoff、核心方法说明和

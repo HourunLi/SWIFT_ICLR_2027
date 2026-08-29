@@ -37,6 +37,12 @@ v6.1 修订结果（2026-08-29）：用户在看过上述失败与可行性诊�
 `PASS_SCALE_V6_1_POST_ANNOTATION_PLAN` / `PASS_SCALE_V6_1_INDEPENDENT_RECOMPUTATION` 结束，发布本地
 400/150/150 关系和1,357-view inventory。该覆盖不改基础 v6 历史状态，也不授权 feature extraction 或训练。
 
+特征抽取覆盖（2026-08-29）：用户在上述关系与 inventory 独立复核后另行授权只抽 selected inventory。授权与
+执行细则分别见 `configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json` 和
+`docs/feature_extraction_protocol_v6_1.md`。该新覆盖允许1,357 trajectory +612 condition 的 exact-ID 全层 BF16
+抽取、分片续跑和逐文件独立复核；仍禁止完整16,000条抽取及任何训练。基础 v6 与 v6.1 关系报告里的
+`feature_extraction_allowed=false` 是它们各自冻结时点的正确边界，不被事后改写。
+
 冻结日期：2026-08-26
 
 机器契约：`configs/data_expansion_scale_v6/protocol.json`

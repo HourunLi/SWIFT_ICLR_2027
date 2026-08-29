@@ -1,0 +1,122 @@
+{
+  "schema_version": "clir-consistency-scale-v6.1-feature-extraction-authorization",
+  "status": "AUTHORIZED_SELECTED_INVENTORY_EXTRACTION_ONLY",
+  "authorized_at_utc": "2026-08-29T13:01:58Z",
+  "authorization_source": {
+    "kind": "explicit_user_confirmation_in_active_codex_thread",
+    "user_instruction": "ok，接着做",
+    "confirmation_follows_offer_to_freeze_and_execute_inventory_only_exact_feature_extraction": true
+  },
+  "frozen_parent": {
+    "authorized_from_clean_parent_commit": "a96b8441f71d574db1a17bca4f3e2fb7b3a977a8",
+    "files": {
+      "protocol": {
+        "path": "configs/data_expansion_scale_v6/protocol.json",
+        "file_sha256": "92c44defb551d814a548c1404cc79b2f89f4a63b2727c7335e2858d71cbd0cab"
+      },
+      "hard_negative_amendment_v6_1": {
+        "path": "configs/data_expansion_scale_v6/hard_negative_amendment_v6_1.json",
+        "file_sha256": "8cbcf62b16d9c144e2d9867c7722bf0a9ccdc3170375237e6ea21339c38b20b3"
+      },
+      "post_annotation_plan_v6_1": {
+        "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/post_annotation_plan_report_v6_1.json",
+        "file_sha256": "71a470e6b3b34f59906eca84502f685858e088ac444b445f5bd4087b208ebb75"
+      },
+      "independent_relation_verification_v6_1": {
+        "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/independent_verification_report_v6_1.json",
+        "file_sha256": "48d6937183eceed07d99e76d1409f27c26228d1076c682d410b4442666fb2756"
+      },
+      "materialized_rows": {
+        "path": "run_artifacts/data_expansion_scale_v6/pre_annotation/materialized/combined_rows.jsonl",
+        "file_sha256": "ca37d0273a3928053efb7e1804e01c6d5d2fdddf7f6bd9ab750aa1f6bb8ea4fd"
+      },
+      "materialized_rows_sidecar": {
+        "path": "run_artifacts/data_expansion_scale_v6/pre_annotation/materialized/combined_rows.jsonl.manifest.json",
+        "file_sha256": "0e38601401a005aa08ee8af2465f90787d6e0d64a1469c2c8e2ddbb0fcb8a8a2"
+      },
+      "selected_feature_inventory": {
+        "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/selected_feature_inventory.jsonl",
+        "file_sha256": "0e3c796d62e1b5024ab6619ed7626054a98dec5850c8532b5982f7f9dd4528db",
+        "sidecar_file_sha256": "dcd46194d5e506b06bc705c0e3b8b5de503ead0075325b9eabce5c761bd63c",
+        "ordered_rows_sha256": "7746ee4bf93ffd3082a83a202bcd1bf7da4ff0cae3de97f5f12c59bc687f5d6a",
+        "row_count": 1357
+      },
+      "train_positive_relations": {
+        "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/train_positive_relations.jsonl",
+        "file_sha256": "4709b14357ed71432c6cf93a8a0357c4a7fb3f4043e0131738829ee2ba56009d",
+        "sidecar_file_sha256": "384b2de864fc73eae01529204e8809bbdcaffa62cbcfde901fc846a7df4cea90",
+        "ordered_rows_sha256": "079d014be548a915e242695aeb8d508f12a73770f6da53d2eaf8dbd7dbbdf9d2",
+        "row_count": 400
+      },
+      "heldout_positive_relations": {
+        "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/heldout_positive_relations.jsonl",
+        "file_sha256": "fc88a094e9daced8528349d6d199da1e6277bd5180bd3ad62f0c8b09d47e96d1",
+        "sidecar_file_sha256": "6d589c79f9718a9af4322c2ae75af0a5afe2caadd6c330f73d341b3b8103a2e0",
+        "ordered_rows_sha256": "704a8317cf27311aec80e446c7b7967c5aac728351b6665ccb7c8636b08d73b6",
+        "row_count": 150
+      },
+      "heldout_hard_negative_relations": {
+        "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/heldout_hard_negative_relations.jsonl",
+        "file_sha256": "fad547c547fdf635b5f7b0973f624d2657365633cf2c48ffd42d136ccbd448f2",
+        "sidecar_file_sha256": "70d160c93b18a2e25c0772fc512d1185735d8d9ced2ad4fb456e5c8d7cb9b95d",
+        "ordered_rows_sha256": "5f97a655ee6ccc06d0c1b1fb684ad739550e2e9442b6fb194a533d2f39957ed0",
+        "row_count": 150
+      }
+    }
+  },
+  "authorized_scope": {
+    "selected_inventory_materialization": true,
+    "full_width_preflight": true,
+    "inventory_only_feature_extraction": true,
+    "independent_payload_verification": true,
+    "publish_extracted_feature_manifest": true,
+    "all_16000_rollout_feature_extraction": false,
+    "new_rollout": false,
+    "new_ai_annotation_or_label_change": false,
+    "relation_or_threshold_change": false,
+    "training": false
+  },
+  "feature_contract": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "num_feature_layers": 33,
+    "per_layer_dim": 3072,
+    "feature_dim": 101376,
+    "bytes_per_feature_token": 202752,
+    "input_axis_truth": "saved_prompt_token_ids_plus_saved_output_token_ids",
+    "condition_contract": "one_condition_from_the_inventory_designated_owner_forward_per_unique_query",
+    "trajectory_contract": "generated_token_slice_from_teacher_forced_prompt_plus_output_forward",
+    "decode_or_retokenize_allowed": false
+  },
+  "expected_inventory": {
+    "trajectory_count": 1357,
+    "query_count": 612,
+    "condition_count": 612,
+    "output_token_count": 460151,
+    "prompt_token_count": 59952,
+    "total_feature_token_count": 520103,
+    "raw_feature_bytes": 105451923456,
+    "raw_feature_gib": 98.20975685119629,
+    "raw_feature_gb": 105.451923456,
+    "relation_endpoint_union_must_equal_inventory": true
+  },
+  "runtime_contract": {
+    "output_root": "run_artifacts/data_expansion_scale_v6/features_v6_1",
+    "cache_dir": "run_artifacts/model_cache",
+    "worker_count": 8,
+    "one_cuda_device_per_worker": true,
+    "query_assignment": "deterministic_largest_first_feature_token_balanced_by_query_v1",
+    "query_marker_is_atomic_completion_unit": true,
+    "payload_write_is_atomic": true,
+    "existing_complete_query_policy": "verify_marker_and_sizes_then_skip_during_extraction",
+    "existing_payload_without_query_marker_policy": "reload_validate_and_resume_without_overwrite",
+    "independent_verifier_reloads_every_payload": true,
+    "final_manifest_requires_all_8_extraction_and_all_8_verifier_reports": true,
+    "minimum_free_storage_gb_before_launch": 130,
+    "require_clean_committed_implementation": true
+  },
+  "failure_rule": "any_parent_hash_inventory_endpoint_exact_id_model_shape_dtype_finiteness_checksum_or_worker_gate_failure_stops_without_final_feature_manifest_or_training",
+  "next_gate_after_pass": "separate_c_only_training_authorization"
+}

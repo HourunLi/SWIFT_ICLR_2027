@@ -434,6 +434,23 @@ verification report SHA-256 为 `48d69371…2756`。本地 Git-ignored manifest 
 101-prompt 粗估没有按 query 扣除已随正关系保存的44 个 prompt，现已纠正。这个结果只把 Consistency 数据构造
 推进到“已发布并复核关系清单”，不是可学习性或 Best-of-N 证据。plan 和 verifier 都明确
 `feature_extraction_allowed=false`、`training_allowed=false`；下一步需单独授权只抽 inventory，禁止抽全16,000 条。
+
+### Consistency v6.1 selected-inventory feature extraction：已授权，待正式执行
+
+用户在关系/inventory 独立复核完成后明确回复“ok，接着做”，授权只推进 exact feature extraction。机器记录
+[`../configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json`](../configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json)
+绑定 commit `a96b8441` 上的 v6.1 plan/verifier、三份关系、1,357-row inventory 与16,000-row materialized file；
+范围只含 selected rows join、一个全宽 preflight、inventory-only 抽取、逐文件独立复核和最终 feature manifest。
+完整16,000条抽取、重 rollout、改标签/关系/阈值以及训练都是 false。
+
+新入口 `extract_clir_scale_features.py` 不改变通用 exact-ID 数学定义，只补正式规模所需的恢复与审计层：按 query
+的总 feature token 做固定 largest-first 八路均衡；同题所有 view 在同一 GPU worker；tensor 与 query marker
+分别原子发布；无 marker 的现有 payload 必须 reload 验证后才续用；8个 writer 全通过后，再由8个 CPU verifier
+逐个重读1,969个 payload，检查 shape、BF16、contiguous、finiteness 和 SHA-256。最终预期 raw tensor bytes 必须
+精确等于 `105451923456`，且报告继续 `training_allowed=false`。完整执行规则见
+[`feature_extraction_protocol_v6_1.md`](feature_extraction_protocol_v6_1.md)。本段在执行前只表示“授权与实现冻结”，
+不表示 feature 已经完成；只有 finalize PASS 才能改状态。
+
 用户报告全部 shard 完成后，
 [`../configs/data_expansion_scale_v6/post_annotation_authorization.json`](../configs/data_expansion_scale_v6/post_annotation_authorization.json)
 （SHA-256 `7dcd096a…ab34`）只解锁 deterministic label audit、条件式 400/150 选择和 frozen hard-negative

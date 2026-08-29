@@ -1,6 +1,6 @@
 # CLIR Consistency v6.1：C0/C1 训练与留出关系评估协议
 
-状态：`AUTHORIZED_NOT_YET_EXECUTED`
+状态：`PASS_C0_C1_TRAINING_AND_HELDOUT_RELATION_MECHANISM_REPLICATION_V6_1`
 
 授权日期：2026-08-29
 
@@ -103,3 +103,40 @@ batch size 固定为 4。分组 sampler 每个 batch 放两个 relation：
 - 不得根据本轮结果回头修改已冻结样本或只汇报最好的 seed。
 
 本协议完成后，下一步才是决定：Consistency 机制若可学，是否值得另外构建新的 query-disjoint ranking population，重跑 C0/C1/H0/CH0 的最终效果实验。
+
+## 8. 正式执行结果
+
+实现、配置和授权先冻结在 clean commit
+`2a55e02c43cab016eac0f6cd6bd2915ba63ba8ef`。随后依次通过：4,768-row
+训练清单和两个留出视图的确定性发布、独立重算、C0/C1 真实全宽
+`[4,429,101376]` forward/backward、seed 42 一轮 pilot、六个 3-epoch
+checkpoint 深度复核，以及六份 150+150 held-out relation 评估。六个 checkpoint
+的 model、optimizer 和 metrics 均 finite，数据/配置/seed/commit provenance 全部一致。
+
+冻结主指标的 C1−C0 结果为：
+
+| 指标 | C0 三 seed 均值 | C1 三 seed 均值 | C1−C0 |
+|---|---:|---:|---:|
+| 正对 cosine − 负对 cosine | 0.00016 | 0.17614 | +0.17597 |
+| cosine relation AUROC | 0.6875 | 0.7209 | +0.0334（seed 方向混合） |
+| 正对 cosine | 0.99991 | 0.98335 | −0.01656 |
+| 负对 cosine | 0.99975 | 0.80721 | −0.19253 |
+| score-gap separation | 0.18622 | 0.42970 | +0.24348 |
+| score-gap relation AUROC | 0.5954 | 0.7400 | +0.1447 |
+
+主指标逐 seed 增量为 `+0.0953/+0.3110/+0.1216`；固定-seed relation
+bootstrap 95% 区间为 `[+0.1389,+0.2155]`，因此按预注册规则得到
+`SUPPORTS_C1_HELDOUT_RELATION_SEPARATION`。score-gap separation 三个 seed 也都为
+正，均值增量 `+0.2435`，relation bootstrap 区间 `[+0.1405,+0.3457]`。
+
+这个 PASS 必须按“部分机制证据”解释。C0 的表示几乎全部塌在同一点；C1 主要把 hard
+negative 推远并展开表示，而不是让正对更近。正对 cosine 实际下降，cosine AUROC 在 seed
+42/43 下降、seed 44 上升，且 C1 的 hard-negative margin violation 仍为
+`98.0%/80.7%/96.7%`。因此可以说 C1 稳定改善了均值分离和 scalar score-gap
+结构，不能说正对不变性已经干净建立，更不能说 Best-of-N 已提高。
+
+本地大 artifact 保持 Git ignore。可提交机器摘要为
+`configs/data_expansion_scale_v6/consistency_training_v6_1/completion.json`；本地最终
+verifier SHA-256 为 `2a3cda4f…e1555f`，paired summary SHA-256 为
+`e8037676…3c139`。下一步是另建新的 query-disjoint ranking population，再按独立协议重跑
+C0/C1/H0/CH0；不在这份 relation 留出集上继续调 epoch、margin 或 loss weight。

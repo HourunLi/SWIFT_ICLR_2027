@@ -21,3 +21,12 @@ The frozen 150 positive and 150 hard-negative relations are evaluation-only.
 This experiment can show whether C1 learns the held-out relation geometry. It
 cannot establish Best-of-N or reward-ranking improvement because no new
 independent ranking population is part of this stage.
+
+The run is complete. Across seeds 42/43/44, C1 minus C0 improved the frozen
+positive-minus-negative mean cosine separation by `+0.17597`; the descriptive
+relation-bootstrap 95% interval is `[+0.13889,+0.21553]`. Score-gap separation
+also improved in all three seeds. However, positive-pair cosine decreased and
+cosine AUROC changed in mixed directions across seeds. The result is therefore
+partial evidence for hard-negative separation and representation de-collapse,
+not evidence for stronger positive invariance or Best-of-N efficacy. The
+hash-bound machine summary is `completion.json`.

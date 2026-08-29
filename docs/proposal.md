@@ -126,7 +126,7 @@ L_cons = L_pos + 1.0·L_neg + 0.1·L_score
 m = 0.2
 ```
 
-`SemanticGroupBatchSampler` 保证同 semantic 的样本能进入同一 mini-batch。接口不限定 augmentation 的来源：可以是经过验证的 rewrite，也可以是同一模型生成、经独立裁决确认 reasoning-equivalent 的 on-policy trajectories。但当前已有证据只来自 27 对小规模 on-policy relations，不能外推到广义 style/domain invariance。
+`SemanticGroupBatchSampler` 保证同 semantic 的样本能进入同一 mini-batch。接口不限定 augmentation 的来源：可以是经过验证的 rewrite，也可以是同一模型生成、经独立裁决确认 reasoning-equivalent 的 on-policy trajectories。v6.1 已用400个双 AI Silver 训练正对和150+150个 held-out 正负关系完成三 seed C0/C1 复测；当前支持的是 hard-negative separation 和去塌缩的部分机制证据，不能外推成广义 style/domain invariance 或 ranking efficacy。
 
 ## 模块二：hallucination onset 与 negative tail
 
@@ -256,7 +256,7 @@ complete reconstruction
 |---|---|
 | Exact-ID 抽取可保持 token/feature 对齐 | 有代码与回归测试支持的工程事实 |
 | Layer-axis encoder 可在真实 raw width 下构建小于一千万参数的模型 | 有配置和测试支持的工程事实 |
-| Consistency loss 能在小规模训练关系上改变 geometry | 有 27 对训练内诊断；无 held-out 泛化证据 |
+| Consistency loss 能改变 held-out relation geometry | v6.1 400 train positives、150 heldout positives、150 hard negatives 的三 seed C0/C1 中，冻结均值 separation 增量 `+.1760`、relation bootstrap `[+.1389,+.2155]`；但正对 cosine 下降、AUROC seed 方向混合，只支持 hard-negative separation/去塌缩的部分机制结论 |
 | Sparse-span H head 在 16-row dev 上超过位置基线 | 只有点估计；bootstrap 跨 0，后续 blind/position control 失败；且不是当前默认实现 |
 | Main onset-tail shaping 会改善 reward ranking | 未验证假设；历史 absolute/relative/clean-matched 实现均暴露问题 |
 | Direct key/complete targets 可学习 | 48/16、3 seeds 的 standalone gate 通过 |
@@ -264,7 +264,7 @@ complete reconstruction
 | Shared gate-prior alignment 改善 Best-of-N | 未建立。v2 同 dev 调参中 `.25` 的 BoN@16 `.9187` vs P0 `.9180`，两个配对区间跨 0；`10` 的 raw point estimate `.9207` 也未形成独立验证。默认 `.25` 是方法身份约束下的 dev-tuned 工程值，不是 efficacy 结论 |
 | 三模块联合优于 correctness-only | 未建立；历史 JALL BoN@16 `.912`，J0 `.920`，扩展门失败 |
 
-这些证据主要来自 Phi/GSM8K 小规模实验，不能支持跨模型、跨领域或正式机制结论。工程 pipeline 运行、auxiliary target 可学习和 Best-of-N 改善必须分开报告。
+这些证据主要来自 Phi 生成的 GSM8K/MATH 算术与数学推理数据；Consistency 的关系规模已扩大，但仍不能支持跨生成器、广义跨领域或 Best-of-N 结论。工程 pipeline 运行、auxiliary target 可学习和 Best-of-N 改善必须分开报告。
 
 ## 评价设计
 

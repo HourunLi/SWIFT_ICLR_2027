@@ -395,10 +395,23 @@ BF16 payload 全部逐文件重读，shape/contiguous/finiteness/SHA 与 writer 
 代码、授权、完成摘要和关键文档。这个 PASS 仍只是 exact feature pipeline 证据，`training_allowed=false`；
 下一门是单独冻结并授权 C-only 训练与 heldout 正/负关系机制评估。
 
+该下一门随后已由用户单独授权并完成。C0/C1 使用同一 4,768-row 训练清单、seeds
+42/43/44 和3 epochs，只有 `consistency_weight=0/1` 不同；150 个正关系与150 个
+hard negative 始终只用于 held-out 评估。冻结主指标“正对平均 cosine−负对平均
+cosine”的 C1−C0 增量为 `+0.1760`，三个 seed 都为正，relation bootstrap 95%
+区间 `[+0.1389,+0.2155]`。但正对 cosine 从 `.99991` 降到 `.98335`，cosine
+AUROC 的 seed 方向混合，说明主要学到的是 hard-negative 分离和去塌缩，不是干净的正对
+不变性。完整协议与结果见
+[`docs/consistency_training_protocol_v6_1.md`](docs/consistency_training_protocol_v6_1.md)，
+机器摘要见
+[`completion.json`](configs/data_expansion_scale_v6/consistency_training_v6_1/completion.json)。
+本轮没有新的 ranking population，不能据此声称 Best-of-N 提升。
+
 [`post_annotation_authorization.json`](configs/data_expansion_scale_v6/post_annotation_authorization.json)（SHA-256
 `7dcd096a…ab34`）在其阶段只解锁 deterministic audit、条件式正关系选择和 frozen hard-negative feasibility；
 它没有授权 provider、第三模型、改标签/阈值、feature extraction 或训练。后来的 selected feature 完成状态只来自
-上面的独立 feature authorization；训练至今仍为 false。
+上面的独立 feature authorization；再后来的 C0/C1 训练只来自独立的 C-only authorization，不能反向扩大
+post-annotation 授权范围。
 
 ## 目录
 
@@ -412,6 +425,7 @@ configs/data_expansion_smoke_v3/      当前 MATH 扩量 smoke 的机器协议�
 configs/data_expansion_smoke_v4/      Consistency 提示词修复、14-ID 回放清单与机器门
 configs/data_expansion_smoke_v5/      Consistency 机械筛选与双 AI 事实审计协议/启动提示词
 configs/data_expansion_scale_v6/      正式扩容：v6/v6.1 授权、修订与 selected-feature 完成摘要
+  consistency_training_v6_1/          C0/C1 配置、独立训练授权与可提交结果摘要
 prepare_clir_smoke.py                  v2/v3 数据管线与 v4/v5 Consistency gate 入口
 prepare_clir_scale.py                  v6 rollout/材料化/标注审计及 v6.1 关系规划与独立核验
 src/clir_smoke.py                      checker/unitizer/proposal/label 核心契约
@@ -423,11 +437,14 @@ src/clir_data.py                      JSONL 数据、严格 token 对齐、colla
 src/consistency_localized_reward.py   reward model、三模块和 loss
 extract_hidden_states.py              exact-ID teacher-forced 全层特征抽取
 extract_clir_scale_features.py        v6.1 inventory-only 分片抽取、续跑与独立逐文件核验
+prepare_clir_consistency_training.py  v6.1 C0/C1 训练视图、独立重算与全宽预检
 train_clir.py                         训练、验证、原子 checkpoint、精确续训
 score_clir.py                         打分、定位诊断、Best-of-N 选择
 evaluate_clir.py                      query-level Best-of-N 与 pairwise 评估
 evaluate_clir_mechanisms.py           H/onset/value 与 dual-prior 机制诊断
+evaluate_clir_consistency.py          冻结正负 relation 的 representation/score-gap 评估
 summarize_clir_ablation.py            多 seed 候选 parity 与 paired contrast
+summarize_clir_consistency.py         C0/C1 多 seed relation 配对与分层 bootstrap
 examples/create_toy_clir_data.py      仅供管线 smoke test 的合成数据
 tests/                                模型、数据、续训与评估测试
 docs/proposal.md                      与当前实现一致的方法说明
@@ -438,6 +455,7 @@ docs/data_expansion_smoke_protocol_v4.md  Consistency 提示词修复与新样�
 docs/data_expansion_smoke_protocol_v5.md  Consistency 机械筛选与新鲜双盲事实审计
 docs/data_expansion_scale_protocol_v6.md  当前数据扩容主协议；v6.1 关系与 selected feature 均完成
 docs/feature_extraction_protocol_v6_1.md  v6.1 selected inventory 精确特征抽取协议
+docs/consistency_training_protocol_v6_1.md v6.1 C0/C1 训练、结果与证据边界
 ```
 
 当前分支顶端只保留训练/打分/评测代码、测试、可运行配置、README、handoff、核心方法说明和
@@ -678,16 +696,23 @@ bootstrap；预声明 cells 见 `configs/clean_ablation_v1/`，已完成结果�
 ### Consistency v6.1 扩量复测
 
 扩充后的 400 个训练正对、150 个 held-out 正对、150 个 held-out hard negative
-和 1,357 条 exact-ID 全层 feature 已完成独立核验。用户已单独授权 C-only 的
-C0/C1 matched 复测；冻结设计和证据边界见
+和 1,357 条 exact-ID 全层 feature 已完成独立核验。C-only 的 C0/C1 matched
+复测也已完成；冻结设计、执行结果和证据边界见
 [`docs/consistency_training_protocol_v6_1.md`](docs/consistency_training_protocol_v6_1.md)。
 
-本轮会确定性构造一份 C0/C1 共用的 4,768-row 训练清单：3,968 条历史
+本轮确定性构造了一份 C0/C1 共用的 4,768-row 训练清单：3,968 条历史
 correctness 行加 400 个新 relation 的 800 个 endpoint。C0/C1 只差
 `consistency_weight=0/1`，固定 seeds 42/43/44、3 epochs；150+150 关系只做
 机制留出评估。新增入口分别是 `prepare_clir_consistency_training.py`、
 `evaluate_clir_consistency.py` 和 `summarize_clir_consistency.py`。这轮不训练 H、
 Dual Prior 或 Full，也没有新的 ranking population，因此不能给 Best-of-N 效果结论。
+
+正式结果中，C0/C1 的主 cosine separation 为 `.00016/.17614`，配对增量
+`+.17597`，冻结 relation bootstrap 95% 区间 `[+.13889,+.21553]`；score-gap
+separation 也从 `.18622` 增至 `.42970`。同时，正对 cosine 下降、cosine AUROC
+仅从三 seed 均值 `.6875` 到 `.7209` 且方向不一致，hard negatives 大多仍未低于
+`.2` margin。结论是 Consistency 已有“分开 hard negative、打破表示塌缩”的部分机制
+证据，尚未建立完整正对不变性或最终选答案增益。
 
 ## Toy smoke test
 
@@ -735,8 +760,12 @@ pytest -q
   不能称为 Gold 或人工验证。
 - 默认仍使用预抽取全层 feature，真实数据的磁盘开销很大；没有集成 batch-local online extraction。
 - 当前 objective 是 pointwise correctness BCE 加可用 auxiliary supervision，尚无 pairwise/listwise reward objective。
-- clean integration 已在现有小数据上完成三 seed matched matrix，但没有扩充独立机制标签或 protected test；full 没有优于 correctness-only。
-- 历史 consistency、hallucination 和 prior 标签规模都很小，不能支持跨域或正式机制结论。
+- clean integration 已完成历史小数据的三 seed matched matrix，以及扩充 Consistency
+  relation 的独立三 seed C0/C1 机制复测；仍没有新的 protected ranking test，且历史 full
+  没有优于 correctness-only。
+- Consistency 已有400个训练正对和150+150 held-out 正负关系的三 seed C0/C1
+  复测；均值分离与 score-gap 结构改善，但正对 cosine 下降、cosine AUROC seed 方向
+  混合，且没有新的 Best-of-N population。Hallucination 和 Prior 标签仍很小。
 - clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代缺失的数据 provenance 上游与 protected-test protocol。
 - clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired
   summarizer；v6.1 新增了单独的 held-out consistency relation evaluator，但尚未重建

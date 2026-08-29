@@ -461,11 +461,54 @@ trajectory +612个 condition 的 shape/BF16/contiguous/finiteness/SHA 全量一�
 约102 GiB本地 artifact 保持 Git ignore。这个 PASS 不证明 Consistency 可学或提高 BoN，且最终报告继续
 `training_allowed=false`；下一门是单独的 C-only 训练授权。
 
+### Consistency v6.1 C0/C1 训练与 held-out relation 复测：已完成
+
+用户随后明确回复“可以，你按照我们之前的计划做就行”，授权一轮窄范围、hash-bound 的 C-only
+复测。实现、配置、协议与授权先冻结在 clean commit `2a55e02c43cab016eac0f6cd6bd2915ba63ba8ef`；
+H、Prior、Full、新 feature、重标和 ranking efficacy 都不在授权内。
+
+确定性训练视图由历史3,968条 correctness row 和400个新 train relation 的800个 endpoint
+组成，共4,768 rows、896 queries。历史 auxiliary 字段全部去掉；新 relation 两端按保存的
+output-token 相对长度得到 `relative_compact/relative_expanded`，同 relation 提供正对、不同 relation
+同 style 提供 batch 内负对。C0/C1 共用完全相同的 manifest、sampler、batch、optimizer、seed 和 epoch，
+配置只差 `consistency_weight=0/1`。train 与 heldout query/cluster overlap 均为0。
+
+materialization、独立重算和两组真实 `[4,429,101376]` BF16 forward/backward 先通过；seed 42
+完成一轮 pilot 后从同一个 full-state checkpoint 精确续到 epoch 3，seed 43/44 各从头跑3 epochs。
+六个 checkpoint 的 model、optimizer、metrics、数据/config/seed/clean-commit provenance 全部复核通过。
+
+150个 heldout 正关系与150个 hard negative 的三 seed 结果为：
+
+| 指标 | C0 | C1 | C1−C0 |
+|---|---:|---:|---:|
+| 正对 cosine − 负对 cosine | .00016 | .17614 | +.17597 |
+| cosine relation AUROC | .6875 | .7209 | +.0334，seed 方向混合 |
+| 正对 cosine | .99991 | .98335 | −.01656 |
+| 负对 cosine | .99975 | .80721 | −.19253 |
+| score-gap separation | .18622 | .42970 | +.24348 |
+| score-gap relation AUROC | .5954 | .7400 | +.1447 |
+
+冻结主指标逐 seed 增量为 `+.0953/+.3110/+.1216`，relation bootstrap 95% 区间
+`[+.1389,+.2155]`，按协议裁决为 `SUPPORTS_C1_HELDOUT_RELATION_SEPARATION`。score-gap
+separation 三个 seed 也都改善，区间 `[+.1405,+.3457]`。
+
+结论必须保守：C0 表示几乎整体塌缩，C1 可靠地展开表示并把 hard negative 推远；它没有让正对比 C0
+更近，cosine AUROC 在 seed 42/43 下降、44 上升，且 C1 的 negative margin violation 仍为
+98.0%/80.7%/96.7%。所以这是 hard-negative separation、去塌缩和 score-gap 结构的**部分机制证据**，
+不是完整正对不变性，更不是 Best-of-N 证据。正负 relation 还共享43个 endpoint、44个 query/cluster，
+bootstrap 只能解释为 relation-level 描述性不确定性。
+
+机器摘要见
+[`../configs/data_expansion_scale_v6/consistency_training_v6_1/completion.json`](../configs/data_expansion_scale_v6/consistency_training_v6_1/completion.json)。
+本地 paired summary / final verifier SHA-256 分别为 `e8037676…3c139` / `2a3cda4f…e1555f`；大
+manifest、checkpoint 和逐 relation 报告继续 Git ignore。
+
 用户报告全部 shard 完成后，
 [`../configs/data_expansion_scale_v6/post_annotation_authorization.json`](../configs/data_expansion_scale_v6/post_annotation_authorization.json)
 （SHA-256 `7dcd096a…ab34`）在其阶段只解锁 deterministic label audit、条件式 400/150 选择和 frozen
 hard-negative feasibility；它没有授权第三模型、裁决、修标签/阈值、feature extraction 或训练。后来的 selected
-feature PASS 只来自上面的独立授权；训练至今仍关闭。
+feature PASS 只来自上面的独立授权；后来的 C0/C1 训练只来自新的 C-only 授权，不能反向扩大这里的
+post-annotation 授权。
 
 ## 与 `origin/main` / 历史 artifact 的兼容性
 
@@ -479,7 +522,7 @@ feature PASS 只来自上面的独立授权；训练至今仍关闭。
 | CLI/config | 有意 breaking | main 的 loss-heavy CLI 改为一个 JSON 方法配置加少量运行覆盖项，旧命令不能原样复用 |
 | `panzhixin` manifest | 已验证兼容 | nested `feature_metadata`、`feature_sha256`/`condition_sha256` 和全层 BF16 路径已在 3968/8000 manifests 上通过 |
 | `panzhixin` 研究协议 | 不自动兼容 | sparse H、strict/encoded variants、versioned runner、标注与多 seed summarizer 没有迁入；不能把可读 manifest 等同于可复现旧协议 |
-| evaluator | 工程兼容，已补多 seed 配对 | frozen prefix、stable tie、common population、random/oracle/pairwise aggregate、机制诊断及 parity-checked multi-seed paired summary 已有；formal 仍缺 protected test、held-out consistency evaluator 和完整 baseline 矩阵 |
+| evaluator | 工程兼容，已补多 seed 配对 | frozen prefix、stable tie、common population、random/oracle/pairwise aggregate、机制诊断、held-out consistency relation evaluator 及 parity-checked multi-seed paired summary 已有；formal 仍缺新的 protected ranking test 和完整 baseline 矩阵 |
 
 ## 迁移裁决
 
@@ -645,7 +688,9 @@ hallucination_onset = k
 - 只支持预抽取 feature 训练，全层 payload 存储昂贵；online extraction 尚未进入 clean trainer。
 - 当前模型用 pointwise correctness BCE，没有 pairwise/listwise ranking objective。
 - clean 已在历史 3968-row 数据上完成 7-cell 主矩阵和 CH0 二因子补测、三 seed matched evaluation；它没有扩大独立机制样本，也没有使 `best_current` 成为 efficacy winner。
-- consistency 证据只有 27 对且没有 held-out relations。
+- consistency 已有400个训练正对、150个 held-out 正对和150个 held-out hard negative 的
+  三 seed C0/C1 复测；均值 separation 与 score-gap 结构改善，但正对 cosine 下降、AUROC
+  seed 方向混合，且尚无新的 ranking population。
 - H 证据来自很少的 Silver trajectory，首错边界一致性弱；clean onset ±5 仍为 0，恢复的 main gold-tail 再次未通过 locality/ranking 门。
 - dual prior 只有 48 条历史 Key/Complete 标注 trajectory；clean direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
@@ -659,19 +704,18 @@ hallucination_onset = k
 
 1. 关闭 v3 后续消费：不发送第三模型包、不裁决、不 finalize、不抽特征、不训练；保留 H 通过和 C/Prior
    失败作为 pipeline-smoke 诊断。
-2. C prompt-v4 已失败；v5 机械筛选/双盲事实审计通过；v6 raw gate 通过但旧 hard-negative 仅8/150；用户批准的
-   v6.1 已在不改阈值和正关系的前提下发布并独立复核400 train positives、150 heldout positives、150 heldout
-   hard negatives 及1,357-view inventory。selected-view feature extraction 也已对1,969个 payload 全量通过独立
-   核验。用户随后明确授权独立的 hash-bound C-only C0/C1 训练与 held-out 机制评估；冻结协议见
-   `docs/consistency_training_protocol_v6_1.md`。授权只覆盖共享 4,768-row manifest、C0/C1、seeds 42/43/44、
-   3 epochs 和150+150 relation evaluator；H/P/Full、新 feature 和 ranking efficacy 仍不在范围内。
+2. C prompt-v4 已失败；v5 机械筛选/双盲事实审计、v6.1 关系/feature 和 C-only C0/C1 三 seed
+   复测均已完成。C1 在冻结主 relation separation 上三个 seed 都改善，平均 `+.1760`、区间
+   `[+.1389,+.2155]`，score-gap 结构也改善；但正对 cosine 下降、cosine AUROC 方向混合。
+   将结论固定为“hard-negative separation/去塌缩的部分机制证据”，不继续在同一 relation set 调参。
 3. H 若要进入训练，先用新 query 做独立 H-only confirmation 与第三模型稳定性审计；不得把已看过结果的
    v3 H 标签重新包装成确认性通过。新协议全部 raw/final 门过后才发布 `pre_extraction.jsonl`。
 4. Prior 先用 40–60 条全新轨迹标显式 dependency edges，由确定性传递闭包得到 Complete、再选 Key；只有
    exact-set 分歧和裁决负担降下来才扩为 train 300–500/dev 100–200。H 通过后目标仍是 train
    200+200/dev 100+100；统一 checker 的 1500–2000 independent queries ×16 ranking validation 另发协议。
-5. 用新数据完整重跑 `C0/C1/H0/CH0`；H 先过 boundary/calibration，当前 gold-tail、MIL、pseudo-tail 不进
-   核心矩阵。prior 先复核 direct target，再在新 ranking population 上固定 `.25` 做 gate off/on，不再调权重。
-   若要归因 encoder，补 strict/encoded SWIFT 等预算 baseline。
+5. 下一大门先构造新的 query-disjoint ranking population，再完整重跑 `C0/C1/H0/CH0`；不能用这次
+   150+150 relation 结果代替 Best-of-N。H 先过 boundary/calibration，当前 gold-tail、MIL、pseudo-tail
+   不进核心矩阵。prior 先复核 direct target，再在新 ranking population 上固定 `.25` 做 gate off/on，
+   不再调权重。若要归因 encoder，补 strict/encoded SWIFT 等预算 baseline。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

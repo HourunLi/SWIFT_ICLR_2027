@@ -1,0 +1,142 @@
+{
+  "schema_version": "clir-consistency-scale-v6.1-c0-c1-mechanism-replication-completion",
+  "status": "PASS_C0_C1_TRAINING_AND_HELDOUT_RELATION_MECHANISM_REPLICATION_V6_1",
+  "completed_at_utc": "2026-08-29T14:20:00Z",
+  "evidence_tier": "three_seed_matched_c_only_heldout_relation_mechanism_replication",
+  "implementation_commit": "2a55e02c43cab016eac0f6cd6bd2915ba63ba8ef",
+  "authorization": {
+    "path": "configs/data_expansion_scale_v6/consistency_training_v6_1/authorization.json",
+    "status": "AUTHORIZED_C0_C1_MECHANISM_REPLICATION"
+  },
+  "local_artifact_root": "run_artifacts/data_expansion_scale_v6/consistency_training_v6_1",
+  "verified_artifacts": {
+    "materialization_report": {
+      "path": "materialization_report.json",
+      "file_sha256": "0e52f09c1a57dc8c4c3ab000f0de3728b0e52b5fd15cde8fce14c402ee6efd10"
+    },
+    "independent_data_verification": {
+      "path": "independent_data_verification.json",
+      "file_sha256": "6e750b41c47226f7f201cdf09df576be62e170189f815482baff48a9038e82eb"
+    },
+    "c0_full_width_preflight": {
+      "path": "preflight/c0.json",
+      "file_sha256": "9d44794f80138425459bcb8a628fda6f1841a9a6c9c3b3b998788cc8733baa3c"
+    },
+    "c1_full_width_preflight": {
+      "path": "preflight/c1.json",
+      "file_sha256": "36cdefb875fee9e93ec1fad3e5d1460b819e1d39b7349382ae56f5c6043a64dc"
+    },
+    "training_verification": {
+      "path": "training_verification.json",
+      "file_sha256": "dadf86202bf269d9865a3f43b3f70223b435d08642691557202cda4f59627855"
+    },
+    "paired_summary": {
+      "path": "paired_summary.json",
+      "file_sha256": "e8037676d863bf7594fe867d7a68298bfbba0c0cc6804e871aa6977e7373c139"
+    },
+    "final_independent_verification": {
+      "path": "final_verification.json",
+      "file_sha256": "2a3cda4fd4bde7d8f2a3edcc23470df86e902ffec2eb9848cdff94c886e1555f"
+    }
+  },
+  "data": {
+    "shared_train_rows": 4768,
+    "historical_correctness_rows": 3968,
+    "new_consistency_relations": 400,
+    "new_consistency_endpoint_rows": 800,
+    "train_queries": 896,
+    "heldout_positive_relations": 150,
+    "heldout_hard_negative_relations": 150,
+    "heldout_unique_endpoint_rows": 557,
+    "train_heldout_query_overlap": 0,
+    "train_heldout_cluster_overlap": 0,
+    "heldout_positive_negative_shared_endpoints": 43,
+    "heldout_positive_negative_shared_queries": 44,
+    "shared_train_manifest_sha256": "10fdc59475c5b27311d873d84930ec6d1e7963e80158b367b867c2af4df0c5b1",
+    "heldout_positive_training_view_sha256": "182b8ebe4069da03397dda668b553e1f1d4bdc9ccbf2344fc3d9da105fb25434",
+    "heldout_endpoint_manifest_sha256": "24750232069e7d612719852dfc126e27bb946eeabb50b3d1e962c0d5e66ecaba"
+  },
+  "training": {
+    "cells": [
+      "c0_correctness_only",
+      "c1_consistency"
+    ],
+    "only_config_difference": "consistency_weight_0.0_vs_1.0",
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "epochs": 3,
+    "seed_42_one_epoch_pilot_then_exact_resume": true,
+    "all_six_checkpoint_model_optimizer_metrics_finite": true,
+    "all_six_checkpoint_data_seed_config_and_clean_commit_provenance_verified": true,
+    "hallucination_prior_and_full_training_executed": false
+  },
+  "aggregate_metrics": {
+    "c0": {
+      "positive_cosine_mean": 0.9999124890632234,
+      "negative_cosine_mean": 0.9997488000079752,
+      "positive_minus_negative_cosine": 0.0001636890552482543,
+      "cosine_relation_auroc": 0.6875111111111112,
+      "cosine_relation_average_precision": 0.6813089145738784,
+      "score_gap_separation": 0.1862223654323154,
+      "score_gap_relation_auroc": 0.5953777777777778
+    },
+    "c1": {
+      "positive_cosine_mean": 0.9833518537616945,
+      "negative_cosine_mean": 0.8072147029468137,
+      "positive_minus_negative_cosine": 0.1761371508148808,
+      "cosine_relation_auroc": 0.7208740740740741,
+      "cosine_relation_average_precision": 0.719893206460063,
+      "score_gap_separation": 0.42969864805539454,
+      "score_gap_relation_auroc": 0.7400296296296296
+    }
+  },
+  "paired_c1_minus_c0": {
+    "frozen_primary_metric": "positive_mean_cosine_minus_negative_mean_cosine",
+    "primary_mean_delta": 0.1759734617596327,
+    "primary_per_seed_delta": {
+      "42": 0.09532018325269752,
+      "43": 0.3109556162780907,
+      "44": 0.1216445857481098
+    },
+    "primary_fixed_seed_relation_bootstrap_95_ci": [
+      0.1388913322285126,
+      0.21553030919338
+    ],
+    "primary_hierarchical_seed_relation_bootstrap_95_ci": [
+      0.08353431876528843,
+      0.3119628032755457
+    ],
+    "frozen_primary_decision": "SUPPORTS_C1_HELDOUT_RELATION_SEPARATION",
+    "positive_cosine_mean_delta": -0.0165606353015289,
+    "negative_cosine_mean_delta": -0.1925340970611615,
+    "cosine_auroc_per_seed_delta": {
+      "42": -0.023644444444444357,
+      "43": -0.0829333333333333,
+      "44": 0.20666666666666667
+    },
+    "score_gap_separation_mean_delta": 0.2434762826230791,
+    "score_gap_separation_fixed_seed_relation_bootstrap_95_ci": [
+      0.14051062665714156,
+      0.34571484446194434
+    ],
+    "score_gap_separation_hierarchical_seed_relation_bootstrap_95_ci": [
+      0.014522579948107406,
+      0.47000127605597175
+    ]
+  },
+  "interpretation": {
+    "hard_negative_separation_and_representation_decollapse_supported": true,
+    "positive_pair_invariance_improvement_supported": false,
+    "cosine_relation_rank_discrimination_consistent_across_seeds": false,
+    "score_gap_relation_structure_improved_in_all_three_seeds": true,
+    "hard_negative_margin_0_2_generally_satisfied": false,
+    "best_of_n_or_reward_ranking_efficacy_established": false,
+    "plain_language": "C1 reliably stopped treating almost every trajectory as the same representation and pushed hard negatives farther away, but it also moved positive pairs apart and did not improve cosine AUROC in every seed. This is partial mechanism evidence, not a final answer-selection win."
+  },
+  "dependency_warning": "The 150 positive and 150 negative relations share 43 endpoints and 44 queries/clusters. Bootstrap intervals are descriptive relation-level uncertainty, not proof of 300 independent samples.",
+  "claim_boundary": "partial_consistency_mechanism_evidence_for_hard_negative_separation_and_score_gap_structure_not_positive_invariance_or_Best_of_N_efficacy",
+  "next_gate": "new_query_disjoint_ranking_population_then_matched_C0_C1_H0_CH0_without_post_hoc_epoch_or_weight_tuning"
+}

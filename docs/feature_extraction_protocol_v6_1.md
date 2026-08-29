@@ -63,8 +63,10 @@ preflight 会额外占少量空间；启动前要求至少130 GB 可用空间。
 6. 8个 GPU worker 都通过后，再由8个 CPU verifier 逐文件重读，检查 shape、BF16、连续性、有限值和 SHA-256；
 7. 只有全部 verifier 与 writer 的 payload digest 一致，才发布最终 extracted manifest。
 
-这套恢复规则不会覆盖已经发布的 rollout、materialized rows、标签、关系或 inventory；所有新大文件都放在
-Git 忽略的 `run_artifacts/data_expansion_scale_v6/features_v6_1/`。
+这套恢复规则不会覆盖已经发布的 rollout、materialized rows、标签、关系或 inventory。第一次 plan 通过后，
+preflight 在模型加载前因 PyTorch 2.3 的 CUDA 显存统计 API 参数形式停止，没有写 tensor；该只影响监控调用的
+错误已经记录在机器授权。修复后不复用旧 plan，正式新文件放在全新的 Git 忽略目录
+`run_artifacts/data_expansion_scale_v6/features_v6_1_run2/`。
 
 ## 5. 固定执行顺序
 
@@ -104,4 +106,3 @@ tracked 文件会使后续命令 fail closed。
 
 通过只证明“选定关系的 exact-token 全层特征已完整、可读取、可复核”，属于数据/工程 pipeline 证据。它不证明
 Consistency 可学，更不证明 Best-of-N 提升。下一个独立决策门才是 C-only 训练与 heldout 正负关系机制评估。
-

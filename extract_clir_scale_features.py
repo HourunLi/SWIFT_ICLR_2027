@@ -55,7 +55,7 @@ DEFAULT_AUTHORIZATION = (
     / "configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json"
 )
 DEFAULT_OUTPUT_ROOT = (
-    PROJECT_ROOT / "run_artifacts/data_expansion_scale_v6/features_v6_1"
+    PROJECT_ROOT / "run_artifacts/data_expansion_scale_v6/features_v6_1_run2"
 )
 
 
@@ -422,7 +422,10 @@ def command_preflight(args: argparse.Namespace) -> None:
     device = torch.device(args.device)
     if device.type != "cuda" or not torch.cuda.is_available():
         raise ValueError("full-width preflight requires a visible CUDA GPU")
-    torch.cuda.reset_peak_memory_stats(device)
+    cuda_index = (
+        device.index if device.index is not None else torch.cuda.current_device()
+    )
+    torch.cuda.reset_peak_memory_stats(cuda_index)
     load_started = time.monotonic()
     model, resolved_revision = _load_model(authorization, device)
     model_load_seconds = time.monotonic() - load_started
@@ -478,8 +481,8 @@ def command_preflight(args: argparse.Namespace) -> None:
         "condition": condition_reload,
         "model_load_seconds": model_load_seconds,
         "extraction_seconds": extraction_seconds,
-        "cuda_peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
-        "cuda_peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
+        "cuda_peak_allocated_bytes": torch.cuda.max_memory_allocated(cuda_index),
+        "cuda_peak_reserved_bytes": torch.cuda.max_memory_reserved(cuda_index),
         "training_allowed": False,
     }
     atomic_write_json(report_path, report)
@@ -540,7 +543,10 @@ def command_extract_worker(args: argparse.Namespace) -> None:
     device = torch.device(args.device)
     if device.type != "cuda" or not torch.cuda.is_available():
         raise ValueError("feature extraction worker requires a visible CUDA GPU")
-    torch.cuda.reset_peak_memory_stats(device)
+    cuda_index = (
+        device.index if device.index is not None else torch.cuda.current_device()
+    )
+    torch.cuda.reset_peak_memory_stats(cuda_index)
     started = time.monotonic()
     model, resolved_revision = _load_model(authorization, device)
     contract = authorization["feature_contract"]
@@ -689,8 +695,8 @@ def command_extract_worker(args: argparse.Namespace) -> None:
         "new_trajectory_count": extracted_trajectories,
         "reused_trajectory_count": reused_trajectories,
         "elapsed_seconds": time.monotonic() - started,
-        "cuda_peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
-        "cuda_peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
+        "cuda_peak_allocated_bytes": torch.cuda.max_memory_allocated(cuda_index),
+        "cuda_peak_reserved_bytes": torch.cuda.max_memory_reserved(cuda_index),
         "training_allowed": False,
     }
     worker_report_path.parent.mkdir(parents=True, exist_ok=True)

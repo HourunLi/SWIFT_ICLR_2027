@@ -1,0 +1,112 @@
+{
+  "schema_version": "clir-h0-fresh-supplement-v7.2",
+  "status": "FROZEN_PREPARATION_ROLLOUT_NOT_STARTED",
+  "frozen_at_utc": "2026-08-29T17:32:41Z",
+  "reason": "fresh_query_pool_after_preregistered_v7_1_FAIL_yield",
+  "parent": {
+    "base_protocol_file_sha256": "1e9de5d1c6d23c63a7ed6a501440329ce78cdfdb0e26ade2e2189dad56440155",
+    "base_pre_rollout_registry_file_sha256": "15192ccd36268aaf8a48b1d056414be775b6a96405b376661df486363ecc4f34",
+    "base_ranking_queries_file_sha256": "44daeba2f7ba1103d6ba32f844db9436e28a282af50c7995b224b6c0c2d13c77",
+    "base_h_queries_file_sha256": "94573cfc721d7349dd5aa9342605b12f6e9ad8c9dbc6825333b6b9760ab3e9ec",
+    "base_h_materialized_file_sha256": "f62f534fc5600ba436117620aced8fb2bebbbdfda94fcffcbab0f5ca23b7a185",
+    "yield_rescue_amendment_file_sha256": "8b342155809fc22dba5d534a5fbfccd2d2ceccf83f3a122abc74afd2246d891a",
+    "yield_rescue_authorization_file_sha256": "a989b6b2542b9a6f083f18555b11053e63bf4ed340754608c7fc236c092b45ad",
+    "yield_rescue_rollout_report_file_sha256": "856e96789cec3301c78e079a7f06e6215f57f5518f42e172875bc0229ccddd76",
+    "yield_rescue_materialization_report_file_sha256": "a07710f662cf4ed40f40bf2fa01d909737cc873748a9ff95f7c8c5789a3c1f94",
+    "yield_rescue_materialized_file_sha256": "f8b7bc8d0e8f2c473321ff12ab264310a3c088a6defc23090c32b4e0563b18b5",
+    "ai_labels_seen": false
+  },
+  "observed_final_fail_yield": {
+    "combined_candidate_rows": 12584,
+    "combined_original_queries": 1000,
+    "surviving_queries_by_cell": {
+      "numeric_match|dev|gsm8k": 89,
+      "numeric_match|dev|math": 43,
+      "numeric_match|train|gsm8k": 202,
+      "numeric_match|train|math": 73,
+      "numeric_mismatch|dev|gsm8k": 19,
+      "numeric_mismatch|dev|math": 113,
+      "numeric_mismatch|train|gsm8k": 25,
+      "numeric_mismatch|train|math": 258
+    },
+    "remaining_shortages": {
+      "numeric_match|dev|math": 7,
+      "numeric_match|train|math": 27,
+      "numeric_mismatch|dev|gsm8k": 14
+    },
+    "failure_class": "FAIL-yield",
+    "second_sampling_round_on_existing_queries_forbidden": true
+  },
+  "fresh_source_pool": {
+    "inherits_base_train_only_sources_and_all_hash_pins": true,
+    "all_v7_ranking_and_h_queries_are_exclusion_anchors": true,
+    "all_clusters_touching_a_historical_or_v7_anchor_are_excluded": true,
+    "one_query_per_new_template_cluster": true,
+    "cluster_namespace": "clir-ranking-v7.2-fresh-supplement",
+    "math": {
+      "selected_level": 2,
+      "minimum_official_solution_words": 45,
+      "allowed_subjects_inherit_base": true,
+      "reason": "fresh_easier_numeric_match_queries_with_long_reference_reasoning"
+    },
+    "gsm8k": {
+      "long_chain_filter_inherits_base": true,
+      "reason": "fresh_numeric_mismatch_queries"
+    }
+  },
+  "preassigned_cells": [
+    {
+      "source": "math",
+      "checker_status": "numeric_match",
+      "label_split": "train",
+      "query_count": 80
+    },
+    {
+      "source": "math",
+      "checker_status": "numeric_match",
+      "label_split": "dev",
+      "query_count": 30
+    },
+    {
+      "source": "gsm8k",
+      "checker_status": "numeric_mismatch",
+      "label_split": "dev",
+      "query_count": 70
+    }
+  ],
+  "query_count": 180,
+  "candidate_count": 16,
+  "candidate_index_start": 0,
+  "expected_candidate_rows": 2880,
+  "rollout_shards": 8,
+  "generation": {
+    "inherits_base_model_revision_prompt_temperature_top_p_and_max_new_tokens": true,
+    "independent_seed_namespace": "clir-H-v7.2-fresh-supplement-query-seed",
+    "exact_prompt_token_ids_frozen_before_rollout": true
+  },
+  "selection_after_materialization": {
+    "same_checker_version_as_base": true,
+    "same_unitizer_version_as_base": true,
+    "minimum_material_units": 5,
+    "truncated_or_parser_or_unitizer_failure_is_ineligible": true,
+    "one_proposal_per_query": true,
+    "candidate_choice_namespace": "clir-H-v7-candidate-within-query",
+    "original_800_proposal_cell_quotas_unchanged": true,
+    "no_further_adaptive_sampling": true
+  },
+  "execution_authorization": {
+    "source_audit_allowed": true,
+    "pre_rollout_freeze_allowed": true,
+    "rollout_allowed": false,
+    "ai_annotation_allowed": false,
+    "feature_extraction_allowed": false,
+    "training_allowed": false,
+    "next_gate": "clean_commit_then_freeze_and_independently_recompute"
+  },
+  "claim_boundary": {
+    "supplement_is_post_yield_but_pre_ai_label": true,
+    "math_level_2_is_a_documented_source_extension": true,
+    "labels_remain_dual_ai_silver_without_human_verification": true,
+    "fresh_ranking_evaluation_population_is_unchanged": true
+  }
+}

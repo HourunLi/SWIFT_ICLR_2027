@@ -1876,8 +1876,7 @@ def _verify_materialized_h(
         )
         rescue_report = json.loads(rescue_report_path.read_text(encoding="utf-8"))
         if (
-            rescue_report.get("status")
-            != "PASS_H0_V7_1_YIELD_RESCUE_MATERIALIZATION"
+            rescue_report.get("status") != "PASS_H0_V7_1_YIELD_RESCUE_MATERIALIZATION"
             or rescue_report.get("file_sha256") != rescue_sidecar["file_sha256"]
             or int(rescue_report.get("rows", -1)) != len(rescue_rows)
             or rescue_report.get("parent_h_materialized_file_sha256")
@@ -1885,11 +1884,59 @@ def _verify_materialized_h(
         ):
             raise ValueError("yield-rescue materialization report drift")
         parent_query_ids = {str(row["query_id"]) for row in h_rows}
-        if not {str(row["query_id"]) for row in rescue_rows}.issubset(
-            parent_query_ids
-        ):
+        if not {str(row["query_id"]) for row in rescue_rows}.issubset(parent_query_ids):
             raise ValueError("yield-rescue rows contain a non-parent query")
         h_rows = [*h_rows, *rescue_rows]
+    supplement_path = output_root / "supplement_v7_2/materialized/supplement_rows.jsonl"
+    if supplement_path.exists():
+        supplement_rows, supplement_sidecar = _read_published_jsonl(
+            supplement_path,
+            expected_schema="clir-h0-v7.2-fresh-supplement-materialized",
+        )
+        supplement_report_path = (
+            output_root / "supplement_v7_2/materialized/materialization_report.json"
+        )
+        supplement_report = json.loads(
+            supplement_report_path.read_text(encoding="utf-8")
+        )
+        if (
+            supplement_report.get("status")
+            != "PASS_H0_V7_2_FRESH_SUPPLEMENT_MATERIALIZATION"
+            or supplement_report.get("file_sha256") != supplement_sidecar["file_sha256"]
+            or int(supplement_report.get("rows", -1)) != len(supplement_rows)
+            or supplement_report.get("parent_h_materialized_file_sha256")
+            != file_sha256(h_path)
+            or supplement_report.get("parent_rescue_materialized_file_sha256")
+            != file_sha256(rescue_path)
+            or supplement_report.get("supplement_protocol_file_sha256")
+            != file_sha256(
+                PROJECT_ROOT
+                / "configs/ranking_expansion_v7/supplement_protocol_v7_2.json"
+            )
+            or supplement_report.get("pre_rollout_registry_file_sha256")
+            != file_sha256(
+                output_root
+                / "supplement_v7_2/pre_rollout/manifest_registry.json"
+            )
+            or supplement_report.get("independent_verification_file_sha256")
+            != file_sha256(
+                output_root
+                / "supplement_v7_2/pre_rollout/independent_verification.json"
+            )
+            or supplement_report.get("authorization_file_sha256")
+            != file_sha256(
+                PROJECT_ROOT
+                / "configs/ranking_expansion_v7/supplement_authorization_v7_2.json"
+            )
+            or supplement_report.get("query_overlap_with_v7") != 0
+            or supplement_report.get("cluster_overlap_with_v7") != 0
+        ):
+            raise ValueError("fresh supplement materialization report drift")
+        parent_query_ids = {str(row["query_id"]) for row in h_rows}
+        supplement_query_ids = {str(row["query_id"]) for row in supplement_rows}
+        if parent_query_ids & supplement_query_ids:
+            raise ValueError("fresh supplement reuses a parent H query")
+        h_rows = [*h_rows, *supplement_rows]
     return protocol, output_root, ranking, h_rows, h_validation
 
 

@@ -1,10 +1,11 @@
 # CLIR 排序评测与 H0 扩量协议 v7
 
-状态：32,000 条原始回复已经生成并通过哈希校验，checker/unitizer 已完成；H0 proposal
-首次冻结因目标回复产率不足而停止，尚未送给 AI 标注，也未抽特征或训练。机器可执行的
-权威契约是 `configs/ranking_expansion_v7/protocol.json` 和一次性补采样修订
-`configs/ranking_expansion_v7/yield_rescue_amendment_v7_1.json`；本文只解释设计，不替代
-JSON 契约。
+状态：32,000 条原始回复与 v7.1 一次性补采样均已完成并通过哈希校验，但 H0 proposal
+仍有三个格子产率不足；v7.2 全新补充题池已通过只读容量审计，尚未生成，也尚未送给 AI
+标注、抽特征或训练。机器可执行的权威契约是 `configs/ranking_expansion_v7/protocol.json`、
+`configs/ranking_expansion_v7/yield_rescue_amendment_v7_1.json` 和
+`configs/ranking_expansion_v7/supplement_protocol_v7_2.json`；本文只解释设计，不替代 JSON
+契约。
 
 ## 1. 这一轮要回答什么
 
@@ -77,6 +78,24 @@ v7.1 只允许一次补采样：固定上述短缺格子中全部 191 道零产�
 5 个 material units 的门槛、800 条配额和哈希选择规则都不变；仍然是每题最多入选一条。
 补采样前没有查看任何 AI 标签。若这一轮后仍凑不满，必须以 FAIL-yield 停止并另建新题池，
 不能继续追采样或降低门槛。
+
+v7.1 补采样按上述规则执行后仍有三个格子不足：MATH numeric-match train/dev 分别差
+27/7 道，GSM8K numeric-mismatch dev 差 14 道。因此旧 191 道题正式停止采样，转入新的
+v7.2 题池，不把这次结果当成协议或标签失败。
+
+### 4.2 v7.2 全新补充题池
+
+v7.2 在任何 AI 标签打开前冻结 180 道新题，每题从一开始固定生成 16 条，共 2,880 条：
+
+- 80 道 MATH numeric-match train；
+- 30 道 MATH numeric-match dev；
+- 70 道 GSM8K numeric-mismatch dev。
+
+所有历史题、v7 排序题和原 H0 题都作为模板簇排除锚点，新题与它们 query 和模板簇均不
+重叠。GSM8K 仍用原来的长链门槛；MATH 为了补充较稀缺的数值正确路径，扩展到 level 2，
+但仍要求官方解答至少 45 个英文词并可解析出单一数值。只允许这一批预冻结生成，不再按
+结果追加采样；checker、unitizer、至少 5 个实质步骤、每题最多一条和最终 800 条格子配额
+全部保持不变。机器契约见 `configs/ranking_expansion_v7/supplement_protocol_v7_2.json`。
 
 ## 5. 后续训练与允许的结论
 

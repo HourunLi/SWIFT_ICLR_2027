@@ -131,6 +131,28 @@ def test_proposals_accept_one_frozen_rescue_round() -> None:
     assert report["input_rows"] == 8 * 8 + 24
 
 
+def test_proposals_accept_fresh_sixteen_candidate_queries() -> None:
+    protocol = _protocol()
+    rows = _rows()
+    query_id = rows[0]["query_id"]
+    target = rows[0]["h_target_checker_status"]
+    fresh = [row for row in rows if row["query_id"] != query_id]
+    parent = next(row for row in rows if row["query_id"] == query_id)
+    for candidate_index in range(16):
+        candidate = dict(parent)
+        candidate["id"] = f"{query_id}:cand:{candidate_index:03d}"
+        candidate["candidate_index"] = candidate_index
+        candidate["checker_status"] = (
+            target if candidate_index == 12 else "numeric_mismatch"
+        )
+        fresh.append(candidate)
+
+    proposals, _ = build_h_proposals(fresh, protocol)
+    chosen = next(row for row in proposals if row["query_id"] == query_id)
+
+    assert chosen["candidate_index"] == 12
+
+
 def test_blind_package_controls_repeats_and_smoke_gate() -> None:
     protocol = _protocol()
     proposals, _ = build_h_proposals(_rows(), protocol)

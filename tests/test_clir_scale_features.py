@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from extract_clir_scale_features import build_parser
+from extract_clir_scale_features import _initialize_cuda_memory_stats, build_parser
 from src.clir_scale_features import (
     AUTHORIZATION_SCHEMA,
     SELECTED_INPUT_SCHEMA,
@@ -219,3 +219,28 @@ def test_scale_feature_cli_has_separate_prepare_extract_verify_and_finalize_step
     )
     assert parser.parse_args(["verify-worker", "--worker-index", "0"]).worker_index == 0
     assert parser.parse_args(["finalize"]).command == "finalize"
+
+
+def test_cuda_memory_stats_initializes_context_before_reset(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        torch.cuda, "set_device", lambda index: calls.append(("set", index))
+    )
+    monkeypatch.setattr(
+        torch,
+        "empty",
+        lambda *args, **kwargs: calls.append(("empty", kwargs["device"])),
+    )
+    monkeypatch.setattr(
+        torch.cuda,
+        "reset_peak_memory_stats",
+        lambda index: calls.append(("reset", index)),
+    )
+
+    assert _initialize_cuda_memory_stats(torch.device("cuda:3")) == 3
+    assert calls == [
+        ("set", 3),
+        ("empty", torch.device("cuda:3")),
+        ("reset", 3),
+    ]

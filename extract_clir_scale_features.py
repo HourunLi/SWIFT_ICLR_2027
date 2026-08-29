@@ -55,7 +55,7 @@ DEFAULT_AUTHORIZATION = (
     / "configs/data_expansion_scale_v6/feature_extraction_authorization_v6_1.json"
 )
 DEFAULT_OUTPUT_ROOT = (
-    PROJECT_ROOT / "run_artifacts/data_expansion_scale_v6/features_v6_1_run2"
+    PROJECT_ROOT / "run_artifacts/data_expansion_scale_v6/features_v6_1_run3"
 )
 
 
@@ -403,6 +403,18 @@ def _record_new_tensor(value: torch.Tensor, path: Path) -> dict[str, Any]:
     }
 
 
+def _initialize_cuda_memory_stats(device: torch.device) -> int:
+    """Initialize the CUDA context before using PyTorch 2.3 memory stats."""
+
+    cuda_index = (
+        device.index if device.index is not None else torch.cuda.current_device()
+    )
+    torch.cuda.set_device(cuda_index)
+    torch.empty(0, device=device)
+    torch.cuda.reset_peak_memory_stats(cuda_index)
+    return cuda_index
+
+
 def command_preflight(args: argparse.Namespace) -> None:
     output_root = Path(args.output_root).resolve()
     authorization, plan, selected, plan_path = _load_plan(
@@ -422,10 +434,7 @@ def command_preflight(args: argparse.Namespace) -> None:
     device = torch.device(args.device)
     if device.type != "cuda" or not torch.cuda.is_available():
         raise ValueError("full-width preflight requires a visible CUDA GPU")
-    cuda_index = (
-        device.index if device.index is not None else torch.cuda.current_device()
-    )
-    torch.cuda.reset_peak_memory_stats(cuda_index)
+    cuda_index = _initialize_cuda_memory_stats(device)
     load_started = time.monotonic()
     model, resolved_revision = _load_model(authorization, device)
     model_load_seconds = time.monotonic() - load_started
@@ -543,10 +552,7 @@ def command_extract_worker(args: argparse.Namespace) -> None:
     device = torch.device(args.device)
     if device.type != "cuda" or not torch.cuda.is_available():
         raise ValueError("feature extraction worker requires a visible CUDA GPU")
-    cuda_index = (
-        device.index if device.index is not None else torch.cuda.current_device()
-    )
-    torch.cuda.reset_peak_memory_stats(cuda_index)
+    cuda_index = _initialize_cuda_memory_stats(device)
     started = time.monotonic()
     model, resolved_revision = _load_model(authorization, device)
     contract = authorization["feature_contract"]

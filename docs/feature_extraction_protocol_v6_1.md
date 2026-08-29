@@ -63,10 +63,10 @@ preflight 会额外占少量空间；启动前要求至少130 GB 可用空间。
 6. 8个 GPU worker 都通过后，再由8个 CPU verifier 逐文件重读，检查 shape、BF16、连续性、有限值和 SHA-256；
 7. 只有全部 verifier 与 writer 的 payload digest 一致，才发布最终 extracted manifest。
 
-这套恢复规则不会覆盖已经发布的 rollout、materialized rows、标签、关系或 inventory。第一次 plan 通过后，
-preflight 在模型加载前因 PyTorch 2.3 的 CUDA 显存统计 API 参数形式停止，没有写 tensor；该只影响监控调用的
-错误已经记录在机器授权。修复后不复用旧 plan，正式新文件放在全新的 Git 忽略目录
-`run_artifacts/data_expansion_scale_v6/features_v6_1_run2/`。
+这套恢复规则不会覆盖已经发布的 rollout、materialized rows、标签、关系或 inventory。前两次 plan 通过后，
+preflight 都在模型加载前被 PyTorch 2.3 的 CUDA 显存统计 API 停止：第一次参数不是整数设备号，第二次虽改成
+整数但还没初始化 CUDA context；两次都没有写 tensor，且已逐次记录在机器授权。修复后不复用旧 plan，正式
+新文件放在全新的 Git 忽略目录 `run_artifacts/data_expansion_scale_v6/features_v6_1_run3/`。
 
 ## 5. 固定执行顺序
 

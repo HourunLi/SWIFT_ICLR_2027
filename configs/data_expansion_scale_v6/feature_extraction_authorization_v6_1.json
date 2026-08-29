@@ -86,6 +86,16 @@
     "scope_or_feature_math_changed": false,
     "resolution": "pass_the_integer_visible_cuda_index_and_restart_in_a_new_empty_output_root"
   },
+  "failed_preflight_attempt_2": {
+    "output_root": "run_artifacts/data_expansion_scale_v6/features_v6_1_run2",
+    "plan_code_commit": "3f29035915b2f1b94d29b54fae402e0ed9c5ded5",
+    "plan_file_sha256": "7e58517f95bf323ff295c8fdf5a0086af84910a96793fcc49fe787df3060c7d8",
+    "status": "STOP_BEFORE_MODEL_LOAD_CUDA_CONTEXT_NOT_INITIALIZED_FOR_MEMORY_STATS",
+    "model_loaded": false,
+    "tensor_written": false,
+    "scope_or_feature_math_changed": false,
+    "resolution": "initialize_the_visible_cuda_context_before_resetting_peak_stats_and_restart_in_a_new_empty_output_root"
+  },
   "feature_contract": {
     "model_id": "microsoft/Phi-3.5-mini-instruct",
     "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
@@ -113,7 +123,7 @@
     "relation_endpoint_union_must_equal_inventory": true
   },
   "runtime_contract": {
-    "output_root": "run_artifacts/data_expansion_scale_v6/features_v6_1_run2",
+    "output_root": "run_artifacts/data_expansion_scale_v6/features_v6_1_run3",
     "cache_dir": "run_artifacts/model_cache",
     "worker_count": 8,
     "one_cuda_device_per_worker": true,

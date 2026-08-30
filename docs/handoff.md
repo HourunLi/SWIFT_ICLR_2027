@@ -678,6 +678,26 @@ hallucination_onset = k
 - `score_clir.py`：默认 batch 2 + BF16，输出 checkpoint SHA-256、scalar/path-clean log/逐 token H-reward-value/prior membership/condition 诊断和每 query Best-of-N 标记；原子写入且默认不覆盖。
 - `evaluate_clir.py`：candidate-prefix Best-of-N、bootstrap、pairwise accuracy；默认要求全部 query 满足 max K，仅 `--allow_incomplete_queries` 启用逐 K 过滤，报告记录输入 SHA-256。
 
+### Ranking/H0 v7 当前终态
+
+v7 已生成并核验 1,500-query、每题 16 候选的新排序池，以及经补样后冻结的 800 条 H0
+proposal。80 条 smoke 通过全部门后开放 reserve。reserve 首轮因 A 大量兜底和控制失败而
+终止；v7.3 一次性修正案又让 GPT-5.6-sol xhigh 与 Claude Opus 5 high 在独立新会话中
+对同一批 800 条公开条目完整重标。
+
+v7.3 的 32 个 label shard 全部通过 schema、ID、unit index、原包重建、重复理由和哈希
+校验。自然 reserve 的 path agreement 为 `698/720=.96944`、kappa `.94081`，共同
+positive 403 条，首错 unit exact agreement `.76923`，A/B controls 都为 `8/8`。但 A/B
+self-repeat 只有 `65/72=.90278` 和 `64/72=.88889`，低于预注册 `.95`。最终状态是
+`FAIL_H0_V7_RESERVE`；final selection 未运行，没有可训练的 H0 Silver manifest，且
+feature extraction/training 都未授权。终止报告 SHA-256 为 `93260683…2c01`。修正案次数已
+耗尽，禁止第三次重标、选行补救、混轮、改分母或降门槛。
+
+重复失败的只读拆解是：15 个分歧中 11 个保持 hallucinated path、但 onset 相差 3–43 个
+unit；另外 4 个直接在 clean/hallucinated 之间翻转，没有一个只是相邻 unit 的 ±1 偏差。
+因此不能用“exact 太严”解释，也不应把原数据改成 ±1 后追认通过。若另开新 H 协议，应
+优先机械化坏主张的证据与不可挽回边界，或把监督改成预注册的候选集合/区间目标。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
@@ -691,7 +711,9 @@ hallucination_onset = k
 - consistency 已有400个训练正对、150个 held-out 正对和150个 held-out hard negative 的
   三 seed C0/C1 复测；均值 separation 与 score-gap 结构改善，但正对 cosine 下降、AUROC
   seed 方向混合，且尚无新的 ranking population。
-- H 证据来自很少的 Silver trajectory，首错边界一致性弱；clean onset ±5 仍为 0，恢复的 main gold-tail 再次未通过 locality/ranking 门。
+- 历史 H 证据来自很少的 Silver trajectory；v7 虽显示双 AI 对自然 path/onset 有较高互相
+  一致性，但两边各自的盲重复稳定性都未过门，因此没有新增可训练 H0 标签。clean onset
+  ±5 仍为 0，恢复的 main gold-tail 再次未通过 locality/ranking 门。
 - dual prior 只有 48 条历史 Key/Complete 标注 trajectory；clean direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
@@ -702,23 +724,18 @@ hallucination_onset = k
 
 ## 下一步
 
-1. 按 [`ranking_expansion_protocol_v7.md`](ranking_expansion_protocol_v7.md) 冻结并独立复算
-   1,500-query 排序池和 1,000-query H0 采集池。只读容量审计已经确认 4,062 条可选题，
-   两池 query/template-cluster overlap 均为 0。
-2. 用 8 张 L20Z 分 50 个可恢复 shard 生成 32,000 条 Phi 候选，先校验每片 token IDs、
-   候选编号、模型/代码版本和哈希，再合并；原始数据不进 Git。
-3. checker/unitizer 后确定性冻结 800 条 H proposal。先只开放 80 条 smoke 给互盲的
-   GPT-5.6-sol xhigh 与 Claude Opus 5 high；通过 path/onset/control/self-repeat 门后才开放
-   reserve。最终目标为 train 200 positive + 200 clean、dev 100 + 100，统一称无人工复核
-   Dual-AI Silver。
-4. 只为冻结的 24,000 条排序候选、800 条 H proposal 和每题 condition 抽全层 feature；
-   禁止把全部 32,000 条 rollout 都物化成 33×3072 feature。
-5. 固定运行 `C0/C1/H0/CH0 × seeds 42/43/44 × 3 epochs`。H1 negative-tail、Dual Prior
-   和 Full 本轮关闭；不根据结果追加 epoch 或调 loss。用新排序池报告 Best-of-16、各 K、
-   random/oracle、题源分层、seed 区间及 `CH0-C1-H0+C0` 交互。
+1. 保留 v7 的 24,000 条新排序候选和全部 H0 失败证据，不覆盖、不重标、不从失败行中
+   选择训练子集。
+2. 原 `C0/C1/H0/CH0` 四格矩阵因 H0 门失败已经阻断。下一项需要用户在两个独立方向中
+   另行授权：要么只抽新排序池特征并做 C0/C1 排序复测；要么先设计全新的 H0 数据协议，
+   使用新的题/候选和更稳定的标注过程，然后再谈 H0/CH0。
+3. 若选择 C0/C1，必须先冻结 selected-only feature inventory、存储预算、代码 commit 和
+   独立核验流程，再使用 GPU；不得顺带抽取失败 H0 proposal 的训练 feature。
+4. 若选择新 H0，必须把本轮 800 query 永久排除，并在看到新标签前重新冻结 self-repeat、
+   path/onset、控制项和最终产率门；不能把降低 `.95` 写成对本轮的追认。
 
-完整 v7 结果出现前，当前裁决仍是：Consistency 有部分 held-out relation 机制证据；H0、
+当前裁决仍是：Consistency 有部分 held-out relation 机制证据；H0、
 H1、Prior 的历史 Best-of-N 都只是小样本筛选信号；C+H0 有负交互迹象；Full 没有建立增益。
-不得把“扩量正在执行”写成模块已经通过确认。
+v7 只新增了新排序资产和一次终止的 H0 标注实验，不得写成 H0 扩量成功或模块已经确认。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

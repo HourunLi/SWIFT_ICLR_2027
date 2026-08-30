@@ -714,19 +714,25 @@ separation 也从 `.18622` 增至 `.42970`。同时，正对 cosine 下降、cos
 `.2` margin。结论是 Consistency 已有“分开 hard negative、打破表示塌缩”的部分机制
 证据，尚未建立完整正对不变性或最终选答案增益。
 
-### 排序评测与 H0 扩量 v7（准备中）
+### 排序评测与 H0 扩量 v7（H0 标注已按门槛终止）
 
-下一阶段已经冻结准备协议，详见
+冻结协议见
 [`docs/ranking_expansion_protocol_v7.md`](docs/ranking_expansion_protocol_v7.md) 和
 [`configs/ranking_expansion_v7/protocol.json`](configs/ranking_expansion_v7/protocol.json)。
-只读容量审计已通过：排除历史使用题及其近重复簇后还有 4,062 条可选题，足以建立互不
-重叠的 1,500-query 新排序池（700 MATH + 800 长链 GSM8K，每题 16 候选）和
-1,000-query H0 采集池（600 + 400，每题 8 候选），query 与模板簇交叉都为 0。
+现已生成并校验 1,500-query 新排序池的 24,000 条候选，以及 H0 采集、补样和最终冻结的
+800 条 proposal。80 条 smoke 通过后开放 720 条 reserve；reserve 首轮失败，v7.3 按
+一次性修正案让 GPT-5.6-sol xhigh 和 Claude Opus 5 high 对原封不动的 800 条公开包全部
+重标。第二轮 path 一致率为 `698/720=96.94%`，共同 positive 的首错 unit 精确一致率为
+`310/403=76.92%`，控制项两边均为 `8/8`；但 A/B 的盲重复自一致性分别只有
+`65/72=90.28%` 和 `64/72=88.89%`，没有达到预先冻结的 95%。因此最终状态为
+`FAIL_H0_V7_RESERVE`，没有发布 H0 Silver train/dev，也不允许 H0 feature extraction、
+H0/CH0 训练、第三次重标或事后降低门槛。终止报告 SHA-256 为
+`93260683…2c01`，原始标注和完整报告只保留在本地 `run_artifacts/`。
 
-本轮只扩 H0 的 first-bad-unit Silver 标签；H1 negative-tail、Dual Prior 和 Full 暂不
-进入训练。H0 smoke 与双 AI 门通过后，固定重跑 C0/C1/H0/CH0、seeds 42/43/44、
-3 epochs，并在新排序池上比较 Best-of-16 和二因子交互。当前状态仅表示源数据、隔离、
-预算和执行代码已通过审计；尚未生成候选、标注、抽特征或得到新的模块效果结论。
+新鲜的 1,500-query 排序候选仍是独立、可复用的评测资产，但在新的书面授权前不抽特征。
+原计划的 C0/C1/H0/CH0 矩阵因 H0 标签门失败不能照原协议执行；可以另行预注册只跑
+C0/C1 的新排序复测，或重新设计一批真正独立的 H0 数据协议，但不能把本轮失败行挑出来
+训练。本轮仍没有产生新的模块 Best-of-N 效果结论。
 
 ## Toy smoke test
 

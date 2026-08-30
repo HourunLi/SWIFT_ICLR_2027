@@ -4,6 +4,8 @@ from src.clir_h_expansion import (
     build_h_annotation_packages,
     build_h_proposals,
     evaluate_h_package_labels,
+    finalize_h_silver_rows,
+    reserve_gate,
     smoke_gate,
     split_smoke_and_reserve,
 )
@@ -29,6 +31,16 @@ def _protocol() -> dict:
                 "numeric_match": {"math": 1, "gsm8k": 1},
                 "minimum_final_positive": 2,
                 "minimum_final_clean": 2,
+            },
+            "final_target": {
+                "train_positive": 1,
+                "train_clean": 1,
+                "dev_positive": 1,
+                "dev_clean": 1,
+                "selection": (
+                    "common_exact_non_low_agreement_then_frozen_hash_order"
+                ),
+                "label_name": "silver_dual_ai_h_onset_test",
             },
             "annotation": {
                 "raw_path_agreement_min": 0.9,
@@ -210,3 +222,77 @@ def test_blind_package_controls_repeats_and_smoke_gate() -> None:
         "hallucinated": 2,
     }
     assert gate["pass"] is True
+    assert reserve_gate(evaluation, protocol)["pass"] is True
+
+
+def _final_labels(proposals: list[dict], *, all_clean: bool = False) -> dict:
+    labels: dict[str, dict[str, dict]] = {"a": {}, "b": {}}
+    by_split: dict[str, list[dict]] = {"train": [], "dev": []}
+    for proposal in proposals:
+        by_split[proposal["h_label_split"]].append(proposal)
+    signatures: dict[str, tuple[str, int | None]] = {}
+    for split_rows in by_split.values():
+        ordered = sorted(split_rows, key=lambda row: row["proposal_priority"])
+        for index, proposal in enumerate(ordered):
+            hallucinated = index == 1 and not all_clean
+            signatures[proposal["proposal_id"]] = (
+                "hallucinated" if hallucinated else "clean",
+                2 if hallucinated else None,
+            )
+    for annotator in ("a", "b"):
+        for proposal in proposals:
+            status, onset = signatures[proposal["proposal_id"]]
+            labels[annotator][proposal["proposal_id"]] = {
+                "item_id": proposal["proposal_id"],
+                "status": status,
+                "first_bad_unit_index": onset,
+                "confidence": "high",
+                "rationale": "deterministic test label",
+            }
+    return labels
+
+
+def test_final_silver_selection_materializes_frozen_balanced_cells() -> None:
+    protocol = _protocol()
+    proposals, _ = build_h_proposals(_rows(), protocol)
+    selected, report = finalize_h_silver_rows(
+        proposals=proposals,
+        labels_by_annotator=_final_labels(proposals),
+        protocol=protocol,
+    )
+
+    assert report["status"] == "PASS_H0_V7_FINAL_SILVER_SELECTION"
+    assert report["selected_rows"] == 4
+    assert report["selected_by_cell"] == {
+        "dev|clean": 1,
+        "dev|hallucinated": 1,
+        "train|clean": 1,
+        "train|hallucinated": 1,
+    }
+    assert len({row["query_id"] for row in selected}) == 4
+    for row in selected:
+        if row["h_status"] == "hallucinated":
+            assert row["path_hallucinated"] == 1
+            assert row["first_bad_unit_index"] == 2
+            assert row["hallucination_onset"] == 2
+        else:
+            assert row["path_hallucinated"] == 0
+            assert row["first_bad_unit_index"] is None
+            assert row["hallucination_onset"] == -1
+
+
+def test_final_silver_selection_fails_closed_on_cell_shortage() -> None:
+    protocol = _protocol()
+    proposals, _ = build_h_proposals(_rows(), protocol)
+    selected, report = finalize_h_silver_rows(
+        proposals=proposals,
+        labels_by_annotator=_final_labels(proposals, all_clean=True),
+        protocol=protocol,
+    )
+
+    assert selected == []
+    assert report["status"] == "FAIL_H0_V7_FINAL_YIELD"
+    assert report["shortages"] == {
+        "dev|hallucinated": {"target": 1, "available": 0},
+        "train|hallucinated": {"target": 1, "available": 0},
+    }

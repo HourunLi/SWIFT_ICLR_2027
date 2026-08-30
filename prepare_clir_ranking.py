@@ -23,11 +23,14 @@ import time
 from typing import Any, Mapping, Sequence
 
 from src.clir_h_expansion import (
+    H_LABEL_SCHEMA,
     H_PACKAGE_SCHEMA,
     H_PROPOSAL_SCHEMA,
     build_h_annotation_packages,
     build_h_proposals,
     evaluate_h_package_labels,
+    finalize_h_silver_rows,
+    reserve_gate,
     smoke_gate,
     split_smoke_and_reserve,
 )
@@ -2137,14 +2140,21 @@ def command_package_h(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
-def command_evaluate_h_smoke(args: argparse.Namespace) -> None:
-    protocol, output_root, _, _ = _verify_h_proposals(args)
-    package_dir = output_root / "packages/smoke"
+def _evaluate_h_stage_labels(
+    *,
+    output_root: Path,
+    stage: str,
+    labels_a: str | Path,
+    labels_b: str | Path,
+) -> tuple[dict[str, dict[str, dict[str, Any]]], dict[str, Any], dict[str, Any]]:
+    if stage not in {"smoke", "reserve"}:
+        raise ValueError("H evaluation stage must be smoke or reserve")
+    package_dir = output_root / f"packages/{stage}"
     package_report = json.loads(
         (package_dir / "package_report.json").read_text(encoding="utf-8")
     )
-    if package_report.get("status") != "PASS_H0_V7_SMOKE_PACKAGE":
-        raise ValueError("H smoke package report is not a PASS")
+    if package_report.get("status") != f"PASS_H0_V7_{stage.upper()}_PACKAGE":
+        raise ValueError(f"H {stage} package report is not a PASS")
     public = {
         annotator: _read_published_jsonl(
             package_dir / f"annotator_{annotator}/hallucination.jsonl",
@@ -2157,13 +2167,25 @@ def command_evaluate_h_smoke(args: argparse.Namespace) -> None:
         expected_schema="clir-h0-v7-private-package-index",
     )[0]
     labels = {
-        "a": read_jsonl(Path(args.labels_a)),
-        "b": read_jsonl(Path(args.labels_b)),
+        "a": read_jsonl(Path(labels_a)),
+        "b": read_jsonl(Path(labels_b)),
     }
-    _, evaluation = evaluate_h_package_labels(
+    canonical, evaluation = evaluate_h_package_labels(
         public_by_annotator=public,
         private_rows=private_rows,
         labels_by_annotator=labels,
+    )
+    return canonical, evaluation, package_report
+
+
+def command_evaluate_h_smoke(args: argparse.Namespace) -> None:
+    protocol, output_root, _, _ = _verify_h_proposals(args)
+    package_dir = output_root / "packages/smoke"
+    _, evaluation, _ = _evaluate_h_stage_labels(
+        output_root=output_root,
+        stage="smoke",
+        labels_a=args.labels_a,
+        labels_b=args.labels_b,
     )
     gate = smoke_gate(evaluation, protocol)
     report = {
@@ -2185,6 +2207,163 @@ def command_evaluate_h_smoke(args: argparse.Namespace) -> None:
     if report_path.exists():
         raise FileExistsError("H smoke evaluation report already exists")
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def command_finalize_h(args: argparse.Namespace) -> None:
+    protocol, output_root, proposals, _ = _verify_h_proposals(args)
+    code_commit = _require_clean_execution("ranking-v7 H Silver finalization")
+    smoke_report_path = output_root / "evaluation/smoke_evaluation_report.json"
+    if not smoke_report_path.exists():
+        raise FileNotFoundError("H smoke evaluation report is missing")
+    smoke_report = json.loads(smoke_report_path.read_text(encoding="utf-8"))
+    smoke_package_path = output_root / "packages/smoke/package_report.json"
+    if (
+        smoke_report.get("status") != "PASS_H0_V7_SMOKE"
+        or smoke_report.get("protocol_file_sha256")
+        != file_sha256(Path(args.protocol))
+        or smoke_report.get("package_report_file_sha256")
+        != file_sha256(smoke_package_path)
+        or smoke_report.get("labels_a_file_sha256")
+        != file_sha256(Path(args.smoke_labels_a))
+        or smoke_report.get("labels_b_file_sha256")
+        != file_sha256(Path(args.smoke_labels_b))
+    ):
+        raise ValueError("H smoke PASS report or its bound labels drifted")
+
+    final_dir = output_root / "final"
+    report_path = final_dir / "finalization_report.json"
+    paths = {
+        "all": final_dir / "h_silver_all.jsonl",
+        "train": final_dir / "h_silver_train.jsonl",
+        "dev": final_dir / "h_silver_dev.jsonl",
+    }
+    if report_path.exists() or any(
+        path.exists() or path.with_suffix(path.suffix + ".manifest.json").exists()
+        for path in paths.values()
+    ):
+        raise FileExistsError("ranking-v7 final H Silver artifacts already exist")
+
+    smoke_canonical, smoke_evaluation, _ = _evaluate_h_stage_labels(
+        output_root=output_root,
+        stage="smoke",
+        labels_a=args.smoke_labels_a,
+        labels_b=args.smoke_labels_b,
+    )
+    recalculated_smoke_gate = smoke_gate(smoke_evaluation, protocol)
+    if not recalculated_smoke_gate["pass"]:
+        raise ValueError("recalculated H smoke gate is not a PASS")
+    reserve_canonical, reserve_evaluation, _ = _evaluate_h_stage_labels(
+        output_root=output_root,
+        stage="reserve",
+        labels_a=args.reserve_labels_a,
+        labels_b=args.reserve_labels_b,
+    )
+    reserve_quality_gate = reserve_gate(reserve_evaluation, protocol)
+
+    combined: dict[str, dict[str, dict[str, Any]]] = {"a": {}, "b": {}}
+    for annotator in ("a", "b"):
+        smoke_ids = set(smoke_canonical[annotator])
+        reserve_ids = set(reserve_canonical[annotator])
+        if smoke_ids & reserve_ids:
+            raise ValueError("H smoke and reserve canonical populations overlap")
+        combined[annotator] = {
+            **smoke_canonical[annotator],
+            **reserve_canonical[annotator],
+        }
+    selected: list[dict[str, Any]] = []
+    selection_report: dict[str, Any] = {
+        "status": "NOT_RUN_RESERVE_QUALITY_GATE_FAILED"
+    }
+    if reserve_quality_gate["pass"]:
+        selected, selection_report = finalize_h_silver_rows(
+            proposals=proposals["all"],
+            labels_by_annotator=combined,
+            protocol=protocol,
+        )
+
+    final_status = (
+        selection_report["status"]
+        if reserve_quality_gate["pass"]
+        else reserve_quality_gate["status"]
+    )
+    report: dict[str, Any] = {
+        "schema_version": "clir-h0-v7-finalization-report",
+        "status": final_status,
+        "code_commit": code_commit,
+        "protocol_file_sha256": file_sha256(Path(args.protocol)),
+        "proposal_report_file_sha256": file_sha256(
+            output_root / "proposals/proposal_report.json"
+        ),
+        "smoke_evaluation_report_file_sha256": file_sha256(smoke_report_path),
+        "package_report_file_sha256": {
+            stage: file_sha256(output_root / f"packages/{stage}/package_report.json")
+            for stage in ("smoke", "reserve")
+        },
+        "label_files": {
+            "smoke_a": file_sha256(Path(args.smoke_labels_a)),
+            "smoke_b": file_sha256(Path(args.smoke_labels_b)),
+            "reserve_a": file_sha256(Path(args.reserve_labels_a)),
+            "reserve_b": file_sha256(Path(args.reserve_labels_b)),
+        },
+        "annotation_evaluation": {
+            "smoke": smoke_evaluation,
+            "reserve": reserve_evaluation,
+        },
+        "gates": {
+            "smoke_recalculated": recalculated_smoke_gate,
+            "reserve_quality": reserve_quality_gate,
+        },
+        "selection": selection_report,
+        "feature_extraction_allowed": False,
+        "training_allowed": False,
+    }
+    if final_status != "PASS_H0_V7_FINAL_SILVER_SELECTION":
+        final_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(report_path, report)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+
+    partitions = {
+        "all": selected,
+        "train": [row for row in selected if row["h_label_split"] == "train"],
+        "dev": [row for row in selected if row["h_label_split"] == "dev"],
+    }
+    if len(partitions["all"]) != 600:
+        raise AssertionError("final H all partition must contain 600 rows")
+    if len(partitions["train"]) != 400 or len(partitions["dev"]) != 200:
+        raise AssertionError("final H train/dev partition counts differ from protocol")
+    manifests = {
+        name: publish_manifest(
+            paths[name],
+            rows,
+            schema_version=H_LABEL_SCHEMA + f"-{name}",
+            metadata={
+                "protocol_file_sha256": file_sha256(Path(args.protocol)),
+                "code_commit": code_commit,
+                "label_name": protocol["h_acquisition"]["final_target"][
+                    "label_name"
+                ],
+            },
+        )
+        for name, rows in partitions.items()
+    }
+    report["files"] = {
+        name: {
+            "path": str(paths[name]),
+            "file_sha256": manifests[name]["file_sha256"],
+            "ordered_rows_sha256": manifests[name]["ordered_rows_sha256"],
+            "row_count": manifests[name]["row_count"],
+            "sidecar_file_sha256": file_sha256(
+                paths[name].with_suffix(paths[name].suffix + ".manifest.json")
+            ),
+        }
+        for name in ("all", "train", "dev")
+    }
+    report["next_gate"] = (
+        "freeze_and_authorize_selected_only_feature_extraction_before_any_GPU_work"
+    )
     atomic_write_json(report_path, report)
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
@@ -2292,6 +2471,25 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_h_smoke.add_argument("--labels-a", required=True)
     evaluate_h_smoke.add_argument("--labels-b", required=True)
     evaluate_h_smoke.set_defaults(func=command_evaluate_h_smoke)
+    finalize_h = subparsers.add_parser(
+        "finalize-h",
+        help="validate reserve labels and freeze final dual-AI H0 Silver rows",
+    )
+    finalize_h.add_argument("--authorization", default=str(DEFAULT_AUTHORIZATION))
+    finalize_h.add_argument(
+        "--pre-annotation-authorization",
+        default=str(DEFAULT_PRE_ANNOTATION_AUTHORIZATION),
+    )
+    finalize_h.add_argument("--pre-rollout-dir", default=str(DEFAULT_OUTPUT))
+    finalize_h.add_argument("--rollout-root", default=str(DEFAULT_ROLLOUT_ROOT))
+    finalize_h.add_argument(
+        "--pre-annotation-root", default=str(DEFAULT_PRE_ANNOTATION_ROOT)
+    )
+    finalize_h.add_argument("--smoke-labels-a", required=True)
+    finalize_h.add_argument("--smoke-labels-b", required=True)
+    finalize_h.add_argument("--reserve-labels-a", required=True)
+    finalize_h.add_argument("--reserve-labels-b", required=True)
+    finalize_h.set_defaults(func=command_finalize_h)
     return parser
 
 

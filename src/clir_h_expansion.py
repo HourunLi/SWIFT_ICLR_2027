@@ -11,6 +11,7 @@ from src.clir_smoke import (
     agreement_report,
     annotation_signature,
     canonical_sha256,
+    materialize_h_label,
     stable_priority,
     validate_annotation,
 )
@@ -565,11 +566,10 @@ def evaluate_h_package_labels(
     return canonical_primary, report
 
 
-def smoke_gate(
+def _annotation_quality_checks(
     report: Mapping[str, Any], protocol: Mapping[str, Any]
-) -> dict[str, Any]:
+) -> dict[str, dict[str, Any]]:
     annotation = protocol["h_acquisition"]["annotation"]
-    smoke = protocol["h_acquisition"]["smoke"]
     agreement = report["agreement"]
     checks = {
         "raw_path_agreement": {
@@ -591,18 +591,6 @@ def smoke_gate(
             and agreement["exact_onset_agreement"]
             >= float(annotation["common_positive_exact_onset_agreement_min"]),
         },
-        "accepted_positive": {
-            "value": report["common_exact_non_low_by_status"].get("hallucinated", 0),
-            "threshold": int(smoke["minimum_final_positive"]),
-            "pass": report["common_exact_non_low_by_status"].get("hallucinated", 0)
-            >= int(smoke["minimum_final_positive"]),
-        },
-        "accepted_clean": {
-            "value": report["common_exact_non_low_by_status"].get("clean", 0),
-            "threshold": int(smoke["minimum_final_clean"]),
-            "pass": report["common_exact_non_low_by_status"].get("clean", 0)
-            >= int(smoke["minimum_final_clean"]),
-        },
     }
     for annotator in ("a", "b"):
         stats = report["annotators"][annotator]
@@ -620,12 +608,182 @@ def smoke_gate(
             and stats["self_repeat_agreement"]
             >= float(annotation["self_repeat_agreement_min"]),
         }
+    return checks
+
+
+def smoke_gate(
+    report: Mapping[str, Any], protocol: Mapping[str, Any]
+) -> dict[str, Any]:
+    smoke = protocol["h_acquisition"]["smoke"]
+    checks = _annotation_quality_checks(report, protocol)
+    checks["accepted_positive"] = {
+        "value": report["common_exact_non_low_by_status"].get("hallucinated", 0),
+        "threshold": int(smoke["minimum_final_positive"]),
+        "pass": report["common_exact_non_low_by_status"].get("hallucinated", 0)
+        >= int(smoke["minimum_final_positive"]),
+    }
+    checks["accepted_clean"] = {
+        "value": report["common_exact_non_low_by_status"].get("clean", 0),
+        "threshold": int(smoke["minimum_final_clean"]),
+        "pass": report["common_exact_non_low_by_status"].get("clean", 0)
+        >= int(smoke["minimum_final_clean"]),
+    }
     passed = all(value["pass"] for value in checks.values())
     return {
         "status": "PASS_H0_V7_SMOKE" if passed else "FAIL_H0_V7_SMOKE",
         "pass": passed,
         "checks": checks,
         "reserve_annotation_allowed": passed,
+    }
+
+
+def reserve_gate(
+    report: Mapping[str, Any], protocol: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Apply the already frozen annotation-quality checks to the reserve pass."""
+
+    checks = _annotation_quality_checks(report, protocol)
+    passed = all(value["pass"] for value in checks.values())
+    return {
+        "status": "PASS_H0_V7_RESERVE" if passed else "FAIL_H0_V7_RESERVE",
+        "pass": passed,
+        "checks": checks,
+        "final_label_selection_allowed": passed,
+    }
+
+
+def _final_target_quotas(protocol: Mapping[str, Any]) -> dict[str, int]:
+    target = protocol["h_acquisition"]["final_target"]
+    return {
+        "dev|clean": int(target["dev_clean"]),
+        "dev|hallucinated": int(target["dev_positive"]),
+        "train|clean": int(target["train_clean"]),
+        "train|hallucinated": int(target["train_positive"]),
+    }
+
+
+def finalize_h_silver_rows(
+    *,
+    proposals: Sequence[Mapping[str, Any]],
+    labels_by_annotator: Mapping[str, Mapping[str, Mapping[str, Any]]],
+    protocol: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Freeze the exact-agreement H0 Silver rows without adaptive selection."""
+
+    proposal_by_id = {str(row["proposal_id"]): dict(row) for row in proposals}
+    if len(proposal_by_id) != len(proposals):
+        raise ValueError("H finalization proposals contain duplicate proposal IDs")
+    expected_ids = set(proposal_by_id)
+    for annotator in ("a", "b"):
+        if set(labels_by_annotator.get(annotator, {})) != expected_ids:
+            raise ValueError(
+                f"annotator {annotator}: canonical H labels differ from proposals"
+            )
+
+    label_name = str(protocol["h_acquisition"]["final_target"]["label_name"])
+    accepted: list[dict[str, Any]] = []
+    discarded: Counter[str] = Counter()
+    for proposal_id, proposal in sorted(proposal_by_id.items()):
+        label_a = labels_by_annotator["a"][proposal_id]
+        label_b = labels_by_annotator["b"][proposal_id]
+        if label_a["status"] != label_b["status"]:
+            discarded["path_disagreement"] += 1
+            continue
+        status = str(label_a["status"])
+        if status not in FINAL_H_VALUES:
+            discarded[f"non_final_status|{status}"] += 1
+            continue
+        if label_a.get("first_bad_unit_index") != label_b.get(
+            "first_bad_unit_index"
+        ):
+            discarded["onset_disagreement"] += 1
+            continue
+        if label_a["confidence"] == "low" or label_b["confidence"] == "low":
+            discarded["low_confidence"] += 1
+            continue
+        agreed = {
+            "status": status,
+            "first_bad_unit_index": label_a.get("first_bad_unit_index"),
+            "label_source": "dual_ai_exact_non_low_agreement",
+        }
+        materialized = materialize_h_label(
+            agreed,
+            proposal,
+            label_tier=label_name,
+        )
+        accepted.append(
+            {
+                **proposal,
+                **materialized,
+                "h_status": status,
+                "h_label_name": label_name,
+                "h_label_selection": (
+                    "common_exact_non_low_agreement_then_frozen_hash_order"
+                ),
+                "h_annotator_a_confidence": str(label_a["confidence"]),
+                "h_annotator_b_confidence": str(label_b["confidence"]),
+            }
+        )
+
+    accepted_by_cell: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in accepted:
+        cell = f"{row['h_label_split']}|{row['h_status']}"
+        accepted_by_cell[cell].append(row)
+    quotas = _final_target_quotas(protocol)
+    selected: list[dict[str, Any]] = []
+    shortages: dict[str, dict[str, int]] = {}
+    for cell, target in sorted(quotas.items()):
+        available = sorted(
+            accepted_by_cell.get(cell, []),
+            key=lambda row: (str(row["proposal_priority"]), str(row["proposal_id"])),
+        )
+        if len(available) < target:
+            shortages[cell] = {"target": target, "available": len(available)}
+            continue
+        selected.extend(available[:target])
+    selected.sort(
+        key=lambda row: (str(row["proposal_priority"]), str(row["proposal_id"]))
+    )
+    status = (
+        "FAIL_H0_V7_FINAL_YIELD"
+        if shortages
+        else "PASS_H0_V7_FINAL_SILVER_SELECTION"
+    )
+    if shortages:
+        selected = []
+    if not shortages and len(selected) != sum(quotas.values()):
+        raise AssertionError("H final Silver selection total differs from protocol")
+    selected_ids = [str(row["proposal_id"]) for row in selected]
+    if len(selected_ids) != len(set(selected_ids)):
+        raise AssertionError("H final Silver selection contains duplicate rows")
+    return selected, {
+        "status": status,
+        "label_name": label_name,
+        "proposal_rows": len(proposals),
+        "accepted_rows": len(accepted),
+        "discarded_rows": sum(discarded.values()),
+        "discarded_by_reason": dict(sorted(discarded.items())),
+        "accepted_by_cell": {
+            cell: len(rows) for cell, rows in sorted(accepted_by_cell.items())
+        },
+        "targets_by_cell": quotas,
+        "selected_by_cell": dict(
+            sorted(
+                Counter(
+                    f"{row['h_label_split']}|{row['h_status']}" for row in selected
+                ).items()
+            )
+        ),
+        "shortages": shortages,
+        "selected_rows": len(selected),
+        "selected_queries": len({str(row["query_id"]) for row in selected}),
+        "selected_ids_sha256": canonical_sha256(selected_ids),
+        "selected_by_source": dict(
+            sorted(Counter(str(row["source"]) for row in selected).items())
+        ),
+        "selected_by_checker_status": dict(
+            sorted(Counter(str(row["checker_status"]) for row in selected).items())
+        ),
     }
 
 
@@ -636,6 +794,8 @@ __all__ = [
     "build_h_annotation_packages",
     "build_h_proposals",
     "evaluate_h_package_labels",
+    "finalize_h_silver_rows",
+    "reserve_gate",
     "smoke_gate",
     "split_smoke_and_reserve",
 ]

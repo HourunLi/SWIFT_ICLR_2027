@@ -1,0 +1,106 @@
+{
+  "schema_version": "clir-h0-v7.4-training-authorization",
+  "status": "AUTHORIZED_POSTHOC_EXPLORATORY_FOUR_CELL_TRAINING",
+  "frozen_at_utc": "2026-08-31T00:00:00Z",
+  "evidence_tier": "posthoc_exploratory_silver_no_human_verification",
+  "original_v7_status": "FAIL_H0_V7_RESERVE",
+  "minimum_code_commit": "f496568fd694c9ad9df94531d0be3da989fc6199",
+  "frozen_inputs": {
+    "experiment_protocol": {
+      "path": "configs/ranking_expansion_v7/h0_experiment_v7_4/protocol.json",
+      "file_sha256": "a47c0d9bec247983637f73c91e2352da49e0dcd7face9ed40fc9c3e5aa0abb8b"
+    },
+    "feature_and_data_finalization": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/finalization_report.json",
+      "file_sha256": "092c99a57aeae16c9cb61336714b7270fd3cdc9b47877d67336a9bcce8625b54"
+    },
+    "train": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/train_c0_c1_h0_ch0.jsonl",
+      "file_sha256": "e7904f6a169345815e71fcacccba607d1caea0d9b2a893515b26acdd29cbc56e",
+      "row_count": 5168
+    },
+    "h_dev": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/h_dev.jsonl",
+      "file_sha256": "3fb507d60094c97077d12065adb4da24296bd8baadd73fbe4354a7a3f4a6d208",
+      "row_count": 200
+    },
+    "ranking": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/ranking_evaluation.jsonl",
+      "file_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7",
+      "row_count": 14272,
+      "query_count": 892,
+      "candidate_count": 16
+    }
+  },
+  "cells": {
+    "c0": {
+      "config": "configs/ranking_expansion_v7/h0_experiment_v7_4/c0_correctness_only.json",
+      "file_sha256": "8de1b4720f319a08447a17e5b11fd0081c25f31c6b635cbc877ba58f96e74f89",
+      "consistency_weight": 0.0,
+      "hallucination_weight": 0.0
+    },
+    "c1": {
+      "config": "configs/ranking_expansion_v7/h0_experiment_v7_4/c1_consistency.json",
+      "file_sha256": "b3943379c4f97e44aa5b3dbdce0ea38b884b9f201601d5c64975e7973dc4142a",
+      "consistency_weight": 1.0,
+      "hallucination_weight": 0.0
+    },
+    "h0": {
+      "config": "configs/ranking_expansion_v7/h0_experiment_v7_4/h0_onset_bce.json",
+      "file_sha256": "fde388cb515e8a2015d17bc9de9694fdf60553dcba61ec5e265ff933b62265cf",
+      "consistency_weight": 0.0,
+      "hallucination_weight": 1.0
+    },
+    "ch0": {
+      "config": "configs/ranking_expansion_v7/h0_experiment_v7_4/ch0_consistency_onset_bce.json",
+      "file_sha256": "d5f67aca2696c08a6331b26beb0840b4e197c146a4dbec57841290a06c741545",
+      "consistency_weight": 1.0,
+      "hallucination_weight": 1.0
+    }
+  },
+  "training": {
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "same_train_and_h_dev_manifests_for_every_cell_and_seed": true,
+    "only_cell_differences": ["consistency_weight", "hallucination_weight"],
+    "h1_negative_tail_reward": false,
+    "path_mil": false,
+    "pseudo_onset_tail": false,
+    "dual_prior_and_full": false,
+    "post_result_retuning": false
+  },
+  "preflight": {
+    "batches_per_cell": ["two_consistency_relations", "two_clean_plus_two_positive_h_rows"],
+    "require_finite_forward_loss_and_gradients": true,
+    "require_projector_gradient_iff_consistency_enabled_on_consistency_batch": true,
+    "require_hallucination_head_gradient_iff_h0_enabled_on_h_batch": true
+  },
+  "evaluation": {
+    "ranking_k": [1, 2, 4, 8, 16],
+    "primary_k": 16,
+    "stable_tie_break": "lowest_frozen_candidate_index",
+    "onset_threshold": 0.5,
+    "onset_window_tokens": 5,
+    "bootstrap_replicates": 10000,
+    "bootstrap_seed": 20260831,
+    "paired_contrasts": ["c1-c0", "h0-c0", "ch0-c0"],
+    "interaction": "ch0-c1-h0+c0",
+    "same_query_population_all_cells_and_seeds": true
+  },
+  "runtime": {
+    "output_root": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4",
+    "large_artifacts_remain_git_ignored": true,
+    "require_clean_committed_code_for_preflight_and_training": true
+  },
+  "claim_boundary": {
+    "allowed": "posthoc exploratory Silver evidence about H0, Consistency, and their interaction",
+    "forbidden": [
+      "original v7 H annotation passed",
+      "Gold or human-verified labels",
+      "confirmatory or protected-test claim",
+      "H1, Dual Prior, or Full conclusion from this run"
+    ]
+  }
+}

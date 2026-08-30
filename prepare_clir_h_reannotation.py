@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 from typing import Any, Mapping, Sequence
 
+from prepare_clir_ranking import command_finalize_h
 from src.clir_h_expansion import H_PACKAGE_SCHEMA
 from src.clir_smoke import (
     atomic_write_json,
@@ -432,6 +433,110 @@ def command_merge_labels(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
+def _verify_merged_labels(
+    *, amendment_path: Path, pre_annotation_root: Path
+) -> dict[str, Any]:
+    amendment, paths = _load_contract(amendment_path, pre_annotation_root)
+    _verify_packages(
+        amendment_path=amendment_path,
+        pre_annotation_root=pre_annotation_root,
+    )
+    merged_root = _output_root(pre_annotation_root) / "merged"
+    report_path = merged_root / "merge_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if (
+        report.get("schema_version")
+        != "clir-h0-v7.3-reannotation-label-merge-report"
+        or report.get("status") != "PASS_H0_V7_3_REANNOTATION_LABEL_MERGE"
+        or report.get("amendment_file_sha256") != file_sha256(amendment_path)
+    ):
+        raise ValueError("H0 v7.3 merged-label report is not a bound PASS")
+
+    merged_paths = {
+        "a": merged_root / "reserve_a_gpt56sol_retry_v7_3.jsonl",
+        "b": merged_root / "reserve_b_claude_opus5_retry_v7_3.jsonl",
+    }
+    verified: dict[str, Any] = {}
+    for annotator, path in merged_paths.items():
+        rows, sidecar = _read_published(path, expected_schema=MERGED_LABEL_SCHEMA)
+        record = report.get("files", {}).get(annotator, {})
+        validation = report.get("validation", {}).get(annotator, {})
+        if (
+            len(rows) != 800
+            or int(record.get("row_count", -1)) != len(rows)
+            or record.get("file_sha256") != sidecar["file_sha256"]
+            or record.get("ordered_rows_sha256")
+            != sidecar["ordered_rows_sha256"]
+            or record.get("sidecar_file_sha256") != file_sha256(_manifest_path(path))
+            or int(validation.get("rows", -1)) != len(rows)
+            or validation.get("ordered_item_ids_sha256")
+            != canonical_sha256([row["item_id"] for row in rows])
+        ):
+            raise ValueError(f"H0 v7.3 merged annotator {annotator} drift")
+        verified[annotator] = {
+            "label_file_sha256": sidecar["file_sha256"],
+            "label_sidecar_file_sha256": file_sha256(_manifest_path(path)),
+            "row_count": len(rows),
+        }
+
+    return {
+        "attempt": amendment["retry_scope"]["attempt_name"],
+        "amendment_file_sha256": file_sha256(amendment_path),
+        "package_registry_file_sha256": file_sha256(
+            _registry_path(pre_annotation_root)
+        ),
+        "package_verification_file_sha256": file_sha256(
+            _output_root(pre_annotation_root) / "package_verification.json"
+        ),
+        "merge_report_file_sha256": file_sha256(report_path),
+        "parent_failed_finalization_report_file_sha256": file_sha256(
+            paths["failed_report"]
+        ),
+        "merged_labels": verified,
+        "retry_exhausted_after_this_attempt": True,
+    }
+
+
+def command_finalize_labels(args: argparse.Namespace) -> None:
+    amendment_path = Path(args.amendment).resolve()
+    pre_annotation_root = Path(args.pre_annotation_root).resolve()
+    evidence = _verify_merged_labels(
+        amendment_path=amendment_path,
+        pre_annotation_root=pre_annotation_root,
+    )
+    merged_root = _output_root(pre_annotation_root) / "merged"
+    forwarded = argparse.Namespace(
+        protocol=str(PROJECT_ROOT / "configs/ranking_expansion_v7/protocol.json"),
+        authorization=str(
+            PROJECT_ROOT / "configs/ranking_expansion_v7/rollout_authorization.json"
+        ),
+        pre_annotation_authorization=str(
+            PROJECT_ROOT
+            / "configs/ranking_expansion_v7/pre_annotation_authorization.json"
+        ),
+        pre_rollout_dir=str(
+            PROJECT_ROOT / "run_artifacts/ranking_expansion_v7/pre_rollout"
+        ),
+        rollout_root=str(PROJECT_ROOT / "run_artifacts/ranking_expansion_v7"),
+        pre_annotation_root=str(pre_annotation_root),
+        smoke_labels_a=str(pre_annotation_root / "annotation/smoke_a_gpt56sol.jsonl"),
+        smoke_labels_b=str(
+            pre_annotation_root / "annotation/smoke_b_claude_opus5.jsonl"
+        ),
+        reserve_labels_a=str(
+            merged_root / "reserve_a_gpt56sol_retry_v7_3.jsonl"
+        ),
+        reserve_labels_b=str(
+            merged_root / "reserve_b_claude_opus5_retry_v7_3.jsonl"
+        ),
+        final_dir_name="final_v7_3",
+        finalization_attempt="reserve_attempt_2_v7_3",
+        finalization_report_schema="clir-h0-v7.3-finalization-report",
+        finalization_evidence=evidence,
+    )
+    command_finalize_h(forwarded)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--amendment", default=str(DEFAULT_AMENDMENT))
@@ -449,6 +554,11 @@ def build_parser() -> argparse.ArgumentParser:
         "merge-labels", help="validate and merge all retry label shards"
     )
     merge.set_defaults(func=command_merge_labels)
+    finalize = commands.add_parser(
+        "finalize-labels",
+        help="apply unchanged reserve gates and freeze the terminal v7.3 result",
+    )
+    finalize.set_defaults(func=command_finalize_labels)
     return parser
 
 

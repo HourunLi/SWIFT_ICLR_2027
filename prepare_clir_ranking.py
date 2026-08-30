@@ -2214,6 +2214,16 @@ def command_evaluate_h_smoke(args: argparse.Namespace) -> None:
 def command_finalize_h(args: argparse.Namespace) -> None:
     protocol, output_root, proposals, _ = _verify_h_proposals(args)
     code_commit = _require_clean_execution("ranking-v7 H Silver finalization")
+    final_dir_name = str(getattr(args, "final_dir_name", "final"))
+    if final_dir_name not in {"final", "final_v7_3"}:
+        raise ValueError("unsupported H Silver finalization directory")
+    finalization_attempt = str(
+        getattr(args, "finalization_attempt", "reserve_attempt_1")
+    )
+    report_schema = str(
+        getattr(args, "finalization_report_schema", "clir-h0-v7-finalization-report")
+    )
+    extra_evidence = getattr(args, "finalization_evidence", None)
     smoke_report_path = output_root / "evaluation/smoke_evaluation_report.json"
     if not smoke_report_path.exists():
         raise FileNotFoundError("H smoke evaluation report is missing")
@@ -2232,7 +2242,7 @@ def command_finalize_h(args: argparse.Namespace) -> None:
     ):
         raise ValueError("H smoke PASS report or its bound labels drifted")
 
-    final_dir = output_root / "final"
+    final_dir = output_root / final_dir_name
     report_path = final_dir / "finalization_report.json"
     paths = {
         "all": final_dir / "h_silver_all.jsonl",
@@ -2289,8 +2299,9 @@ def command_finalize_h(args: argparse.Namespace) -> None:
         else reserve_quality_gate["status"]
     )
     report: dict[str, Any] = {
-        "schema_version": "clir-h0-v7-finalization-report",
+        "schema_version": report_schema,
         "status": final_status,
+        "finalization_attempt": finalization_attempt,
         "code_commit": code_commit,
         "protocol_file_sha256": file_sha256(Path(args.protocol)),
         "proposal_report_file_sha256": file_sha256(
@@ -2319,6 +2330,8 @@ def command_finalize_h(args: argparse.Namespace) -> None:
         "feature_extraction_allowed": False,
         "training_allowed": False,
     }
+    if extra_evidence is not None:
+        report["reannotation_evidence"] = extra_evidence
     if final_status != "PASS_H0_V7_FINAL_SILVER_SELECTION":
         final_dir.mkdir(parents=True, exist_ok=True)
         atomic_write_json(report_path, report)
@@ -2342,6 +2355,7 @@ def command_finalize_h(args: argparse.Namespace) -> None:
             metadata={
                 "protocol_file_sha256": file_sha256(Path(args.protocol)),
                 "code_commit": code_commit,
+                "finalization_attempt": finalization_attempt,
                 "label_name": protocol["h_acquisition"]["final_target"][
                     "label_name"
                 ],

@@ -714,7 +714,7 @@ separation 也从 `.18622` 增至 `.42970`。同时，正对 cosine 下降、cos
 `.2` margin。结论是 Consistency 已有“分开 hard negative、打破表示塌缩”的部分机制
 证据，尚未建立完整正对不变性或最终选答案增益。
 
-### 排序评测与 H0 扩量 v7（H0 标注已按门槛终止）
+### 排序评测与 H0 扩量 v7（原协议失败，v7.4 另做探索性子集）
 
 冻结协议见
 [`docs/ranking_expansion_protocol_v7.md`](docs/ranking_expansion_protocol_v7.md) 和
@@ -725,14 +725,31 @@ separation 也从 `.18622` 增至 `.42970`。同时，正对 cosine 下降、cos
 重标。第二轮 path 一致率为 `698/720=96.94%`，共同 positive 的首错 unit 精确一致率为
 `310/403=76.92%`，控制项两边均为 `8/8`；但 A/B 的盲重复自一致性分别只有
 `65/72=90.28%` 和 `64/72=88.89%`，没有达到预先冻结的 95%。因此最终状态为
-`FAIL_H0_V7_RESERVE`，没有发布 H0 Silver train/dev，也不允许 H0 feature extraction、
-H0/CH0 训练、第三次重标或事后降低门槛。终止报告 SHA-256 为
+`FAIL_H0_V7_RESERVE`。原协议没有发布 H0 Silver train/dev，也不允许第三次重标或事后
+降低门槛。终止报告 SHA-256 为
 `93260683…2c01`，原始标注和完整报告只保留在本地 `run_artifacts/`。
 
-新鲜的 1,500-query 排序候选仍是独立、可复用的评测资产，但在新的书面授权前不抽特征。
-原计划的 C0/C1/H0/CH0 矩阵因 H0 标签门失败不能照原协议执行；可以另行预注册只跑
-C0/C1 的新排序复测，或重新设计一批真正独立的 H0 数据协议，但不能把本轮失败行挑出来
-训练。本轮仍没有产生新的模块 Best-of-N 效果结论。
+用户随后明确授权“看看这些 H 数据里有没有能用的，挑子集使用”。这不是追认 v7 通过，
+而是一个单独登记的 post-hoc exploratory 路线。v7.4 只接收 smoke 的 A/B 精确非低置信
+共识，以及 reserve 中 retry A、retry B、原始 B 三者对 `(clean/hallucinated, onset unit)`
+完全一致的自然行；任何 retry 自重复失败的自然题都排除，attempt-1 A 完全不用。按原冻结
+优先级而非模型效果取满后得到 600 条、600 个不同 query：train 为 200 positive + 200
+clean，dev 为 100 + 100，train/dev 无 query 重叠。标签名是
+`silver_posthoc_triple_consensus_h0_v7_4`，只能称“双/三路 AI 共识的探索性 Silver”，不能称
+Gold、人工验证或 confirmatory 数据。原始 `FAIL_H0_V7_RESERVE` 保持不变。
+
+新实验协议见
+[`configs/ranking_expansion_v7/h0_experiment_v7_4/protocol.json`](configs/ranking_expansion_v7/h0_experiment_v7_4/protocol.json)。
+四格 `C0/C1/H0/CH0` 共用同一个 5,168-row 训练 manifest：原 C0/C1 的 4,768 行加
+400 条 H train；只有 `consistency_weight` 与 `hallucination_weight` 开关不同。H0 仅开启
+onset-tail token BCE，H1 negative-tail reward、Path MIL、pseudo-tail、Dual Prior 和 Full
+全部关闭。H dev 的 200 条不进训练。
+
+24,000 条原始排序候选全部保留。为满足 Best-of-N evaluator 对每题 16 个二值 correctness
+标签的硬契约，v7.4 在抽特征前机械保留“16 条都能被 checker 明确判成 numeric match 或
+mismatch”的 892 题、14,272 条；不看任何 CLIR 分数，也不按正负比例挑题。其中 347 题
+同时含正确和错误候选，另作配对区分力副报告。选定 H + ranking 的全层 BF16 特征预算约
+990.9 GiB。当前只是完成了子集与执行协议冻结，尚未产生新的模块 Best-of-N 结果。
 
 ## Toy smoke test
 

@@ -32,6 +32,17 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Pinned model revision/commit used for reproducible extraction.",
     )
+    parser.add_argument(
+        "--cache_dir",
+        default=None,
+        help="Optional pinned Hugging Face cache directory.",
+    )
+    parser.add_argument(
+        "--attn_implementation",
+        default=None,
+        choices=["eager", "sdpa", "flash_attention_2"],
+        help="Explicit attention backend used for feature parity across runs.",
+    )
     parser.add_argument("--device", default="auto")
     parser.add_argument(
         "--dtype", default="bfloat16", choices=["bfloat16", "float16", "float32"]
@@ -184,11 +195,17 @@ def main() -> None:
 
     device = resolve_device(args.device)
     dtype = resolve_dtype(args.dtype)
+    load_kwargs: Dict[str, Any] = {
+        "revision": args.revision,
+        "cache_dir": args.cache_dir,
+        "torch_dtype": dtype,
+        "trust_remote_code": args.trust_remote_code,
+    }
+    if args.attn_implementation is not None:
+        load_kwargs["attn_implementation"] = args.attn_implementation
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        revision=args.revision,
-        torch_dtype=dtype,
-        trust_remote_code=args.trust_remote_code,
+        **load_kwargs,
     ).to(device)
     model.eval()
 
@@ -281,6 +298,7 @@ def main() -> None:
         row["feature_model"] = args.model
         row["feature_revision"] = resolved_revision
         row["feature_dtype"] = args.dtype
+        row["feature_attention_implementation"] = args.attn_implementation
         output_rows.append(row)
 
     output_jsonl.parent.mkdir(parents=True, exist_ok=True)

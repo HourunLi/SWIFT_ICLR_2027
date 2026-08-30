@@ -1,0 +1,180 @@
+{
+  "schema_version": "clir-h0-v7.4-posthoc-exploratory-experiment-protocol",
+  "status": "AUTHORIZED_H0_V7_4_POSTHOC_EXPLORATORY_MATCHED_EXPERIMENT",
+  "frozen_at_utc": "2026-08-31T00:00:00Z",
+  "authorization_source": {
+    "kind": "explicit_user_instruction_in_active_codex_thread",
+    "instruction": "这些H数据有没有能用的，把子集挑出来用吧",
+    "meaning": "authorize deterministic salvage, selected-only features, matched H0 training, and frozen evaluation; do not reinterpret the original v7 failure as a pass"
+  },
+  "original_evidence_status": {
+    "ranking_v7_h0_status": "FAIL_H0_V7_RESERVE",
+    "failure_is_preserved": true,
+    "salvage_evidence_tier": "posthoc_exploratory_silver_no_human_verification",
+    "salvage_may_be_called_gold_or_confirmatory": false
+  },
+  "frozen_parent_commit": "acb932a6a2df79629d6621cbd3e9a623ba016b85",
+  "frozen_inputs": {
+    "ranking_v7_protocol": {
+      "path": "configs/ranking_expansion_v7/protocol.json",
+      "file_sha256": "1e9de5d1c6d23c63a7ed6a501440329ce78cdfdb0e26ade2e2189dad56440155"
+    },
+    "salvage_amendment": {
+      "path": "configs/ranking_expansion_v7/salvage_amendment_v7_4.json",
+      "file_sha256": "dd0bc56c5b9760d77b12413f3892b66d4c54de114a1c7eea2a1fe31826e8ee7b"
+    },
+    "salvage_selection_report": {
+      "path": "run_artifacts/ranking_expansion_v7/pre_annotation/salvage_v7_4/selection_report.json",
+      "file_sha256": "ffa8f5d6e1c9f9c9147897391dc46681669fe6e1b7190c4da9a1f8c9b6a52225"
+    },
+    "salvage_verification_report": {
+      "path": "run_artifacts/ranking_expansion_v7/pre_annotation/salvage_v7_4/verification_report.json",
+      "file_sha256": "7cfe9c3c7b4d2fb8b3e75a48715c7b7c4c311c5881379ebc6fa6a237b4fb6b7f"
+    },
+    "h_train": {
+      "path": "run_artifacts/ranking_expansion_v7/pre_annotation/salvage_v7_4/h_salvage_selected_train.jsonl",
+      "file_sha256": "b8530ba7d37e663868f85e93cf1684993307a2b2702694cfdfaa50828b1ef78c",
+      "sidecar_file_sha256": "83d5b0a54993a76f0d455e09522e8087930831c2651e799236ac8761b94790f9",
+      "row_count": 400
+    },
+    "h_dev": {
+      "path": "run_artifacts/ranking_expansion_v7/pre_annotation/salvage_v7_4/h_salvage_selected_dev.jsonl",
+      "file_sha256": "3278a4850719f49720c83ce7f20590d044a7303a7b513307ca975feb29e2de45",
+      "sidecar_file_sha256": "ded178c63440f8e0695ba32e61d446671018442e2e38ab6f9ae74d77409616f0",
+      "row_count": 200
+    },
+    "ranking_checked": {
+      "path": "run_artifacts/ranking_expansion_v7/pre_annotation/materialized/ranking_checked.jsonl",
+      "file_sha256": "c651ca637d6e304380b8afdb57366110c6315651f10031e558747399469854ea",
+      "sidecar_file_sha256": "0011f10d4481a4df7116f298b4cf0eeb1f015f04999c58f3bd926f3bb1ecf96e",
+      "row_count": 24000
+    },
+    "base_c0_c1_train": {
+      "path": "run_artifacts/data_expansion_scale_v6/consistency_training_v6_1/data/train_c0_c1.jsonl",
+      "file_sha256": "10fdc59475c5b27311d873d84930ec6d1e7963e80158b367b867c2af4df0c5b1",
+      "sidecar_file_sha256": "89b935d2df648e691aab93eb8d709d0dddaee3dff0796c1c675063552a6e0ea3",
+      "row_count": 4768
+    }
+  },
+  "ranking_evaluation_subset": {
+    "rule": "retain_a_query_iff_candidate_indices_are_exactly_0_through_15_and_all_16_rows_have_eligible_numeric_match_or_numeric_mismatch_with_binary_correctness",
+    "selection_uses_clir_scores_or_checkpoint_outputs": false,
+    "selection_uses_correct_vs_incorrect_balance": false,
+    "selected_queries": 892,
+    "selected_trajectories": 14272,
+    "source_queries": {
+      "gsm8k": 731,
+      "math": 161
+    },
+    "informative_queries_with_at_least_one_correct_and_one_incorrect": 347,
+    "primary_absolute_bon_population": "all_892_fully_labeled_queries",
+    "paired_discrimination_secondary_population": "347_informative_queries",
+    "unselected_raw_ranking_rows_are_retained": true
+  },
+  "feature_contract": {
+    "scope": "600_selected_h_rows_plus_14272_fully_labeled_ranking_rows_only",
+    "all_24000_ranking_feature_extraction": false,
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "input_axis_truth": "saved_prompt_token_ids_plus_saved_output_token_ids",
+    "decode_or_retokenize_allowed": false,
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "num_feature_layers": 33,
+    "per_layer_dim": 3072,
+    "feature_dim": 101376,
+    "bytes_per_feature_token": 202752,
+    "worker_count": 8,
+    "query_atomic_worker_assignment": true,
+    "expected": {
+      "trajectory_count": 14872,
+      "query_count": 1492,
+      "condition_count": 1492,
+      "output_token_count": 5079276,
+      "prompt_token_count": 168382,
+      "total_feature_token_count": 5247658,
+      "raw_feature_bytes": 1063973154816
+    }
+  },
+  "training_contract": {
+    "cells": ["C0", "C1", "H0", "CH0"],
+    "shared_train_manifest_all_cells": true,
+    "base_rows": 4768,
+    "new_h_train_rows": 400,
+    "total_train_rows": 5168,
+    "h_dev_rows": 200,
+    "h_train_dev_query_overlap": 0,
+    "base_h_query_source_record_and_cluster_overlap": 0,
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "h0_objective": "hallucination_onset_tail_token_bce_only",
+    "h1_negative_tail_reward": false,
+    "path_mil": false,
+    "pseudo_onset_tail": false,
+    "dual_prior_or_full": false,
+    "only_cell_differences": {
+      "C0": {"consistency_weight": 0.0, "hallucination_weight": 0.0},
+      "C1": {"consistency_weight": 1.0, "hallucination_weight": 0.0},
+      "H0": {"consistency_weight": 0.0, "hallucination_weight": 1.0},
+      "CH0": {"consistency_weight": 1.0, "hallucination_weight": 1.0}
+    },
+    "epoch_margin_or_loss_weight_tuning_after_results": false
+  },
+  "execution_configs": {
+    "C0": {
+      "path": "configs/ranking_expansion_v7/h0_experiment_v7_4/c0_correctness_only.json",
+      "file_sha256": "8de1b4720f319a08447a17e5b11fd0081c25f31c6b635cbc877ba58f96e74f89"
+    },
+    "C1": {
+      "path": "configs/ranking_expansion_v7/h0_experiment_v7_4/c1_consistency.json",
+      "file_sha256": "b3943379c4f97e44aa5b3dbdce0ea38b884b9f201601d5c64975e7973dc4142a"
+    },
+    "H0": {
+      "path": "configs/ranking_expansion_v7/h0_experiment_v7_4/h0_onset_bce.json",
+      "file_sha256": "fde388cb515e8a2015d17bc9de9694fdf60553dcba61ec5e265ff933b62265cf"
+    },
+    "CH0": {
+      "path": "configs/ranking_expansion_v7/h0_experiment_v7_4/ch0_consistency_onset_bce.json",
+      "file_sha256": "d5f67aca2696c08a6331b26beb0840b4e197c146a4dbec57841290a06c741545"
+    }
+  },
+  "evaluation_contract": {
+    "primary": "paired_query_level_Best_of_N_accuracy_at_K_16_on_892_fully_labeled_queries",
+    "secondary": [
+      "Best_of_N_at_K_1_2_4_8",
+      "within_query_correct_vs_incorrect_pairwise_accuracy",
+      "H_dev_token_AUROC_AP_BCE",
+      "H_dev_positive_onset_detection_and_window_accuracy",
+      "CH0_minus_C1_minus_H0_plus_C0_interaction"
+    ],
+    "same_ranking_rows_and_candidate_order_all_cells_and_seeds": true,
+    "ranking_results_may_retune_this_v7_4_run": false
+  },
+  "runtime_contract": {
+    "output_root": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4",
+    "model_cache": "run_artifacts/model_cache",
+    "require_clean_committed_implementation_before_feature_extraction": true,
+    "large_features_manifests_checkpoints_and_reports_remain_git_ignored": true
+  },
+  "claim_boundary": {
+    "allowed": "posthoc_exploratory_H0_and_C_by_H0_mechanism_and_ranking_evidence_on_fresh_query_disjoint_validation",
+    "not_allowed": [
+      "original_v7_H0_pipeline_passed",
+      "Gold_or_human_verified_labels",
+      "confirmatory_or_protected_test_claim",
+      "dual_prior_or_full_integration_claim",
+      "retuning_on_the_same_ranking_population"
+    ]
+  },
+  "authorized_scope": {
+    "deterministic_plan_and_independent_recompute": true,
+    "selected_only_feature_extraction": true,
+    "matched_C0_C1_H0_CH0_training": true,
+    "frozen_H_dev_and_ranking_evaluation": true,
+    "new_rollout_or_new_ai_annotation": false,
+    "label_change_or_adjudication": false,
+    "H1_prior_or_full_training": false
+  }
+}

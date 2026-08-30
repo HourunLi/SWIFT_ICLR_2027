@@ -713,6 +713,42 @@ split 无 query 重叠。选择和独立复算报告均已通过。它们的正�
 trajectory，不看 CLIR score 或正负比例。其中 347 query 同时有正负 candidate。H + ranking
 selected-only 全层 BF16 原始 tensor 预算是 1,063,973,154,816 bytes（约 990.9 GiB）。
 
+该 v7.4 路线现已完整执行。600 条 H 与 14,272 条 ranking candidate 的全宽 feature
+抽取、8-worker 完整性复核、四格 full-width 梯度 preflight 均通过；12 个
+`4 cells × 3 seeds × 3 epochs` checkpoint 全部完成并通过 load/finite/epoch/data-hash
+检查。训练授权冻结在
+`configs/ranking_expansion_v7/h0_experiment_v7_4/training_authorization.json`，没有根据
+中途或最终结果改 subset、loss weight、epoch 或 seed。
+
+892-query Best-of-N@16 的三 seed 结果为：
+
+| Cell | mean | seed 42/43/44 | paired delta vs C0 | hierarchical 95% interval |
+|---|---:|---:|---:|---:|
+| C0 | `.8408` | `.8643/.8632/.7948` | — | — |
+| C1 | `.8535` | `.8576/.8543/.8487` | `+.0127` | `[-.0168,+.0523]` |
+| H0 | **`.8606`** | `.8576/.8655/.8587` | `+.0198` | `[-.0112,+.0613]` |
+| CH0 | `.8558` | `.8520/.8554/.8599` | `+.0149` | `[-.0194,+.0639]` |
+
+random expected/oracle 为 `.8254/.9552`。13,028 个同题 correct-vs-wrong pair 上，
+C0/C1/H0/CH0 平均区分率分别为 `.6232/.6612/.6697/.6642`；H0 在三个 seed 都约
+`.667–.674`，是最稳定的点估计。另一方面，C0 seed 44 明显回退，所有 C0-relative
+hierarchical interval 都跨 0，不能把均值提升写成已确认的 Best-of-N 增益。
+
+`CH0-C1-H0+C0` 的 BoN@16 交互均值为 `-.0176`，逐 seed
+`+.0011/-.0011/-.0527`，区间 `[-.0538,+.0105]`。这次仍未看到 C 与 H0 叠加，CH0
+也没有超过 H0；但符号并非三 seed 一致，不能升级为“二者天然冲突”的结论。
+
+H dev 的机制结果给出了更直接的“可用范围”：H0 token AUROC/AP/BCE 为
+`.8782/.8481/.5488`，path AUROC `.8415`；正路径检出率 `.8267`、clean-no-onset
+`.7867`、平衡路径决策 `.8067`。可是首错 start exact 为 `0`，±5 token 只有 `.04`，
+条件 onset MAE 约 124–151 token。故这批标签可训练出 tail/path 风险区分器，却没有训练出
+可信的精确首错边界；对外应称 `first-bad-unit-derived tail supervision`，不能称精确
+first-bad-token detector。CH0 的 token/path AUROC 为 `.8630/.8413`，略低于 H0。
+
+最终状态 `COMPLETE_H0_V7_4_POSTHOC_EXPLORATORY_EVALUATION`；本地汇总 SHA-256
+`d80fff82adeeaf84a72e9c867811e90519d52c241da12840213731dd104d291e`。原始
+`FAIL_H0_V7_RESERVE` 与全部淘汰行仍保留，结果不覆盖它。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
@@ -727,9 +763,9 @@ selected-only 全层 BF16 原始 tensor 预算是 1,063,973,154,816 bytes（约 
   三 seed C0/C1 复测；均值 separation 与 score-gap 结构改善，但正对 cosine 下降、AUROC
   seed 方向混合，且尚无新的 ranking population。
 - 历史 H 证据来自很少的 Silver trajectory；v7 双 AI 的盲重复稳定性未过原门。v7.4 的
-  600 条是用户授权的事后严格共识探索子集，不是原协议成功，也没有人工准确率保证；在
-  新结果出来前只能说“可训练清单已冻结”。clean onset ±5 仍为 0，恢复的 main gold-tail
-  再次未通过 locality/ranking 门。
+  600 条是用户授权的事后严格共识探索子集，不是原协议成功，也没有人工准确率保证。
+  新结果支持 tail/path 风险可学和正向排序点信号，但 exact onset 为 0、±5 只有 4%，
+  Best-of-N 增益区间跨 0；恢复的 main gold-tail 也仍未通过 locality/ranking 门。
 - dual prior 只有 48 条历史 Key/Complete 标注 trajectory；clean direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
@@ -742,18 +778,18 @@ selected-only 全层 BF16 原始 tensor 预算是 1,063,973,154,816 bytes（约 
 
 1. 保留 v7 的 24,000 条排序候选、800 条 proposal、两轮原始标签和终止报告，不覆盖或
    重标；v7.4 子集必须始终与原失败证据并存。
-2. 在干净 commit 上发布并独立复算 v7.4 的 600-H + 14,272-ranking selected-only feature
-   inventory，做最大长度全宽 preflight，然后由 8 个 query-atomic worker 抽取和逐 payload
-   校验约 990.9 GiB BF16 feature。
-3. 物化所有 cell 完全相同的 5,168-row train、200-row H dev 和 892×16 ranking manifest；
-   先做四 cell full-width finite preflight，再按 seeds 42/43/44、3 epochs 完整运行，不按中途
-   排名删 cell、调 epoch、改 H loss 或换子集。
-4. 分开报告 H dev 可学性、892-query BoN、347-query 配对区分力和
-   `CH0-C1-H0+C0` 交互；不得把探索性点估计写成原 v7 通过或最终论文结论。
+2. v7.4 的 feature、preflight、12 次训练、H dev、892-query BoN、347-query 配对区分力和
+   交互汇总均已完成；保留其 authorization、manifest/report hash 与本地大 artifact，不再在
+   这 200 条 dev 或 892 题 ranking 上调阈值、subset、loss、epoch 或权重。
+3. 下一轮若要确认 H0，应重新预注册并采一批独立 H train/dev 与 ranking population，优先
+   把目标表述为 tail/path 风险；若研究目标仍要求精确 onset，先修改/验证 label target 与
+   解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
+4. Prior 扩量继续作为独立工作流；H1、Dual Prior 和 Full 没有被本轮 v7.4 重新验证。
 
-当前裁决仍是：Consistency 有部分 held-out relation 机制证据；H0、H1、Prior 的历史
-Best-of-N 都只是小样本筛选信号；C+H0 有负交互迹象；Full 没有建立增益。v7.4 让我们
-可以做一次明确标注为 post-hoc exploratory 的扩大复测，但在训练和新 ranking 结果完成前，
-不得写成 H0 扩量成功或模块已经确认。
+当前裁决是：Consistency 有部分 held-out relation 机制证据；v7.4 证明严格 H 子集能学到
+tail/path 风险，并给出 H0 最好的 ranking 点估计，但增益区间跨 0、精确 onset 失败；
+C+H0 没有超过 H0，负交互点估计仍不确定。H1、Prior、Full 没有因本轮获得新证据。
+因此可以保留这 400 条作为探索性 H0 训练子集和 200 条独立诊断集，但不能称 H0 已确认，
+更不能把原 v7 写成通过。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

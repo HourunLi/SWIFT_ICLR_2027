@@ -6,7 +6,7 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 
 需要先明确证据边界：[`configs/best_current.json`](configs/best_current.json) 是当前唯一的**整合配置**，不是已经证明优于 correctness-only baseline 的“最优效果配置”。三模块联合训练的历史结果没有通过扩展门，详见 [`docs/handoff.md`](docs/handoff.md)。
 
-## 当前标注账本（扩量前）
+## 当前标注账本
 
 必须把“已经用于小规模训练的数据”和“后来只做流程审计的数据”分开：
 
@@ -14,10 +14,10 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 |---|---:|---|---|
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
-| Hallucination H | 17 条 first-bad-unit positive +31 条明确 clean | 是，但很稀疏 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”；H0 学起点，H1 另把起点后的 value 往负方向推 |
+| Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
 | Dual Prior | 48 条与 H 共用的轨迹、每个 head 14,307 个 token 标签 | 是，但有效独立样本仍只有 48 条 | 双 AI 标 Key（最关键步骤）和 Complete（支撑结论所需步骤集合） |
 
-后来的标注不能并入这张训练表：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过了机械筛选流程审计，协议明确 `eligible_for_training=false`。所以现阶段不是“已经有很多新标签但还没训练”，而是“旧小数据已跑通，新扩量数据尚未生成”。
+失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。
 
 ## 2026-08-23 clean integration 审计与训练试跑
 
@@ -748,8 +748,34 @@ onset-tail token BCE，H1 negative-tail reward、Path MIL、pseudo-tail、Dual P
 24,000 条原始排序候选全部保留。为满足 Best-of-N evaluator 对每题 16 个二值 correctness
 标签的硬契约，v7.4 在抽特征前机械保留“16 条都能被 checker 明确判成 numeric match 或
 mismatch”的 892 题、14,272 条；不看任何 CLIR 分数，也不按正负比例挑题。其中 347 题
-同时含正确和错误候选，另作配对区分力副报告。选定 H + ranking 的全层 BF16 特征预算约
-990.9 GiB。当前只是完成了子集与执行协议冻结，尚未产生新的模块 Best-of-N 结果。
+同时含正确和错误候选，另作配对区分力副报告。选定 H + ranking 共抽取 5,247,658 个
+全宽 token，BF16 payload 约 990.9 GiB；8 个 worker 和逐文件 SHA/shape/finite 复核均通过。
+
+四格、三 seed、三 epoch 共 12 个训练和两类评测均已完成。BoN@16 如下；括号内是相对
+C0 的配对均值，区间为 seed+query hierarchical bootstrap 95% interval：
+
+| Cell | BoN@16 | seed 42/43/44 | 相对 C0 |
+|---|---:|---:|---:|
+| C0 correctness | `84.08%` | `86.43/86.32/79.48%` | — |
+| C1 consistency | `85.35%` | `85.76/85.43/84.87%` | `+1.27` points `[-1.68,+5.23]` |
+| H0 onset BCE | **`86.06%`** | `85.76/86.55/85.87%` | `+1.98` points `[-1.12,+6.13]` |
+| CH0 C1 + H0 | `85.58%` | `85.20/85.54/85.99%` | `+1.49` points `[-1.94,+6.39]` |
+
+H0 的点估计最高，而且 13,028 个 query 内 correct-vs-wrong 比较中，平均区分率也是四格
+最高的 `.6697`（C0/C1/CH0 为 `.6232/.6612/.6642`）。但三项增益区间都跨 0，C0 的
+seed 44 又明显塌到 `79.48%`，所以只能说“严格子集有可用排序信号”，不能说 H0 已稳定
+提高 Best-of-N。`CH0-C1-H0+C0` 交互为 `-1.76` points，区间
+`[-5.38,+1.05]`：组合仍没有胜过 H0，但也不足以确认稳定负交互。
+
+200 条独立 H dev 更清楚地界定了这些标签到底能用来学什么：H0 的 token AUROC/AP 为
+`.878/.848`，path AUROC 为 `.841`，正路径检出率 `.827`、clean 拒报率 `.787`；说明它
+能学到“从某个区域开始，后面的推理不可信”。但固定 `.5` 阈值下，first-bad start exact
+为 `0%`、±5 token 仅 `4%`。因此这 400 条训练子集适合继续用作 **tail/path 风险监督**，
+目前不适合宣称“精确首错 token 定位”。CH0 的 H 指标略低于 H0，也没有带来组合收益。
+
+最终汇总状态是 `COMPLETE_H0_V7_4_POSTHOC_EXPLORATORY_EVALUATION`，本地 summary
+SHA-256 为 `d80fff82…291e`。这是扩大后的探索性 Silver 复测，不是原 v7 翻盘，也不是
+Gold、人工验证、protected-test 或 H1/Prior/Full 的证据。
 
 ## Toy smoke test
 

@@ -97,6 +97,25 @@ v7.2 在任何 AI 标签打开前冻结 180 道新题，每题从一开始固定
 结果追加采样；checker、unitizer、至少 5 个实质步骤、每题最多一条和最终 800 条格子配额
 全部保持不变。机器契约见 `configs/ranking_expansion_v7/supplement_protocol_v7_2.json`。
 
+### 4.3 reserve 首轮失败与 v7.3 一次性全量重标
+
+80 条 smoke 的两 AI path 一致率为 96.25%，共同 positive 的首错 unit 精确一致率为
+82.22%；两位标注者的 8 个控制项和 8 个盲重复项都全对，因此按原门槛开放 720 条
+reserve。
+
+reserve 首轮没有通过。A 在 720 条自然样本中把 527 条标成 `uncertain`，并在包括隐藏
+控制项在内的 578 行重复同一句笼统兜底理由，控制项只有 1/8；B 的控制项为 8/8，但盲
+重复为 68/72（94.44%），比冻结的 95% 门槛少一条。两者 path 一致率因此只有 25.97%。
+该轮已按 `FAIL_H0_V7_RESERVE` 永久保留，未生成训练标签，也不降低任何门槛。
+
+v7.3 只允许一次完整重标：同样的两位模型在新的独立会话中，对原封不动的同一批 800
+个公开条目全部重做。为避免长文件末尾被占位符补齐，每份公开包仅按原顺序机械切成
+16 个 50 行 shard；item ID、题目、trajectory、units、隐藏控制项和盲重复项均不改变。
+禁止读取首轮标签、对方包或 private index，禁止只修失败行，也禁止混用两轮结果。若
+无法完成后续 shard，必须让文件缺失，不能批量填 `uncertain`。第二轮仍使用原来的 path、
+onset、控制项、盲重复和最终 200/200/100/100 门槛；再失败就停止，不允许第三次尝试。
+冻结契约见 `configs/ranking_expansion_v7/reannotation_amendment_v7_3.json`。
+
 ## 5. 后续训练与允许的结论
 
 固定训练矩阵为 C0、C1、H0、C1+H0；seed 42/43/44；每个条件 3 epoch。H0 只用 onset BCE，H1 负尾部关闭，Dual Prior 关闭，不在看到结果后调 epoch、margin 或 loss 权重。

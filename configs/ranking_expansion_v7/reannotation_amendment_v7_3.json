@@ -1,0 +1,76 @@
+{
+  "schema_version": "clir-h0-v7.3-full-reserve-reannotation-amendment",
+  "status": "AUTHORIZED_ONE_FULL_RESERVE_REANNOTATION_ATTEMPT",
+  "reason": "reserve_attempt_1_failed_frozen_annotation_quality_gates",
+  "parent": {
+    "protocol_file_sha256": "1e9de5d1c6d23c63a7ed6a501440329ce78cdfdb0e26ade2e2189dad56440155",
+    "reserve_package_a_file_sha256": "6c2c41137b42d1f91c57697f7a1a4b15e75a66694902bf0011baa690d928040f",
+    "reserve_package_b_file_sha256": "da7f84c6f34314bf60b922ee4470617e23e0fc30eac27a03a7729f825f448088",
+    "reserve_attempt_1_a_file_sha256": "df7d1b50bddea8ba451d76987117399b8d428b4f6b20d2ed6f4133f3a5c69a4e",
+    "reserve_attempt_1_b_file_sha256": "02647b50224eb243d6568bef7b42e5dff8694df1f10f8270a1674d26130925d5",
+    "failed_finalization_report_file_sha256": "c678c219645f7aa3cc30d3168d1c95df8129b16be10dffa08a9bf5128f908c84",
+    "failed_finalization_code_commit": "e9ad9ad03e7ff9525796397069fb624f77315015"
+  },
+  "attempt_1_failure": {
+    "status": "FAIL_H0_V7_RESERVE",
+    "annotator_a_controls": "1/8",
+    "annotator_a_self_repeat": "72/72",
+    "annotator_a_natural_uncertain": 527,
+    "annotator_a_repeated_generic_uncertain_rationale_rows": 578,
+    "annotator_b_controls": "8/8",
+    "annotator_b_self_repeat": "68/72",
+    "raw_path_agreement": 0.25972222222222224,
+    "exact_onset_agreement_on_common_positive": 0.8058252427184466
+  },
+  "retry_scope": {
+    "attempt_name": "reserve_attempt_2_v7_3",
+    "same_800_public_items_per_annotator": true,
+    "same_item_ids_and_public_content": true,
+    "same_annotator_models": {
+      "a": "user_reported_gpt_5_6_sol_xhigh",
+      "b": "user_reported_claude_opus_5_high"
+    },
+    "new_independent_sessions_required": true,
+    "attempt_1_labels_must_not_be_read_by_retry_annotators": true,
+    "other_annotator_package_or_labels_forbidden": true,
+    "private_package_index_forbidden": true,
+    "full_reannotation_required_for_both_annotators": true,
+    "selective_row_repair_forbidden": true,
+    "mixing_attempt_1_and_attempt_2_labels_forbidden": true,
+    "third_model_or_adjudication_used": false,
+    "human_verification_used": false,
+    "maximum_retry_attempts_after_attempt_1": 1
+  },
+  "mechanical_resharding": {
+    "shards_per_annotator": 16,
+    "rows_per_shard": 50,
+    "preserve_original_public_package_order": true,
+    "content_or_item_id_changes_allowed": false,
+    "label_based_selection_or_ordering_allowed": false
+  },
+  "execution_rules": {
+    "process_and_validate_one_shard_at_a_time": true,
+    "unreviewed_placeholder_labels_forbidden": true,
+    "bulk_generic_uncertain_fallback_forbidden": true,
+    "maximum_identical_rationale_rows_per_annotator": 20,
+    "if_unable_to_finish_leave_remaining_shard_outputs_absent": true,
+    "all_16_shards_must_pass_schema_and_exact_id_validation_before_merge": true
+  },
+  "unchanged_gates": {
+    "raw_path_agreement_min": 0.9,
+    "common_positive_exact_onset_agreement_min": 0.75,
+    "common_positive_minimum_support": 30,
+    "controls_required_correct": "8/8_per_annotator",
+    "self_repeat_agreement_min": 0.95,
+    "final_target": {
+      "train_positive": 200,
+      "train_clean": 200,
+      "dev_positive": 100,
+      "dev_clean": 100
+    },
+    "final_selection": "common_exact_non_low_agreement_then_original_frozen_hash_order"
+  },
+  "failure_rule": "if_attempt_2_fails_any_unchanged_gate_stop_without_further_retry_or_threshold_change",
+  "feature_extraction": false,
+  "training": false
+}

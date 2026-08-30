@@ -383,13 +383,18 @@ def command_merge_labels(args: argparse.Namespace) -> None:
         raise FileExistsError("H0 v7.3 merged label artifacts already exist")
     merged: dict[str, list[dict[str, Any]]] = {}
     validation: dict[str, Any] = {}
-    manifests: dict[str, Any] = {}
+    # Validate both annotators completely before publishing either merged file.
+    # This keeps a missing or malformed later shard from leaving a one-sided
+    # merged artifact that can be mistaken for a completed merge.
     for annotator in ("a", "b"):
         merged[annotator], validation[annotator] = _validate_label_shards(
             amendment=amendment,
             pre_annotation_root=pre_annotation_root,
             annotator=annotator,
         )
+
+    manifests: dict[str, Any] = {}
+    for annotator in ("a", "b"):
         manifests[annotator] = publish_manifest(
             outputs[annotator],
             merged[annotator],

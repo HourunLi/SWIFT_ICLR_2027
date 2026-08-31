@@ -8,7 +8,7 @@ labels; it has no provider, feature-extraction, finalization, or training path.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from src.clir_prior_partial import (
     build_blind_packages,
@@ -183,7 +183,12 @@ def build_canonical_blind_packages(
 
 
 def _normalized_population(
-    package: Sequence[Mapping[str, Any]], labels: Sequence[Mapping[str, Any]]
+    package: Sequence[Mapping[str, Any]],
+    labels: Sequence[Mapping[str, Any]],
+    *,
+    annotation_validator: Callable[
+        [Mapping[str, Any], Mapping[str, Any]], dict[str, Any]
+    ] = validate_canonical_prior_annotation,
 ) -> dict[str, dict[str, Any]]:
     package_by_id = {str(row["item_id"]): row for row in package}
     if len(package_by_id) != len(package):
@@ -195,9 +200,7 @@ def _normalized_population(
             raise ValueError("duplicate label item_id")
         if item_id not in package_by_id:
             raise ValueError("unknown label item_id")
-        output[item_id] = validate_canonical_prior_annotation(
-            row, package_by_id[item_id]
-        )
+        output[item_id] = annotation_validator(row, package_by_id[item_id])
     if set(output) != set(package_by_id):
         raise ValueError("label population is incomplete")
     return output
@@ -234,9 +237,23 @@ def evaluate_canonical_prior_labels(
     labels_a: Sequence[Mapping[str, Any]],
     labels_b: Sequence[Mapping[str, Any]],
     gates: Mapping[str, Any],
+    annotation_validator: Callable[
+        [Mapping[str, Any], Mapping[str, Any]], dict[str, Any]
+    ] = validate_canonical_prior_annotation,
+    report_schema: str = REPORT_SCHEMA,
+    pass_status: str = "PASS_PRIOR_CANONICAL_SMOKE_V10",
+    yield_only_status: str = "STOP_PRIOR_CANONICAL_SMOKE_V10_YIELD_ONLY",
+    definition_failure_status: str = (
+        "STOP_PRIOR_CANONICAL_SMOKE_V10_DEFINITION_FAILURE"
+    ),
+    claim_boundary: str = "canonical dual-AI Prior target operability only; not Gold, factual accuracy, learnability, gate efficacy, or Best-of-N evidence",
 ) -> dict[str, Any]:
-    normalized_a = _normalized_population(package_a, labels_a)
-    normalized_b = _normalized_population(package_b, labels_b)
+    normalized_a = _normalized_population(
+        package_a, labels_a, annotation_validator=annotation_validator
+    )
+    normalized_b = _normalized_population(
+        package_b, labels_b, annotation_validator=annotation_validator
+    )
     report = evaluate_partial_prior_labels(
         package_a=package_a,
         package_b=package_b,
@@ -254,7 +271,7 @@ def evaluate_canonical_prior_labels(
             annotator="b", private_index=private_index, labels=normalized_b
         ),
     }
-    report["schema_version"] = REPORT_SCHEMA
+    report["schema_version"] = report_schema
     report["metrics"]["self_repeat"] = repeats
     report["gates"]["self_repeat_a"] = {
         "pass": repeats["a"]["rate"] >= float(gates["self_repeat_min"])
@@ -274,17 +291,17 @@ def evaluate_canonical_prior_labels(
         "partial_paired_rows",
     }
     if not failed:
-        status = "PASS_PRIOR_CANONICAL_SMOKE_V10"
+        status = pass_status
         failure_class = None
         scale_protocol_allowed = True
         oversampled_scale_protocol_allowed = True
     elif failed.issubset(yield_only_gates):
-        status = "STOP_PRIOR_CANONICAL_SMOKE_V10_YIELD_ONLY"
+        status = yield_only_status
         failure_class = "yield_only"
         scale_protocol_allowed = False
         oversampled_scale_protocol_allowed = True
     else:
-        status = "STOP_PRIOR_CANONICAL_SMOKE_V10_DEFINITION_FAILURE"
+        status = definition_failure_status
         failure_class = "definition_or_stability"
         scale_protocol_allowed = False
         oversampled_scale_protocol_allowed = False
@@ -300,7 +317,7 @@ def evaluate_canonical_prior_labels(
             ),
             "feature_extraction_allowed": False,
             "training_allowed": False,
-            "claim_boundary": "canonical dual-AI Prior target operability only; not Gold, factual accuracy, learnability, gate efficacy, or Best-of-N evidence",
+            "claim_boundary": claim_boundary,
         }
     )
     return report

@@ -1,0 +1,10 @@
+你是 CLIR Prior v11 的独立标注者 A，模型身份记录为 GPT-5.6-sol、xhigh。请先完整读取：
+/prodcpfs/user/panzhixin/ICLR_2027/configs/data_expansion_prior_v11/annotation_prompt.md
+
+然后只读取这个公开盲包：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v11/pre_annotation/packages/annotator_a/prior_verified_smoke.jsonl
+
+严格逐行完成全部 80 行，把单行 JSONL 结果直接写到：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v11/pre_annotation/labels_a/prior_verified_smoke.jsonl
+
+不要读取任何 PRIVATE 文件、annotator_b 文件、历史标签、checker 或参考答案；不要改输入、协议和代码。每行必须先按提示词逐单元重新验算算术、代数、单位、对象和所求量，再决定最早致命错误。usable 行的 key_unit_indices 必须恰好一个，Complete 必须按候选实际链回溯。写完后自行检查：输出 80 行、item_id 与输入集合完全一致、没有 Markdown、每行都是合法 JSON。

@@ -1,0 +1,45 @@
+{
+  "schema_version": "clir-prior-canonical-smoke-completion-v10",
+  "status": "STOP_PRIOR_CANONICAL_SMOKE_V10_DEFINITION_FAILURE",
+  "evaluated_at_code_commit": "13294f01fac73675dc5395a457a2fd00a3771943",
+  "raw_gate_report_file_sha256": "2ecc2e80f16bbe0f567a4a41ec9f1275b7cc0c413ae3e71ffc1ada6c597c3025",
+  "deterministic_second_evaluation_same_file_sha256": true,
+  "labels": {
+    "annotator_a_rows": 80,
+    "annotator_b_rows": 80,
+    "annotator_a_file_sha256": "f13f4acafbaedfc841b4686ec308c12cbf4ae3a4540877116a087ecc733cae0f",
+    "annotator_b_file_sha256": "1535a7e754634f0e34f3174e48f6d7b6595ead56f1ffa16940ee47c782eb9cc0"
+  },
+  "natural_metrics": {
+    "denominator": 60,
+    "eligibility_agreement": 1.0,
+    "common_usable": 60,
+    "common_nonlow_usable": 60,
+    "key_macro_f1": 0.9,
+    "complete_macro_f1": 0.9253210334169559,
+    "key_exact_nonlow_rows": 54,
+    "complete_nonempty_consensus_rows": 60,
+    "partial_paired_trainable_rows": 54,
+    "complete_unit_decision_agreement": 0.9291270527225584,
+    "complete_ambiguous_unit_fraction": 0.07087294727744164,
+    "complete_positive_intersection_over_union": 0.8461538461538461,
+    "complete_row_mask_coverage_mean": 0.9349536980320657
+  },
+  "stability": {
+    "annotator_a_self_repeat": "12/12",
+    "annotator_b_self_repeat": "12/12",
+    "annotator_a_controls": "7/8",
+    "annotator_b_controls": "8/8",
+    "failed_control": "annotator_a missed 7+5=13 as the earliest fatal error and selected the downstream unit",
+    "frozen_control_requirement_per_annotator": "8/8"
+  },
+  "decision": {
+    "failure_class": "definition_or_stability",
+    "scale_protocol_preparation_allowed": false,
+    "oversampled_scale_protocol_preparation_allowed": false,
+    "feature_extraction_allowed": false,
+    "training_allowed": false,
+    "posthoc_subset_allowed": false
+  },
+  "claim_boundary": "v10 materially improved canonical target agreement, but failed its frozen control gate; no Gold, accuracy, learnability, gate, ranking, or training claim"
+}

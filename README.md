@@ -15,9 +15,9 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史可训练 48 条；v8/v9 已失败；v10 统一回溯提示词的全新 60 题盲包已准备 | 现在仍只能训练历史 48 条；v10 尚未标注，不能抽 feature 或训练 | v10 强制单 Key 与同一 Complete 回溯算法；若只有 yield 不足才允许另冻“扩量后按预注册规则取严格共识子集”，定义/控制门失败则停止 |
+| Dual Prior | 历史可训练 48 条；v8/v9/v10 均已按冻结门失败；v11 全新确认协议已冻结 | 现在仍只能训练历史 48 条；v10 的 54 条共识行也不能事后训练 | v10 的自然标签门全过，但 A 漏掉一条算术控制题；v11 保持定义与门槛不变，只强制“逐单元验算后再选最早错误”并换全新样本/控制 |
 
-失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8/v9 分别以 `STOP_PRIOR_DEPENDENCY_SMOKE_V8_RAW_GATE_FAILURE` / `STOP_PRIOR_PARTIAL_SMOKE_V9_RAW_GATE_FAILURE` 终止，不能事后挑子集、裁决或降门训练；v10 只是一轮全新定义 smoke，包准备完成不等于数据通过。
+失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8/v9/v10 分别以 `STOP_PRIOR_DEPENDENCY_SMOKE_V8_RAW_GATE_FAILURE`、`STOP_PRIOR_PARTIAL_SMOKE_V9_RAW_GATE_FAILURE`、`STOP_PRIOR_CANONICAL_SMOKE_V10_DEFINITION_FAILURE` 终止，不能事后挑子集、裁决或降门训练。v11 是用户另行批准的全新确认轮，不会翻转这些历史结果。
 
 ## 2026-08-23 clean integration 审计与训练试跑
 
@@ -779,7 +779,7 @@ seed 44 又明显塌到 `79.48%`，所以只能说“严格子集有可用排序
 SHA-256 为 `d80fff82…291e`。这是扩大后的探索性 Silver 复测，不是原 v7 翻盘，也不是
 Gold、人工验证、protected-test 或 H1/Prior/Full 的证据。
 
-### Dual Prior 扩量 v8/v9 均停止，v10 待双标
+### Dual Prior v8/v9/v10 均停止，v11 做一次全新确认
 
 v8 的 60 条依赖图标注已经完成并按冻结门评估。结果不是“待标”：eligibility=`60/60`、
 path agreement=`.95`，但 Key/Complete F1 只有 `.7667/.8040`，非低置信完整训练共识仅
@@ -835,8 +835,24 @@ ordered hash=`01642639…4f3` / `d6c7a5e5…2ee5`，状态分别为
 `PASS_PRIOR_CANONICAL_SMOKE_V10_PACKAGES_READY` 与
 `PASS_PRIOR_CANONICAL_SMOKE_V10_RECOMPUTATION`。协议见
 [`docs/data_expansion_prior_protocol_v10.md`](docs/data_expansion_prior_protocol_v10.md)，入口为
-`prepare_clir_prior_v10.py`。当前尚无 v10 标签或 raw gate 结果，不用 GPU，也不允许抽
-feature、训练或宣称 Prior 数据已扩成。
+`prepare_clir_prior_v10.py`。
+
+两份 v10 标签随后完整通过 schema、ID、顺序和盲包绑定。自然 60 条的 Key/Complete F1 为
+`.9000/.9253`，exact non-low Key=`54/60`，Complete unit agreement=`.9291`、positive
+IoU=`.8462`，A/B self-repeat 都是 `12/12`；所有自然、数量、coverage、repeat 和反退化门均
+通过。但 A 漏看隐藏题里的 `7+5=13`，把下游步骤选成 Key，controls=`7/8`；B 为 `8/8`。
+冻结门要求两边都 `8/8`，所以最终状态是
+`STOP_PRIOR_CANONICAL_SMOKE_V10_DEFINITION_FAILURE`，report SHA-256=`2ecc2e80…3025`。
+这不能被解释成 yield-only，也不能重标控制题、降低门槛或挑 54 条共识行训练。
+
+用户已明确批准再做一次 v11。它不改 singleton Key、canonical Complete、partial mask、模型、
+loss 或固定 `.25` gate，只在提示词前增加“按 unit 顺序重新验算算术/代数/单位/对象/所求量，
+再选最早致命错误”，并要求错误 rationale 写出具体校验。v11 从同一已 materialize 池确定性
+选择 60 个新的 query/cluster，排除 v6.1 C、v7 H/ranking、v8、v9、v10；8 个控制题也全部
+换新，A/B 仍各 60 natural +8 controls +12 repeats。协议见
+[`docs/data_expansion_prior_protocol_v11.md`](docs/data_expansion_prior_protocol_v11.md)，入口为
+`prepare_clir_prior_v11.py`。本段记录的是冻结设计与用户授权；包发布前仍没有 v11 标签、
+feature 或训练许可。
 
 ## Toy smoke test
 

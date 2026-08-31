@@ -1,8 +1,9 @@
 # CLIR Prior v12：全新大池双标与预注册严格共识扩量
 
 协议冻结状态：`FROZEN_PREPARATION_ROLLOUT_NOT_STARTED`；该机器字段不随执行进度回写。
-执行截至 2026-08-31：pre-rollout 已冻结并独立复算，40 个 rollout shard/16,000 条轨迹已
-全部验证合并；checker/unitizer、AI 标注、feature 和训练仍分别由后续 hash-bound 授权解锁。
+执行截至 2026-08-31：pre-rollout、40 个 rollout shard/16,000 条轨迹、checker/unitizer、
+800 条自然 proposal 和 A/B 各 16 个盲标 shard 均已构造并独立复算通过；尚未产生任何标签，
+AI 标注、严格共识选择、feature 和训练仍是后续独立门。
 
 ## 1. 为什么另开 v12
 
@@ -69,6 +70,11 @@ material unit 数 `6..40` 和冻结 SHA-256 priority 选择，不看 CLIR score 
   Key，否则取首次完成答案的最后非包装 unit；Complete 按候选实际主线向后回溯。
 - 800 条自然样本按每边 16 shard ×50 natural 分发；每边另有 16 条隐藏控制和 80 条盲重复。
 - 不使用第三模型或裁决；所有 800 条自然行始终保留在 raw denominator 中。
+
+正式公开包已在 commit `a669e9a` 上生成并复算：32 个 shard 均为 56 行，每边合计 800
+natural +16 controls +80 repeats=`896` 行，且 repeat 与其 natural parent 不在同一 shard。
+annotation prompt SHA-256=`0f61f566…c3c21`；package report SHA-256=`ffe02fb1…f452`，
+独立 verification SHA-256=`37837dc0…c27e`。PRIVATE 索引只留本地，不能发送给任一标注者。
 
 ## 6. 严格共识选择与最终规模
 

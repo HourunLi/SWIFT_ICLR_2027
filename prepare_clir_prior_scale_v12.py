@@ -30,6 +30,7 @@ from prepare_clir_ranking import (
 )
 from src.clir_prior_consensus_scale import (
     PROTOCOL_SCHEMA,
+    PROPOSAL_SCHEMA,
     QUERY_SCHEMA,
     build_acquisition_shards,
     select_acquisition_queries,

@@ -36,6 +36,7 @@ from src.clir_prior_consensus_scale import (
     QUERY_SCHEMA,
     build_acquisition_shards,
     build_prior_annotation_shards,
+    evaluate_prior_v12_labels,
     select_acquisition_queries,
     select_prior_proposals,
 )
@@ -63,8 +64,7 @@ DEFAULT_AUTHORIZATION = (
     PROJECT_ROOT / "configs/data_expansion_prior_v12/rollout_authorization.json"
 )
 DEFAULT_PRE_ANNOTATION_AUTHORIZATION = (
-    PROJECT_ROOT
-    / "configs/data_expansion_prior_v12/pre_annotation_authorization.json"
+    PROJECT_ROOT / "configs/data_expansion_prior_v12/pre_annotation_authorization.json"
 )
 DEFAULT_ROLLOUT_ROOT = PROJECT_ROOT / "run_artifacts/data_expansion_prior_v12"
 DEFAULT_PRE_ANNOTATION_ROOT = DEFAULT_ROLLOUT_ROOT / "pre_annotation"
@@ -149,9 +149,7 @@ def _ordered_vllm_candidates(request_output: Any, expected_count: int) -> list[A
     return sorted(candidates, key=lambda candidate: int(candidate.index))
 
 
-def _select_shard(
-    shards: Sequence[Mapping[str, Any]], shard_id: str
-) -> dict[str, Any]:
+def _select_shard(shards: Sequence[Mapping[str, Any]], shard_id: str) -> dict[str, Any]:
     matches = [dict(row) for row in shards if row.get("shard_id") == shard_id]
     if len(matches) != 1:
         raise ValueError(f"expected one Prior v12 shard {shard_id}")
@@ -222,9 +220,7 @@ def load_scale_protocol(
             raise ValueError(f"Prior v12 pre-rollout must keep {forbidden}=false")
 
     parent = protocol["parent"]
-    if parent["base_ranking_protocol_file_sha256"] != file_sha256(
-        base_protocol_path
-    ):
+    if parent["base_ranking_protocol_file_sha256"] != file_sha256(base_protocol_path):
         raise ValueError("Prior v12 base protocol hash drift")
     _verify_file(
         parent["base_pre_rollout_registry_path"],
@@ -292,9 +288,7 @@ def load_rollout_authorization(
         (pre_rollout_dir / "freeze_report.json").read_text(encoding="utf-8")
     )
     verification = json.loads(
-        (pre_rollout_dir / "independent_verification.json").read_text(
-            encoding="utf-8"
-        )
+        (pre_rollout_dir / "independent_verification.json").read_text(encoding="utf-8")
     )
     if freeze.get("status") != parent.get("pre_rollout_status"):
         raise ValueError("Prior v12 frozen status drift")
@@ -340,8 +334,7 @@ def load_pre_annotation_authorization(
     expected_files = {
         "protocol_file_sha256": protocol_path,
         "rollout_authorization_file_sha256": rollout_authorization_path,
-        "pre_rollout_registry_file_sha256": pre_rollout_dir
-        / "manifest_registry.json",
+        "pre_rollout_registry_file_sha256": pre_rollout_dir / "manifest_registry.json",
         "rollout_completion_report_file_sha256": rollout_root
         / "rollout_completion_report.json",
         "combined_raw_file_sha256": rollout_root / "rollouts/combined_raw.jsonl",
@@ -352,9 +345,7 @@ def load_pre_annotation_authorization(
         if file_sha256(file_path) != parent.get(key):
             raise ValueError(f"Prior v12 pre-annotation {key} mismatch")
     rollout_report = json.loads(
-        (rollout_root / "rollout_completion_report.json").read_text(
-            encoding="utf-8"
-        )
+        (rollout_root / "rollout_completion_report.json").read_text(encoding="utf-8")
     )
     if rollout_report.get("status") != parent.get("rollout_status"):
         raise ValueError("Prior v12 rollout status drift")
@@ -379,9 +370,7 @@ def _load_rollout_contract(
     authorization_path = Path(args.authorization).resolve()
     pre_rollout = Path(args.output).resolve()
     rollout_root = Path(args.rollout_root).resolve()
-    _, protocol = load_scale_protocol(
-        protocol_path, base_protocol_path=base_path
-    )
+    _, protocol = load_scale_protocol(protocol_path, base_protocol_path=base_path)
     authorization = load_rollout_authorization(
         authorization_path,
         protocol_path=protocol_path,
@@ -416,9 +405,7 @@ def _load_pre_annotation_contract(
     pre_rollout = Path(args.output).resolve()
     rollout_root = Path(args.rollout_root).resolve()
     pre_annotation_root = Path(args.pre_annotation_root).resolve()
-    _, protocol = load_scale_protocol(
-        protocol_path, base_protocol_path=base_path
-    )
+    _, protocol = load_scale_protocol(protocol_path, base_protocol_path=base_path)
     authorization = load_pre_annotation_authorization(
         pre_annotation_authorization_path,
         protocol_path=protocol_path,
@@ -639,9 +626,7 @@ def build_plan(
 def command_audit(args: argparse.Namespace) -> None:
     base_path = Path(args.base_protocol).resolve()
     protocol_path = Path(args.protocol).resolve()
-    base, protocol = load_scale_protocol(
-        protocol_path, base_protocol_path=base_path
-    )
+    base, protocol = load_scale_protocol(protocol_path, base_protocol_path=base_path)
     plan = build_plan(base, protocol, cache_dir=args.cache_dir)
     print(
         json.dumps(
@@ -652,8 +637,7 @@ def command_audit(args: argparse.Namespace) -> None:
                 "query_count": len(plan["queries"]),
                 "shard_count": len(plan["shards"]),
                 "candidate_rows": sum(
-                    int(row["expected_candidate_rows"])
-                    for row in plan["shards"]
+                    int(row["expected_candidate_rows"]) for row in plan["shards"]
                 ),
                 **plan["reports"],
                 "artifacts_written": False,
@@ -673,9 +657,7 @@ def command_freeze(args: argparse.Namespace) -> None:
     output = Path(args.output).resolve()
     if (output / "manifest_registry.json").exists():
         raise FileExistsError("Prior v12 pre-rollout is already frozen")
-    base, protocol = load_scale_protocol(
-        protocol_path, base_protocol_path=base_path
-    )
+    base, protocol = load_scale_protocol(protocol_path, base_protocol_path=base_path)
     plan = build_plan(base, protocol, cache_dir=args.cache_dir)
     output.mkdir(parents=True, exist_ok=True)
     query_path = output / "acquisition_queries.jsonl"
@@ -748,9 +730,7 @@ def command_verify(args: argparse.Namespace) -> None:
     base_path = Path(args.base_protocol).resolve()
     protocol_path = Path(args.protocol).resolve()
     output = Path(args.output).resolve()
-    base, protocol = load_scale_protocol(
-        protocol_path, base_protocol_path=base_path
-    )
+    base, protocol = load_scale_protocol(protocol_path, base_protocol_path=base_path)
     registry_path = output / "manifest_registry.json"
     report_path = output / "freeze_report.json"
     registry = json.loads(registry_path.read_text(encoding="utf-8"))
@@ -769,7 +749,10 @@ def command_verify(args: argparse.Namespace) -> None:
         raise ValueError("Prior v12 query manifest drift")
     if file_sha256(output / "rollout_shards.json") != registry["shards_file_sha256"]:
         raise ValueError("Prior v12 shard manifest drift")
-    if file_sha256(output / "source_audit.json") != registry["source_audit_file_sha256"]:
+    if (
+        file_sha256(output / "source_audit.json")
+        != registry["source_audit_file_sha256"]
+    ):
         raise ValueError("Prior v12 source audit drift")
     recomputed = build_plan(base, protocol, cache_dir=args.cache_dir)
     if recomputed["queries"] != frozen_queries:
@@ -927,7 +910,9 @@ def verify_rollout_shard(
 ) -> dict[str, Any]:
     output, sidecar_path, completion_path = _shard_paths(rollout_root, shard)
     if not completion_path.is_file():
-        raise FileNotFoundError(f"missing Prior v12 completion marker: {completion_path}")
+        raise FileNotFoundError(
+            f"missing Prior v12 completion marker: {completion_path}"
+        )
     completion = json.loads(completion_path.read_text(encoding="utf-8"))
     if completion.get("status") != "COMPLETE_VERIFIED_PRIOR_V12_ROLLOUT_SHARD":
         raise ValueError(f"invalid Prior v12 completion status: {completion_path}")
@@ -935,9 +920,7 @@ def verify_rollout_shard(
     expected = {
         "shard_id": shard["shard_id"],
         "shard_spec_sha256": canonical_sha256(shard),
-        "protocol_file_sha256": authorization["frozen_parent"][
-            "protocol_file_sha256"
-        ],
+        "protocol_file_sha256": authorization["frozen_parent"]["protocol_file_sha256"],
         "pre_rollout_registry_file_sha256": file_sha256(
             pre_rollout_dir / "manifest_registry.json"
         ),
@@ -947,9 +930,10 @@ def verify_rollout_shard(
         raise ValueError(f"Prior v12 completion binding drift: {completion_path}")
     if not output.is_file() or file_sha256(output) != completion["file_sha256"]:
         raise ValueError(f"Prior v12 shard hash drift: {output}")
-    if not sidecar_path.is_file() or file_sha256(sidecar_path) != completion[
-        "sidecar_file_sha256"
-    ]:
+    if (
+        not sidecar_path.is_file()
+        or file_sha256(sidecar_path) != completion["sidecar_file_sha256"]
+    ):
         raise ValueError(f"Prior v12 shard sidecar hash drift: {sidecar_path}")
     rows = read_jsonl(output)
     if canonical_sha256(rows) != completion["ordered_rows_sha256"]:
@@ -968,9 +952,7 @@ def verify_rollout_shard(
         protocol=protocol,
         protocol_file_sha256=str(completion["protocol_file_sha256"]),
         authorization_file_sha256=file_sha256(authorization_path),
-        registry_file_sha256=file_sha256(
-            pre_rollout_dir / "manifest_registry.json"
-        ),
+        registry_file_sha256=file_sha256(pre_rollout_dir / "manifest_registry.json"),
     )
     if validation != completion["validation"]:
         raise ValueError(f"Prior v12 validation summary drift: {completion_path}")
@@ -987,16 +969,14 @@ def verify_rollout_shard(
 
 
 def command_rollout(args: argparse.Namespace) -> None:
-    protocol, authorization, shards, query_by_id, rollout_root = (
-        _load_rollout_contract(args)
+    protocol, authorization, shards, query_by_id, rollout_root = _load_rollout_contract(
+        args
     )
     authorization_path = Path(args.authorization).resolve()
     pre_rollout = Path(args.output).resolve()
     protocol_path = Path(args.protocol).resolve()
     shard = _select_shard(shards, args.shard_id)
-    calibration_id = str(
-        authorization["runtime_contract"]["first_calibration_shard"]
-    )
+    calibration_id = str(authorization["runtime_contract"]["first_calibration_shard"])
     if shard["shard_id"] != calibration_id:
         calibration = _select_shard(shards, calibration_id)
         _, _, marker = _shard_paths(rollout_root, calibration)
@@ -1335,9 +1315,7 @@ def command_merge_rollouts(args: argparse.Namespace) -> None:
         "authorization_file_sha256": file_sha256(authorization_path),
         "code_commit": next(iter(commits)),
         "shard_count": len(shards),
-        "shard_file_sha256": {
-            row["shard_id"]: row["file_sha256"] for row in reports
-        },
+        "shard_file_sha256": {row["shard_id"]: row["file_sha256"] for row in reports},
         **population,
         "finish_reason_counts": dict(sorted(finish_reasons.items())),
         "output_token_count": _integer_summary(output_lengths),
@@ -1378,9 +1356,7 @@ def command_merge_rollouts(args: argparse.Namespace) -> None:
 def command_materialize(args: argparse.Namespace) -> None:
     if _git_dirty():
         raise RuntimeError("Prior v12 materialization requires a clean Git commit")
-    protocol, _, rollout_root, pre_annotation_root = (
-        _load_pre_annotation_contract(args)
-    )
+    protocol, _, rollout_root, pre_annotation_root = _load_pre_annotation_contract(args)
     output = pre_annotation_root / "materialized/all_rows.jsonl"
     sidecar = output.with_suffix(output.suffix + ".manifest.json")
     report_path = pre_annotation_root / "materialized/materialization_report.json"
@@ -1431,9 +1407,7 @@ def command_materialize(args: argparse.Namespace) -> None:
 
 
 def command_verify_materialized(args: argparse.Namespace) -> None:
-    protocol, _, rollout_root, pre_annotation_root = (
-        _load_pre_annotation_contract(args)
-    )
+    protocol, _, rollout_root, pre_annotation_root = _load_pre_annotation_contract(args)
     output = pre_annotation_root / "materialized/all_rows.jsonl"
     report_path = pre_annotation_root / "materialized/materialization_report.json"
     frozen, sidecar = _read_published_jsonl(
@@ -1449,11 +1423,10 @@ def command_verify_materialized(args: argparse.Namespace) -> None:
         raise ValueError("Prior v12 independent materialization recomputation drift")
     normalized_health = json.loads(json.dumps(health, ensure_ascii=False))
     normalized_validation = json.loads(json.dumps(validation, ensure_ascii=False))
-    if (
-        canonical_sha256(normalized_health)
-        != canonical_sha256(published.get("health"))
-        or canonical_sha256(normalized_validation)
-        != canonical_sha256(published.get("validation"))
+    if canonical_sha256(normalized_health) != canonical_sha256(
+        published.get("health")
+    ) or canonical_sha256(normalized_validation) != canonical_sha256(
+        published.get("validation")
     ):
         raise ValueError("Prior v12 materialization summary drift")
     verification = {
@@ -1612,15 +1585,11 @@ def _recompute_annotation_packages(
     )
     verification_path = pre_annotation_root / "proposals/independent_verification.json"
     verification = json.loads(verification_path.read_text(encoding="utf-8"))
-    if verification.get("status") != (
-        "PASS_PRIOR_V12_PROPOSAL_INDEPENDENT_RECOMPUTE"
-    ):
+    if verification.get("status") != ("PASS_PRIOR_V12_PROPOSAL_INDEPENDENT_RECOMPUTE"):
         raise ValueError("Prior v12 proposal verification is not PASS")
     if verification.get("proposal_file_sha256") != proposal_sidecar["file_sha256"]:
         raise ValueError("Prior v12 proposal verification binding drift")
-    packages, private, construction = build_prior_annotation_shards(
-        proposals, protocol
-    )
+    packages, private, construction = build_prior_annotation_shards(proposals, protocol)
     return packages, private, construction, proposal_sidecar
 
 
@@ -1642,8 +1611,8 @@ def command_build_packages(args: argparse.Namespace) -> None:
     ):
         if not required.is_file():
             raise FileNotFoundError(required)
-    packages, private, construction, proposal_sidecar = (
-        _recompute_annotation_packages(protocol, pre_annotation_root)
+    packages, private, construction, proposal_sidecar = _recompute_annotation_packages(
+        protocol, pre_annotation_root
     )
     code_commit = _git_head()
     protocol_path = Path(args.protocol).resolve()
@@ -1661,9 +1630,7 @@ def command_build_packages(args: argparse.Namespace) -> None:
         for shard_index, rows in enumerate(packages[annotator]):
             key = f"{annotator}-{shard_index:02d}"
             manifests[key] = publish_manifest(
-                _annotation_package_path(
-                    pre_annotation_root, annotator, shard_index
-                ),
+                _annotation_package_path(pre_annotation_root, annotator, shard_index),
                 rows,
                 schema_version=PACKAGE_SCHEMA,
                 metadata={**metadata, "annotation_shard_id": key},
@@ -1722,9 +1689,7 @@ def command_build_packages(args: argparse.Namespace) -> None:
             "ordered_rows_sha256": private_manifest["ordered_rows_sha256"],
         },
         "natural_rows_per_annotator": int(protocol["proposal_pool"]["natural_count"]),
-        "rows_per_annotator": sum(
-            len(rows) for rows in packages["a"]
-        ),
+        "rows_per_annotator": sum(len(rows) for rows in packages["a"]),
         "annotation_started": False,
         "feature_extraction_started": False,
         "training_started": False,
@@ -1743,8 +1708,8 @@ def command_build_packages(args: argparse.Namespace) -> None:
 def command_verify_packages(args: argparse.Namespace) -> None:
     protocol, _, _, pre_annotation_root = _load_pre_annotation_contract(args)
     _assert_no_annotation_labels(pre_annotation_root)
-    packages, private, construction, proposal_sidecar = (
-        _recompute_annotation_packages(protocol, pre_annotation_root)
+    packages, private, construction, proposal_sidecar = _recompute_annotation_packages(
+        protocol, pre_annotation_root
     )
     package_root = pre_annotation_root / "packages"
     report_path = package_root / "package_report.json"
@@ -1755,9 +1720,7 @@ def command_verify_packages(args: argparse.Namespace) -> None:
     for annotator in ("a", "b"):
         for shard_index, expected_rows in enumerate(packages[annotator]):
             key = f"{annotator}-{shard_index:02d}"
-            path = _annotation_package_path(
-                pre_annotation_root, annotator, shard_index
-            )
+            path = _annotation_package_path(pre_annotation_root, annotator, shard_index)
             expected_public_paths.add(path.resolve())
             actual_rows, sidecar = _read_published_jsonl(
                 path, expected_schema=PACKAGE_SCHEMA
@@ -1804,13 +1767,15 @@ def command_verify_packages(args: argparse.Namespace) -> None:
     if published.get("launch_prompts") != expected_launch_hashes:
         mismatches.append("launch_prompt_hashes")
     for key, actual_hash in public_hashes.items():
-        if published.get("public_shards", {}).get(key, {}).get(
-            "file_sha256"
-        ) != actual_hash:
+        if (
+            published.get("public_shards", {}).get(key, {}).get("file_sha256")
+            != actual_hash
+        ):
             mismatches.append(f"report:{key}:file_sha256")
-    if published.get("private_index", {}).get(
-        "file_sha256"
-    ) != private_sidecar["file_sha256"]:
+    if (
+        published.get("private_index", {}).get("file_sha256")
+        != private_sidecar["file_sha256"]
+    ):
         mismatches.append("report:private_index:file_sha256")
     verification = {
         "schema_version": "clir-prior-v12-package-verification",
@@ -1829,9 +1794,7 @@ def command_verify_packages(args: argparse.Namespace) -> None:
         "public_shards": len(public_hashes),
         "rows_per_public_shard": int(construction["rows_per_shard"]),
         "public_rows_total": sum(
-            len(rows)
-            for annotator in ("a", "b")
-            for rows in packages[annotator]
+            len(rows) for annotator in ("a", "b") for rows in packages[annotator]
         ),
         "private_rows": len(private),
         "labels_present": False,
@@ -1846,6 +1809,218 @@ def command_verify_packages(args: argparse.Namespace) -> None:
         atomic_write_json(verification_path, verification)
     print(json.dumps(verification, ensure_ascii=False, indent=2))
     if mismatches:
+        raise SystemExit(1)
+
+
+def _annotation_label_path(
+    pre_annotation_root: Path, annotator: str, shard_index: int
+) -> Path:
+    return (
+        pre_annotation_root
+        / f"labels_{annotator}/prior_v12_{annotator}_{shard_index:02d}.jsonl"
+    )
+
+
+def _load_label_evaluation_inputs(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    protocol, _, _, pre_annotation_root = _load_pre_annotation_contract(args)
+    package_root = pre_annotation_root / "packages"
+    package_report_path = package_root / "package_report.json"
+    package_verification_path = package_root / "independent_verification.json"
+    package_report = json.loads(package_report_path.read_text(encoding="utf-8"))
+    package_verification = json.loads(
+        package_verification_path.read_text(encoding="utf-8")
+    )
+    if package_report.get("status") != "PASS_PRIOR_V12_BLIND_ANNOTATION_SHARDS_READY":
+        raise ValueError("Prior v12 package report is not PASS")
+    if package_verification.get("status") != (
+        "PASS_PRIOR_V12_PACKAGE_INDEPENDENT_RECOMPUTE"
+    ):
+        raise ValueError("Prior v12 package verification is not PASS")
+    if package_verification.get("package_report_file_sha256") != file_sha256(
+        package_report_path
+    ):
+        raise ValueError("Prior v12 package report verification binding drift")
+
+    proposal_path = pre_annotation_root / "proposals/prior_natural_800.jsonl"
+    proposals, proposal_sidecar = _read_published_jsonl(
+        proposal_path, expected_schema=PROPOSAL_SCHEMA
+    )
+    private_path = package_root / "PRIVATE_package_index.jsonl"
+    private_index, private_sidecar = _read_published_jsonl(
+        private_path, expected_schema=PRIVATE_SCHEMA
+    )
+    if package_report.get("proposal_file_sha256") != proposal_sidecar["file_sha256"]:
+        raise ValueError("Prior v12 package/proposal hash binding drift")
+    if (
+        package_report.get("private_index", {}).get("file_sha256")
+        != private_sidecar["file_sha256"]
+    ):
+        raise ValueError("Prior v12 package/private-index hash binding drift")
+
+    packages: dict[str, list[dict[str, Any]]] = {"a": [], "b": []}
+    labels: dict[str, list[dict[str, Any]]] = {"a": [], "b": []}
+    bindings: dict[str, Any] = {
+        "protocol_file_sha256": file_sha256(Path(args.protocol).resolve()),
+        "package_report_file_sha256": file_sha256(package_report_path),
+        "package_verification_file_sha256": file_sha256(package_verification_path),
+        "proposal_file_sha256": proposal_sidecar["file_sha256"],
+        "private_index_file_sha256": private_sidecar["file_sha256"],
+        "package_shards": {},
+        "label_shards": {},
+    }
+    shard_count = int(protocol["annotation"]["natural_shards_per_annotator"])
+    expected_rows = (
+        int(protocol["annotation"]["natural_rows_per_shard"])
+        + 1
+        + int(protocol["annotation"]["self_repeats_total_per_annotator"]) // shard_count
+    )
+    for annotator in ("a", "b"):
+        label_directory = pre_annotation_root / f"labels_{annotator}"
+        expected_label_paths = {
+            _annotation_label_path(
+                pre_annotation_root, annotator, shard_index
+            ).resolve()
+            for shard_index in range(shard_count)
+        }
+        actual_label_paths = {
+            path.resolve() for path in label_directory.glob("*.jsonl")
+        }
+        if actual_label_paths != expected_label_paths:
+            missing = sorted(
+                str(path) for path in expected_label_paths - actual_label_paths
+            )
+            extra = sorted(
+                str(path) for path in actual_label_paths - expected_label_paths
+            )
+            raise ValueError(
+                f"Prior v12 labels {annotator} shard population differs: "
+                f"missing={missing}, extra={extra}"
+            )
+        for shard_index in range(shard_count):
+            shard_id = f"{annotator}-{shard_index:02d}"
+            package_path = _annotation_package_path(
+                pre_annotation_root, annotator, shard_index
+            )
+            package_rows, package_sidecar = _read_published_jsonl(
+                package_path, expected_schema=PACKAGE_SCHEMA
+            )
+            expected_hash = (
+                package_report.get("public_shards", {})
+                .get(shard_id, {})
+                .get("file_sha256")
+            )
+            if expected_hash != package_sidecar["file_sha256"]:
+                raise ValueError(f"Prior v12 package shard hash drift: {shard_id}")
+            label_path = _annotation_label_path(
+                pre_annotation_root, annotator, shard_index
+            )
+            label_rows = read_jsonl(label_path)
+            if len(package_rows) != expected_rows or len(label_rows) != expected_rows:
+                raise ValueError(
+                    f"Prior v12 shard {shard_id} row count drift: "
+                    f"package={len(package_rows)}, labels={len(label_rows)}, "
+                    f"expected={expected_rows}"
+                )
+            package_ids = [str(row.get("item_id")) for row in package_rows]
+            label_ids = [str(row.get("item_id")) for row in label_rows]
+            if len(label_ids) != len(set(label_ids)) or set(label_ids) != set(
+                package_ids
+            ):
+                raise ValueError(
+                    f"Prior v12 label/package ID binding drift: {shard_id}"
+                )
+            packages[annotator].extend(package_rows)
+            labels[annotator].extend(label_rows)
+            bindings["package_shards"][shard_id] = {
+                "rows": len(package_rows),
+                "file_sha256": package_sidecar["file_sha256"],
+                "ordered_rows_sha256": canonical_sha256(package_rows),
+            }
+            bindings["label_shards"][shard_id] = {
+                "rows": len(label_rows),
+                "file_sha256": file_sha256(label_path),
+                "ordered_rows_sha256": canonical_sha256(label_rows),
+            }
+    bindings["label_population_ordered_rows_sha256"] = {
+        annotator: canonical_sha256(labels[annotator]) for annotator in ("a", "b")
+    }
+    return {
+        "proposals": proposals,
+        "package_a": packages["a"],
+        "package_b": packages["b"],
+        "private_index": private_index,
+        "labels_a": labels["a"],
+        "labels_b": labels["b"],
+        "protocol": protocol,
+    }, bindings
+
+
+def _build_label_evaluation_report(args: argparse.Namespace) -> dict[str, Any]:
+    inputs, bindings = _load_label_evaluation_inputs(args)
+    report = evaluate_prior_v12_labels(**inputs)
+    report["bindings"] = bindings
+    report["annotators"] = {
+        "a": "user_reported_gpt_5_6_sol_xhigh",
+        "b": "user_reported_claude_opus_5_high",
+        "exact_revisions_and_temperatures_verified": False,
+    }
+    report["evaluated_at_code_commit"] = _git_head()
+    return report
+
+
+def command_evaluate_labels(args: argparse.Namespace) -> None:
+    if _git_dirty():
+        raise RuntimeError(
+            "Prior v12 first label evaluation requires a clean committed evaluator"
+        )
+    pre_annotation_root = Path(args.pre_annotation_root).resolve()
+    evaluation_root = pre_annotation_root / "evaluation"
+    report_path = evaluation_root / "raw_gate_report.json"
+    verification_path = evaluation_root / "independent_verification.json"
+    if report_path.exists() or verification_path.exists():
+        raise FileExistsError(
+            "Prior v12 label evaluation already exists; run verify-label-evaluation"
+        )
+    report = _build_label_evaluation_report(args)
+    atomic_write_json(report_path, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def command_verify_label_evaluation(args: argparse.Namespace) -> None:
+    if _git_dirty():
+        raise RuntimeError("Prior v12 label evaluation verification requires clean Git")
+    pre_annotation_root = Path(args.pre_annotation_root).resolve()
+    evaluation_root = pre_annotation_root / "evaluation"
+    report_path = evaluation_root / "raw_gate_report.json"
+    verification_path = evaluation_root / "independent_verification.json"
+    published = json.loads(report_path.read_text(encoding="utf-8"))
+    recomputed = _build_label_evaluation_report(args)
+    matches = canonical_sha256(published) == canonical_sha256(recomputed)
+    verification = {
+        "schema_version": "clir-prior-v12-label-evaluation-verification",
+        "status": (
+            "PASS_PRIOR_V12_LABEL_EVALUATION_INDEPENDENT_RECOMPUTE"
+            if matches
+            else "FAIL_PRIOR_V12_LABEL_EVALUATION_INDEPENDENT_RECOMPUTE"
+        ),
+        "published_report_file_sha256": file_sha256(report_path),
+        "published_report_canonical_sha256": canonical_sha256(published),
+        "recomputed_report_canonical_sha256": canonical_sha256(recomputed),
+        "evaluated_at_code_commit": published.get("evaluated_at_code_commit"),
+        "verified_at_code_commit": _git_head(),
+        "label_shards": len(published.get("bindings", {}).get("label_shards", {})),
+        "terminal_or_next_gate": published.get("next_gate"),
+    }
+    if verification_path.exists():
+        previous = json.loads(verification_path.read_text(encoding="utf-8"))
+        if previous != verification:
+            raise ValueError("Prior v12 label evaluation verification drift")
+    else:
+        atomic_write_json(verification_path, verification)
+    print(json.dumps(verification, ensure_ascii=False, indent=2))
+    if not matches:
         raise SystemExit(1)
 
 
@@ -1886,9 +2061,7 @@ def build_parser() -> argparse.ArgumentParser:
     materialize.add_argument("--cache-dir", default="run_artifacts/model_cache")
     materialize.set_defaults(func=command_materialize)
     verify_materialized = subparsers.add_parser("verify-materialized")
-    verify_materialized.add_argument(
-        "--cache-dir", default="run_artifacts/model_cache"
-    )
+    verify_materialized.add_argument("--cache-dir", default="run_artifacts/model_cache")
     verify_materialized.set_defaults(func=command_verify_materialized)
     proposals = subparsers.add_parser("select-proposals")
     proposals.set_defaults(func=command_select_proposals)
@@ -1898,6 +2071,10 @@ def build_parser() -> argparse.ArgumentParser:
     packages.set_defaults(func=command_build_packages)
     verify_packages = subparsers.add_parser("verify-packages")
     verify_packages.set_defaults(func=command_verify_packages)
+    evaluate_labels = subparsers.add_parser("evaluate-labels")
+    evaluate_labels.set_defaults(func=command_evaluate_labels)
+    verify_label_evaluation = subparsers.add_parser("verify-label-evaluation")
+    verify_label_evaluation.set_defaults(func=command_verify_label_evaluation)
     return parser
 
 

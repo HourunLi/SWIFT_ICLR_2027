@@ -8,11 +8,16 @@ from prepare_clir_prior_scale_v12 import (
     _validate_shard_rows,
 )
 from src.clir_prior_consensus_scale import (
+    LABEL_SCHEMA,
+    PACKAGE_SCHEMA,
+    PRIVATE_SCHEMA,
     PROTOCOL_SCHEMA,
     build_acquisition_shards,
     build_prior_annotation_shards,
+    evaluate_prior_v12_labels,
     select_acquisition_queries,
     select_prior_proposals,
+    validate_prior_v12_annotation,
 )
 
 
@@ -260,9 +265,7 @@ def test_prior_v12_annotation_shards_have_frozen_natural_control_repeat_mix() ->
             "proposal_id": f"proposal-{index:04d}",
             "question": f"question {index}",
             "response": f"response {index}",
-            "units": [
-                {"unit_index": 0, "kind": "material_claim", "text": "claim"}
-            ],
+            "units": [{"unit_index": 0, "kind": "material_claim", "text": "claim"}],
         }
         for index in range(800)
     ]
@@ -297,16 +300,261 @@ def test_prior_v12_annotation_shards_have_frozen_natural_control_repeat_mix() ->
             for row in rows
         }
         private_by_item = {
-            row["item_id"]: row
-            for row in private
-            if row["annotator"] == annotator
+            row["item_id"]: row for row in private if row["annotator"] == annotator
         }
         assert all(
-            shard_by_item[item_id]
-            != shard_by_item[private_row["natural_item_id"]]
+            shard_by_item[item_id] != shard_by_item[private_row["natural_item_id"]]
             for item_id, private_row in private_by_item.items()
             if private_row["kind"] == "repeat"
         )
     control_private = [row for row in private if row["kind"] == "control"]
     assert len(control_private) == 32
     assert all("expected_signature" in row for row in control_private)
+
+
+def _evaluation_fixture() -> dict:
+    strata = [
+        ("gsm8k", "numeric_match", "train"),
+        ("gsm8k", "numeric_match", "dev"),
+        ("gsm8k", "numeric_mismatch", "train"),
+        ("gsm8k", "numeric_mismatch", "dev"),
+        ("math", "numeric_match", "train"),
+        ("math", "numeric_match", "dev"),
+        ("math", "numeric_mismatch", "train"),
+        ("math", "numeric_mismatch", "dev"),
+    ]
+    units = [
+        {"unit_index": 0, "kind": "material_claim", "text": "first"},
+        {"unit_index": 1, "kind": "material_claim", "text": "answer"},
+        {"unit_index": 2, "kind": "material_claim", "text": "wrapper"},
+    ]
+    proposals = []
+    packages = {"a": [], "b": []}
+    private = []
+    labels = {"a": [], "b": []}
+    for index, (source, checker_status, split) in enumerate(strata):
+        item_id = f"natural-{index}"
+        proposal = {
+            "schema_version": "clir-prior-v12-natural-proposal",
+            "proposal_id": item_id,
+            "trajectory_id": f"trajectory-{index}",
+            "query_id": f"query-{index}",
+            "cluster_id": f"cluster-{index}",
+            "source": source,
+            "source_record_id": index,
+            "checker_status": checker_status,
+            "prior_label_split": split,
+            "candidate_index": 0,
+            "question": f"question {index}",
+            "response": f"response {index}",
+            "material_claim_count": 3,
+            "output_token_count": 12,
+            "units": units,
+            "selection_priority": f"{index:02d}",
+        }
+        proposals.append(proposal)
+        for annotator in ("a", "b"):
+            packages[annotator].append(
+                {
+                    "schema_version": PACKAGE_SCHEMA,
+                    "item_id": item_id,
+                    "question": proposal["question"],
+                    "response": proposal["response"],
+                    "units": units,
+                }
+            )
+            private.append(
+                {
+                    "schema_version": PRIVATE_SCHEMA,
+                    "annotator": annotator,
+                    "item_id": item_id,
+                    "kind": "natural",
+                    "natural_item_id": item_id,
+                    "annotation_shard_id": f"{annotator}-00",
+                }
+            )
+            labels[annotator].append(
+                {
+                    "item_id": item_id,
+                    "eligibility": "usable",
+                    "key_unit_indices": [1],
+                    "complete_unit_indices": [0, 1],
+                    "confidence": "high",
+                    "rationale": "checked",
+                }
+            )
+
+    for annotator in ("a", "b"):
+        for control_index in range(2):
+            item_id = f"control-{annotator}-{control_index}"
+            packages[annotator].append(
+                {
+                    "schema_version": PACKAGE_SCHEMA,
+                    "item_id": item_id,
+                    "question": "control question",
+                    "response": "control response",
+                    "units": units,
+                }
+            )
+            private.append(
+                {
+                    "schema_version": PRIVATE_SCHEMA,
+                    "annotator": annotator,
+                    "item_id": item_id,
+                    "kind": "control",
+                    "expected_signature": ["usable", [1], [0, 1]],
+                    "annotation_shard_id": f"{annotator}-00",
+                }
+            )
+            labels[annotator].append(
+                {
+                    "item_id": item_id,
+                    "eligibility": "usable",
+                    "key_unit_indices": [1],
+                    "complete_unit_indices": [0, 1],
+                    "confidence": "high",
+                    "rationale": "checked control",
+                }
+            )
+        for repeat_index in range(2):
+            parent_id = f"natural-{repeat_index}"
+            item_id = f"repeat-{annotator}-{repeat_index}"
+            parent = next(
+                row for row in packages[annotator] if row["item_id"] == parent_id
+            )
+            packages[annotator].append({**parent, "item_id": item_id})
+            private.append(
+                {
+                    "schema_version": PRIVATE_SCHEMA,
+                    "annotator": annotator,
+                    "item_id": item_id,
+                    "kind": "repeat",
+                    "natural_item_id": parent_id,
+                    "annotation_shard_id": f"{annotator}-01",
+                }
+            )
+            labels[annotator].append(
+                {
+                    "item_id": item_id,
+                    "eligibility": "usable",
+                    "key_unit_indices": [1],
+                    "complete_unit_indices": [0, 1],
+                    "confidence": "medium",
+                    "rationale": "checked repeat",
+                }
+            )
+
+    protocol = {
+        "schema_version": PROTOCOL_SCHEMA,
+        "proposal_pool": {
+            "natural_count": 8,
+            "strata": [
+                {
+                    "source": source,
+                    "checker_status": checker_status,
+                    "split": split,
+                    "count": 1,
+                }
+                for source, checker_status, split in strata
+            ],
+        },
+        "annotation": {
+            "hidden_controls_total_per_annotator": 2,
+            "self_repeats_total_per_annotator": 2,
+        },
+        "strict_consensus": {
+            "label_name": "silver-test",
+            "final_target_rows": 8,
+            "final_strata": [
+                {
+                    "source": source,
+                    "checker_status": checker_status,
+                    "split": split,
+                    "count": 1,
+                }
+                for source, checker_status, split in strata
+            ],
+        },
+        "gates": {
+            "controls_min_per_annotator": "2/2",
+            "self_repeat_min": 0.95,
+            "selected_complete_positive_iou_mean_min": 0.80,
+            "selected_complete_mask_coverage_mean_min": 0.90,
+            "selected_complete_all_material_rate_max": 0.25,
+        },
+    }
+    return {
+        "proposals": proposals,
+        "package_a": packages["a"],
+        "package_b": packages["b"],
+        "private_index": private,
+        "labels_a": labels["a"],
+        "labels_b": labels["b"],
+        "protocol": protocol,
+    }
+
+
+def test_prior_v12_annotation_requires_exact_fields_and_singleton_key() -> None:
+    item = {
+        "schema_version": PACKAGE_SCHEMA,
+        "item_id": "item",
+        "question": "question",
+        "response": "response",
+        "units": [
+            {"unit_index": 0, "kind": "material_claim", "text": "claim"},
+            {"unit_index": 1, "kind": "material_claim", "text": "answer"},
+        ],
+    }
+    label = {
+        "item_id": "item",
+        "eligibility": "usable",
+        "key_unit_indices": [1],
+        "complete_unit_indices": [0, 1],
+        "confidence": "high",
+        "rationale": "checked",
+    }
+    assert validate_prior_v12_annotation(label, item)["schema_version"] == LABEL_SCHEMA
+    with pytest.raises(ValueError, match="field mismatch"):
+        validate_prior_v12_annotation({**label, "extra": True}, item)
+    with pytest.raises(ValueError, match="exactly one Key"):
+        validate_prior_v12_annotation({**label, "key_unit_indices": [0, 1]}, item)
+
+
+def test_prior_v12_strict_consensus_gate_passes_frozen_selection() -> None:
+    fixture = _evaluation_fixture()
+    report = evaluate_prior_v12_labels(**fixture)
+    assert report["status"] == "PASS_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE"
+    assert report["failed_gates"] == []
+    assert report["metrics"]["raw_population"]["strict_eligible_rows"] == 8
+    selected = report["metrics"]["prospective_frozen_selection"]
+    assert selected["selected_rows"] == 8
+    assert selected["complete_positive_iou_mean"] == 1.0
+    assert selected["complete_mask_coverage_mean"] == 1.0
+    assert report["target_publication_authorized"] is False
+    assert report["training_allowed"] is False
+
+
+def test_prior_v12_gate_stops_when_one_prefrozen_stratum_lacks_yield() -> None:
+    fixture = _evaluation_fixture()
+    fixture["labels_b"][0]["confidence"] = "low"
+    report = evaluate_prior_v12_labels(**fixture)
+    assert report["status"] == "STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE"
+    assert "every_final_stratum_quota" in report["failed_gates"]
+    assert report["metrics"]["prospective_frozen_selection"]["selected_rows"] == 0
+    assert report["failure_is_terminal"] is True
+
+
+def test_prior_v12_gate_uses_fixed_selected_iou_and_coverage_guards() -> None:
+    fixture = _evaluation_fixture()
+    for row in fixture["labels_b"]:
+        if row["item_id"].startswith("natural-") or row["item_id"].startswith(
+            "repeat-b-"
+        ):
+            row["complete_unit_indices"] = [1, 2]
+    report = evaluate_prior_v12_labels(**fixture)
+    assert report["gates"]["every_final_stratum_quota"]["pass"] is True
+    assert report["gates"]["selected_complete_positive_iou_mean"]["pass"] is False
+    assert report["gates"]["selected_complete_mask_coverage_mean"]["pass"] is False
+    selected = report["metrics"]["prospective_frozen_selection"]
+    assert selected["complete_positive_iou_mean"] == pytest.approx(1 / 3)
+    assert selected["complete_mask_coverage_mean"] == pytest.approx(1 / 3)

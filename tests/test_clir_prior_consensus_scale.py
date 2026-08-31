@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from prepare_clir_prior_scale_v12 import _derive_query_seed, _validate_shard_rows
 from src.clir_prior_consensus_scale import (
     PROTOCOL_SCHEMA,
     build_acquisition_shards,
@@ -145,3 +146,86 @@ def test_select_prior_proposals_uses_all_prefrozen_strata() -> None:
 
     with pytest.raises(ValueError, match="insufficient Prior v12 proposal capacity"):
         select_prior_proposals(rows[:-1], protocol)
+
+
+def test_prior_v12_rollout_rows_bind_exact_frozen_prompt_and_provenance() -> None:
+    protocol = {
+        "generation": {
+            "candidate_count": 2,
+            "seed_namespace": "test-prior-v12-seed",
+            "base_seed": 17,
+            "model_revision": "model-revision",
+            "tokenizer_revision": "tokenizer-revision",
+            "backend_version": "vllm-version",
+        }
+    }
+    query = {
+        "query_id": "gsm8k:train:00001",
+        "source": "gsm8k",
+        "question": "What is 1+1?",
+        "reference_answer": "2",
+        "cluster_id": "cluster-1",
+        "prior_label_split": "train",
+        "prompt_token_ids": [1, 2, 3],
+    }
+    shard = {
+        "shard_id": "prior-000",
+        "query_ids": [query["query_id"]],
+        "expected_candidate_rows": 2,
+    }
+    provenance = {
+        "protocol_file_sha256": "protocol-hash",
+        "pre_rollout_registry_file_sha256": "registry-hash",
+        "authorization_file_sha256": "authorization-hash",
+        "code_commit": "commit",
+        "model_revision": "model-revision",
+        "tokenizer_revision": "tokenizer-revision",
+        "vllm_version": "vllm-version",
+    }
+    rows = []
+    for candidate_index in range(2):
+        rows.append(
+            {
+                "id": f"{query['query_id']}:cand:{candidate_index:03d}",
+                "query_id": query["query_id"],
+                "candidate_index": candidate_index,
+                "shard_id": shard["shard_id"],
+                "source": query["source"],
+                "question": query["question"],
+                "reference_answer": query["reference_answer"],
+                "cluster_id": query["cluster_id"],
+                "prior_label_split": query["prior_label_split"],
+                "prompt_token_ids": list(query["prompt_token_ids"]),
+                "output_token_ids": [10 + candidate_index],
+                "response": str(candidate_index),
+                "sampling_seed": _derive_query_seed(protocol, query["query_id"]),
+                "finish_reason": "stop",
+                "decode_matches_backend_text": True,
+                "provenance": dict(provenance),
+            }
+        )
+    report = _validate_shard_rows(
+        rows,
+        shard=shard,
+        query_by_id={query["query_id"]: query},
+        protocol=protocol,
+        protocol_file_sha256="protocol-hash",
+        authorization_file_sha256="authorization-hash",
+        registry_file_sha256="registry-hash",
+    )
+    assert report["queries"] == 1
+    assert report["rows"] == 2
+    assert report["exact_prompt_token_ids_match_freeze"] is True
+
+    rows[0]["prompt_token_ids"] = [1, 2, 4]
+    rows[1]["prompt_token_ids"] = [1, 2, 4]
+    with pytest.raises(ValueError, match="exact prompt token IDs drift"):
+        _validate_shard_rows(
+            rows,
+            shard=shard,
+            query_by_id={query["query_id"]: query},
+            protocol=protocol,
+            protocol_file_sha256="protocol-hash",
+            authorization_file_sha256="authorization-hash",
+            registry_file_sha256="registry-hash",
+        )

@@ -1,0 +1,121 @@
+{
+  "schema_version": "clir-prior-mechanical-local-audit-smoke-v13",
+  "status": "FROZEN_FRESH_SMOKE_PACKAGES_NOT_YET_BUILT",
+  "frozen_at_utc": "2026-09-01",
+  "purpose": "test_whether_mechanical_blocks_roles_and_local_edges_make_key_complete_operationally_stable",
+  "evidence_tier": "preregistered_fresh_dual_ai_smoke_no_human_verification",
+  "parent": {
+    "v12_protocol_path": "configs/data_expansion_prior_v12/protocol.json",
+    "v12_protocol_file_sha256": "04f8915cdd8da27aac2f9c31bea9777c3dc82cca50f8b7e9b048bd878978b9ea",
+    "v12_materialized_path": "run_artifacts/data_expansion_prior_v12/pre_annotation/materialized/all_rows.jsonl",
+    "v12_materialized_file_sha256": "3a6c5a8874cbe55c2ea8e14f86a5c1725cdfea8269dfba56d859fc75aab0058e",
+    "v12_proposals_path": "run_artifacts/data_expansion_prior_v12/pre_annotation/proposals/prior_natural_800.jsonl",
+    "v12_proposals_file_sha256": "334c7dbf4773a32009fbf73cb9083dbaaaa2e9dbac0f7d01fc83107193b65bdc",
+    "v12_terminal_report_path": "run_artifacts/data_expansion_prior_v12/pre_annotation/evaluation/raw_gate_report.json",
+    "v12_terminal_report_file_sha256": "0dce22ba0f3e60483a66de0e882d9084a8f3aba908e7c85a046fde2b9817d0a1",
+    "v12_terminal_status": "STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE",
+    "v12_labels_and_terminal_decision_are_immutable": true,
+    "v12_mechanical_replay_is_diagnostic_only": true,
+    "v12_failed_labels_are_not_silently_trainable": true
+  },
+  "fresh_selection": {
+    "source_population": "previously_unannotated_rows_in_frozen_v12_acquisition",
+    "acquisition_split": "train_only",
+    "exclude_every_v12_proposal_query_and_cluster": true,
+    "one_trajectory_per_query": true,
+    "one_query_per_cluster": true,
+    "selection_uses_only_frozen_source_checker_length_and_sha256_fields": true,
+    "selection_namespace": "clir-prior-mechanical-smoke-v13",
+    "strata": [
+      {"source": "gsm8k", "checker_status": "numeric_match", "length_band": "medium", "count": 6},
+      {"source": "gsm8k", "checker_status": "numeric_match", "length_band": "long", "count": 6},
+      {"source": "gsm8k", "checker_status": "numeric_mismatch", "length_band": "medium", "count": 6},
+      {"source": "gsm8k", "checker_status": "numeric_mismatch", "length_band": "long", "count": 6},
+      {"source": "math", "checker_status": "numeric_match", "length_band": "medium", "count": 6},
+      {"source": "math", "checker_status": "numeric_match", "length_band": "long", "count": 6},
+      {"source": "math", "checker_status": "numeric_mismatch", "length_band": "medium", "count": 6},
+      {"source": "math", "checker_status": "numeric_mismatch", "length_band": "long", "count": 6}
+    ],
+    "natural_rows": 48,
+    "medium_material_claims": [8, 18],
+    "long_material_claims": [19, 40]
+  },
+  "mechanical_compiler": {
+    "contract": "original_raw_unit_indices_remain_axis_truth",
+    "safe_fragment_merges": [
+      "same_line_operator_continuation",
+      "result_only_continuation",
+      "trailing_operator_continuation",
+      "unclosed_delimiter_continuation"
+    ],
+    "role_hints_are_nonbinding": true,
+    "candidate_parents_per_child_max": 2,
+    "annotator_missing_edges_per_row_max": 2,
+    "complete_is_program_derived_by_backward_closure": true,
+    "annotator_never_outputs_complete_directly": true,
+    "key_remains_one_original_raw_unit": true
+  },
+  "annotation": {
+    "annotator_a": "user_reported_gpt_5_6_sol_xhigh",
+    "annotator_b": "user_reported_claude_opus_5_high",
+    "different_non_phi_families_required": true,
+    "temperature": 0,
+    "independent_blind_contexts_required": true,
+    "shards_per_annotator": 4,
+    "natural_rows_per_shard": 12,
+    "hidden_controls_per_shard": 2,
+    "self_repeats_per_shard": 4,
+    "rows_per_shard": 18,
+    "natural_rows_per_annotator": 48,
+    "hidden_controls_per_annotator": 8,
+    "self_repeats_per_annotator": 16,
+    "rows_per_annotator": 72,
+    "parent_and_repeat_never_share_a_shard": true,
+    "no_reference_checker_private_index_other_annotator_or_historical_label_visibility": true,
+    "no_adjudication_or_relabel_rescue": true
+  },
+  "gates": {
+    "population_schema_id_package_binding_required": true,
+    "controls_min_pass": 7,
+    "self_repeat_target_exact_min": 0.9375,
+    "common_usable_nonlow_min": 40,
+    "final_block_exact_min": 0.85,
+    "key_exact_min": 0.80,
+    "complete_macro_f1_min": 0.90,
+    "complete_macro_iou_min": 0.80,
+    "complete_mask_coverage_min": 0.90,
+    "role_decision_agreement_min": 0.85,
+    "edge_decision_agreement_min": 0.85,
+    "all_material_union_rate_max": 0.25,
+    "missing_edge_row_rate_max": 0.20,
+    "all_gates_required": true,
+    "failure_is_terminal_for_v13_no_prompt_patch_or_adaptive_relabel": true
+  },
+  "decision_after_smoke": {
+    "on_pass": "freeze_separate_v14_scale_protocol_before_any_more_annotation",
+    "on_failure": "stop_mechanical_prompt_iteration_and_discuss_separately_versioned_posthoc_v12_exploratory_subset",
+    "v12_exploratory_training_is_not_automatically_authorized_by_v13_failure": true,
+    "v13_smoke_labels_are_not_training_data": true
+  },
+  "claim_boundary": {
+    "labels_are_gold": false,
+    "human_verification": false,
+    "label_name": "dual_ai_mechanical_smoke_silver_v13_no_human_verification",
+    "pass_means": "the_local_audit_definition_is_stable_enough_to_scale_under_prefrozen_gates",
+    "does_not_establish": [
+      "label_factual_accuracy_on_natural_rows",
+      "prior_learnability",
+      "prior_gate_efficacy",
+      "best_of_n_improvement",
+      "full_integration_improvement"
+    ]
+  },
+  "execution_authorization": {
+    "authorized_by_user_message": "你试一下，不然我们就拿v12的训练算了",
+    "fresh_smoke_package_preparation_allowed": true,
+    "dual_ai_annotation_allowed_after_package_verification": true,
+    "gpu_required": false,
+    "feature_extraction_allowed": false,
+    "training_allowed": false
+  }
+}

@@ -1,0 +1,14 @@
+你是 CLIR Prior v13 的独立标注者 B，模型身份记录为 Claude Opus 5、high。请在这个独立上下文中完成全部 4 个公开 shard。
+
+你只允许读取：
+1. /prodcpfs/user/panzhixin/ICLR_2027/configs/data_expansion_prior_v13/annotation_prompt.md
+2. /prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v13/pre_annotation/packages/annotator_b/ 下的 prior_v13_b_00.jsonl 到 prior_v13_b_03.jsonl
+
+禁止读取任何 `PRIVATE_*`、src、tests、协议、checker、参考答案、历史标签、annotator_a 或 labels_a。
+
+每个输入文件固定 18 行。逐个写到：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v13/pre_annotation/labels_b/prior_v13_b_00.jsonl
+……
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v13/pre_annotation/labels_b/prior_v13_b_03.jsonl
+
+可以创建 labels_b 目录，不得修改其他文件。每个输出文件必须恰好 18 个单行 JSON，item_id 集合与同编号输入完全一致且无重复。全部完成后自行检查 4 个文件共 72 行；只能修输出格式，不能查看任何禁止信息。

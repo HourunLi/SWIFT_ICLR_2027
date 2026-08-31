@@ -15,9 +15,9 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史可训练 48 条；v8 依赖图与 v9 direct-set partial-consensus smoke 均已失败 | 现在仍只能训练历史 48 条；v9 不得抽 feature、训练或扩量 | v9 的局部 mask 代码可用，但新鲜双标只有 39/60 行同时满足可训练 Key+Complete，未达到冻结的 50/60 数据门 |
+| Dual Prior | 历史可训练 48 条；v8/v9 已失败；v10 统一回溯提示词的全新 60 题盲包已准备 | 现在仍只能训练历史 48 条；v10 尚未标注，不能抽 feature 或训练 | v10 强制单 Key 与同一 Complete 回溯算法；若只有 yield 不足才允许另冻“扩量后按预注册规则取严格共识子集”，定义/控制门失败则停止 |
 
-失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8/v9 分别以 `STOP_PRIOR_DEPENDENCY_SMOKE_V8_RAW_GATE_FAILURE` / `STOP_PRIOR_PARTIAL_SMOKE_V9_RAW_GATE_FAILURE` 终止，不能事后挑子集、裁决或降门训练。
+失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8/v9 分别以 `STOP_PRIOR_DEPENDENCY_SMOKE_V8_RAW_GATE_FAILURE` / `STOP_PRIOR_PARTIAL_SMOKE_V9_RAW_GATE_FAILURE` 终止，不能事后挑子集、裁决或降门训练；v10 只是一轮全新定义 smoke，包准备完成不等于数据通过。
 
 ## 2026-08-23 clean integration 审计与训练试跑
 
@@ -779,7 +779,7 @@ seed 44 又明显塌到 `79.48%`，所以只能说“严格子集有可用排序
 SHA-256 为 `d80fff82…291e`。这是扩大后的探索性 Silver 复测，不是原 v7 翻盘，也不是
 Gold、人工验证、protected-test 或 H1/Prior/Full 的证据。
 
-### Dual Prior 扩量 v8/v9 均停止
+### Dual Prior 扩量 v8/v9 均停止，v10 待双标
 
 v8 的 60 条依赖图标注已经完成并按冻结门评估。结果不是“待标”：eligibility=`60/60`、
 path agreement=`.95`，但 Key/Complete F1 只有 `.7667/.8040`，非低置信完整训练共识仅
@@ -821,6 +821,22 @@ A self-repeat=`12/12`。
 保留在代码中，但独立 Prior 扩量的最早 blocker 已回到“Complete 到底包含多宽”的标签定义。
 不含原始标签的机器摘要见
 [`configs/data_expansion_prior_v9/completion.json`](configs/data_expansion_prior_v9/completion.json)。
+
+用户随后批准先优化提示词；若统一口径仍只差数量，再采用“先扩量、按事先固定规则取严格
+共识子集”。v10 不重标 v9，也不复用 v9 的 39 行：它在提交 `61aeab6` 上把 usable Key
+强制为单个锚点（错误链取最早致命错误，否则取首次完成答案的最后非包装步骤），并把 Complete
+固定为从最终实质结论向前回溯候选实际计算链；拆开的“代入算式+结果”都保留，自包含计算不收
+重复结果，题面复述/计划/未用旁枝/包装排除。该口径保持 `origin/main` 的 Key 窄、Complete 宽。
+
+v10 从 v6 池另选 60 个全新 query/cluster，四格各 15，并在选择前排除 v6.1 C、v7 H、
+v7 ranking、v8、v9 的全部 query/cluster。A/B 各一个 80 行包（60 natural +8 controls +12
+self-repeats），已发布并独立复算通过：natural ordered hash=`37ae27fa…ecd9`，A/B package
+ordered hash=`01642639…4f3` / `d6c7a5e5…2ee5`，状态分别为
+`PASS_PRIOR_CANONICAL_SMOKE_V10_PACKAGES_READY` 与
+`PASS_PRIOR_CANONICAL_SMOKE_V10_RECOMPUTATION`。协议见
+[`docs/data_expansion_prior_protocol_v10.md`](docs/data_expansion_prior_protocol_v10.md)，入口为
+`prepare_clir_prior_v10.py`。当前尚无 v10 标签或 raw gate 结果，不用 GPU，也不允许抽
+feature、训练或宣称 Prior 数据已扩成。
 
 ## Toy smoke test
 

@@ -749,7 +749,7 @@ first-bad-token detector。CH0 的 token/path AUROC 为 `.8630/.8413`，略低�
 `d80fff82adeeaf84a72e9c867811e90519d52c241da12840213731dd104d291e`。原始
 `FAIL_H0_V7_RESERVE` 与全部淘汰行仍保留，结果不覆盖它。
 
-### Dual Prior v8/v9 终止状态
+### Dual Prior v8/v9 终止，v10 定义 smoke 待双标
 
 Prior 历史可训练数据仍只有 48 条。v8 的依赖图双标和 raw gate 已经完成：eligibility
 `60/60`、path agreement `.95`，但 Key/Complete F1=`.7667/.8040`，非低置信 exact derived
@@ -794,6 +794,26 @@ metric 的 53 条 non-low 行中是 47 条，equal 只有 5 条。A/B 平均 Com
 post-hoc 子集、scale、feature 和训练。远端保留的无标签结果摘要为
 `configs/data_expansion_prior_v9/completion.json`。
 
+用户随后批准先优化提示词；如果新口径的语义/控制/稳定性门通过而只差可训练行数，则允许
+再冻结一份“大池双标后按预注册规则取严格共识子集”的 scale 协议。v10 不能重标或翻转 v9，
+也不能使用已检查的 39 行。提交 `61aeab664ce701d5e4c007b684db9a171480f423` 冻结了
+`prepare_clir_prior_v10.py`、统一回溯提示词、纯 evaluator、8 个控制题和双边 self-repeat。
+
+v10 保持 main 的 Key 窄、Complete 宽，但把标注自由度收紧：usable Key 恰好一个；错误主线
+取最早致命错误，没有致命错误时取首次完成候选答案的最后非包装步骤。Complete 从最终实质
+结论向前做同一套 backward slice；拆开的代入式和求值结果均保留，自包含计算不重复收结果，
+题面复述、计划、通用公式、未用旁枝、重复和 final wrapper 排除。模型、direct/mutual loss、
+显式 mask 与固定 `.25` main-style gate route 均未修改。
+
+从 v6 的已 materialize 池中选出的 60 条全新自然样本按 GSM8K/MATH × match/mismatch 各 15，
+query/cluster 与 v6.1 C、v7 H、v7 ranking、v8 和 v9 均零重合。A/B 各 80 行：60 natural、
+8 controls、12 self-repeats。准备与独立复算状态是
+`PASS_PRIOR_CANONICAL_SMOKE_V10_PACKAGES_READY` / `PASS_PRIOR_CANONICAL_SMOKE_V10_RECOMPUTATION`；
+natural ordered hash=`37ae27fa…ecd9`，A/B package ordered hash=`01642639…4f3` /
+`d6c7a5e5…2ee5`。当前尚未标注，不存在 v10 raw 指标、训练行或 feature。若 raw 只失败于
+预注册 count/yield 门，才允许准备 oversampled scale；若 F1、unit agreement、control 或
+self-repeat 任一失败，则禁止直接扩量。协议为 `docs/data_expansion_prior_protocol_v10.md`。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
@@ -813,8 +833,8 @@ post-hoc 子集、scale、feature 和训练。远端保留的无标签结果摘�
   Best-of-N 增益区间跨 0；恢复的 main gold-tail 也仍未通过 locality/ranking 门。
 - dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8 依赖图和 v9 direct-set
   partial-consensus smoke 都已 raw gate 失败。v9 的显式 mask 工程路径可用，但 39/60 的成对
-  可训练支持不足，不能扩量。clean 历史 direct target 可学，但 mutual 增量与 ranking
-  improvement 都未建立。
+  可训练支持不足。v10 的全新统一回溯盲包已准备且尚未标注，不能计入训练账本。clean 历史
+  direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -832,10 +852,10 @@ post-hoc 子集、scale、feature 和训练。远端保留的无标签结果摘�
 3. 下一轮若要确认 H0，应重新预注册并采一批独立 H train/dev 与 ranking population，优先
    把目标表述为 tail/path 风险；若研究目标仍要求精确 onset，先修改/验证 label target 与
    解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
-4. Prior v8/v9 都必须保持终止状态。不要裁决 v9、从 39 行挑子集、降低 coverage/F1 门，
-   或直接扩到 400/150。若继续 Prior，必须先由用户批准一个使用全新自然样本的 v10 定义实验；
-   在此之前也可以暂停 Prior，先完成独立 C/H ranking 复测。H1、Dual Prior 效果和 Full 没有
-   被 v9 重新验证。
+4. Prior v8/v9 都必须保持终止状态。v10 的 60 条全新定义 smoke 已准备；下一步只把 A/B
+   两个公开 80 行包分别交给 GPT-5.6-sol xhigh 与 Claude Opus 5 high，再运行 raw evaluator。
+   不发 PRIVATE 文件。若只失败于 count/yield，可另冻大池严格共识筛选；若定义/控制/重复门
+   失败则停止，不能用扩量掩盖口径分歧。H1、Dual Prior 效果和 Full 尚未被重新验证。
 
 当前裁决是：Consistency 有部分 held-out relation 机制证据；v7.4 证明严格 H 子集能学到
 tail/path 风险，并给出 H0 最好的 ranking 点估计，但增益区间跨 0、精确 onset 失败；

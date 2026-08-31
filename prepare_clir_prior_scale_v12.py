@@ -1434,14 +1434,15 @@ def command_verify_materialized(args: argparse.Namespace) -> None:
     )
     if canonical_sha256(recomputed) != canonical_sha256(frozen):
         raise ValueError("Prior v12 independent materialization recomputation drift")
+    normalized_health = json.loads(json.dumps(health, ensure_ascii=False))
+    normalized_validation = json.loads(json.dumps(validation, ensure_ascii=False))
     if (
-        canonical_sha256(health) != canonical_sha256(published.get("health"))
-        or canonical_sha256(validation)
+        canonical_sha256(normalized_health)
+        != canonical_sha256(published.get("health"))
+        or canonical_sha256(normalized_validation)
         != canonical_sha256(published.get("validation"))
     ):
         raise ValueError("Prior v12 materialization summary drift")
-    normalized_health = json.loads(json.dumps(health, ensure_ascii=False))
-    normalized_validation = json.loads(json.dumps(validation, ensure_ascii=False))
     verification = {
         "schema_version": "clir-prior-v12-materialization-verification",
         "status": "PASS_PRIOR_V12_MATERIALIZATION_INDEPENDENT_RECOMPUTE",

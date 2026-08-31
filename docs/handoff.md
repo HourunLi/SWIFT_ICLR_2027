@@ -749,7 +749,7 @@ first-bad-token detector。CH0 的 token/path AUROC 为 `.8630/.8413`，略低�
 `d80fff82adeeaf84a72e9c867811e90519d52c241da12840213731dd104d291e`。原始
 `FAIL_H0_V7_RESERVE` 与全部淘汰行仍保留，结果不覆盖它。
 
-### Dual Prior v8/v9/v10 终止，v11 获准做全新确认
+### Dual Prior v8--v11 终止，v12 进入严格共识扩量准备
 
 Prior 历史可训练数据仍只有 48 条。v8 的依赖图双标和 raw gate 已经完成：eligibility
 `60/60`、path agreement `.95`，但 Key/Complete F1=`.7667/.8040`，非低置信 exact derived
@@ -839,8 +839,32 @@ v7 H、v7 ranking、v8、v9、v10 的 query/cluster overlap 均为 0。natural o
 `5a7899e1…d043` / `7d6d0a1a…26aa`。每包 80 行且 80 个唯一 ID，公开字段仅为 item ID、题目、
 回复和 units；无 source/checker/reference/expected-signature 泄露。状态为
 `PASS_PRIOR_VERIFIED_SMOKE_V11_PACKAGES_READY` /
-`PASS_PRIOR_VERIFIED_SMOKE_V11_RECOMPUTATION`。当前标签目录不存在；下一步只发 A/B 各自的
-公开 launch prompt，不能发 `PRIVATE_package_index.jsonl`。
+`PASS_PRIOR_VERIFIED_SMOKE_V11_RECOMPUTATION`。
+
+GPT-5.6-sol xhigh 与 Claude Opus 5 high 随后完成两份 v11 标签。schema、population、ID、
+singleton-Key、controls 与 self-repeat 契约全部通过，纯 evaluator 连续两次产生同一个 report
+SHA-256 `0729d9825bafc187a7937d4eddf01eeeae32d5dfea3565908cfdcd3f28a4fa8d`。60 条自然样本里，
+eligibility、common usable、common non-low 都是 `60/60`；A/B controls=`8/8,8/8`，
+self-repeat=`12/12,12/12`，Complete unit agreement=`.9062`、mask coverage=`.9215`。失败项是
+Key macro F1 `.8333 < .90` 与 Complete positive IoU `.7957 < .80`，最终状态固定为
+`STOP_PRIOR_VERIFIED_SMOKE_V11_DEFINITION_FAILURE`。v11 的 50 条 exact-Key 共识行、任何长度
+子集和全部标签都不可训练。
+
+v11 的只读诊断显示，分歧主要来自错误链中“最早致命错误”与下游错误答案之间的 Key 选择，
+以及长 MATH 链里等价文字/等式与重复枚举的 Complete 边界。限制到短题虽然能把点指标抬高，
+但这是查看标签后的容易题筛选，不能采用。用户此前批准的 fallback 因此成为 v12：全新大池
+双标，再按预注册严格共识取子集；它不重标、不救场、不复用 v8--v11 的任何标签。
+
+v12 的权威规格为 `docs/data_expansion_prior_protocol_v12.md` 与
+`configs/data_expansion_prior_v12/protocol.json`，入口为 `prepare_clir_prior_scale_v12.py`。
+先在未用过的 GSM8K/MATH train 上冻结 2,000 个 query/cluster（GSM 1,200、MATH 800；
+train/dev 1,600/400），每题计划 8 个 Phi rollout，共 16,000 trajectories。只读容量审计已经
+得到 2,647 个 fresh cluster representative，query/cluster exclusion overlap 均为 0，且未读
+test。materialization 后按题源 × checker × split 冻结选 800 条自然样本交给两模型双标；最终
+每格只按生成前 priority 取 exact singleton-Key、非空 Complete 交集的严格共识行，目标 400
+train +100 dev。Complete 交集为正、并集外为负、对称差 mask，不改变 Prior 网络、direct/mutual
+loss 或 main 固定 `.25` gate。该协议会引入明确的 easy-sample bias，所以即使数据门通过也只
+能称 `silver_dual_ai_strict_consensus_prior_v12_no_human_verification`。
 
 ## 已知限制
 
@@ -859,10 +883,9 @@ v7 H、v7 ranking、v8、v9、v10 的 query/cluster overlap 均为 0。natural o
   600 条是用户授权的事后严格共识探索子集，不是原协议成功，也没有人工准确率保证。
   新结果支持 tail/path 风险可学和正向排序点信号，但 exact onset 为 0、±5 只有 4%，
   Best-of-N 增益区间跨 0；恢复的 main gold-tail 也仍未通过 locality/ranking 门。
-- dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8 依赖图、v9 direct-set
-  partial-consensus 与 v10 canonical smoke 都已按 frozen raw gate 失败。v10 的 54/60 共识
-  支持不能事后计入训练。v11 是全新 verification-first 确认轮，两个盲包已验证但尚未标注；
-  clean 历史 direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
+- dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8--v11 都已按 frozen raw gate
+  失败，任何共识子集都不能事后计入训练。v12 已通过 fresh-source 只读容量审计，但尚未 rollout、
+  标注或产出训练行；clean 历史 direct target 可学，mutual 增量与 ranking improvement 仍未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -880,10 +903,11 @@ v7 H、v7 ranking、v8、v9、v10 的 query/cluster overlap 均为 0。natural o
 3. 下一轮若要确认 H0，应重新预注册并采一批独立 H train/dev 与 ranking population，优先
    把目标表述为 tail/path 风险；若研究目标仍要求精确 onset，先修改/验证 label target 与
    解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
-4. Prior v8/v9/v10 都必须保持终止状态。v11 两份全新 80 行盲包已在 clean commit 上发布并
-   复算；下一步分别交给 GPT-5.6-sol xhigh 与 Claude Opus 5 high，不发 PRIVATE 文件。若 v11
-   只失败于 count/yield，可另冻大池严格共识筛选；若定义/控制/重复门失败则停止。H1、Dual
-   Prior 效果和 Full 尚未被重新验证。
+4. Prior v8--v11 都必须保持终止状态。按 v12 协议先在 clean commit 冻结并独立复算 2,000 个
+   fresh query 与 40 个 rollout shard，再由单独 hash-bound 授权运行 Phi rollout、checker/
+   unitizer 和 800 条双标包；未到公开包阶段不得发送 PRIVATE 文件。即使 v12 数据门通过，也要
+   先做 P0 direct-target learnability，再决定是否解锁 P1 mutual 和固定 `.25` gate off/on；H1、
+   Dual Prior 排名效果与 Full 尚未被重新验证。
 
 当前裁决是：Consistency 有部分 held-out relation 机制证据；v7.4 证明严格 H 子集能学到
 tail/path 风险，并给出 H0 最好的 ranking 点估计，但增益区间跨 0、精确 onset 失败；

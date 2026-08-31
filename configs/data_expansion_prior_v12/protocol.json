@@ -1,0 +1,205 @@
+{
+  "schema_version": "clir-prior-strict-consensus-scale-v12",
+  "status": "FROZEN_PREPARATION_ROLLOUT_NOT_STARTED",
+  "frozen_at_utc": "2026-08-31",
+  "purpose": "fresh_oversampled_dual_ai_prior_acquisition_with_prefrozen_strict_consensus_selection",
+  "evidence_tier": "preregistered_data_acquisition",
+  "parent": {
+    "base_ranking_protocol_path": "configs/ranking_expansion_v7/protocol.json",
+    "base_ranking_protocol_file_sha256": "1e9de5d1c6d23c63a7ed6a501440329ce78cdfdb0e26ade2e2189dad56440155",
+    "base_pre_rollout_registry_path": "run_artifacts/ranking_expansion_v7/pre_rollout/manifest_registry.json",
+    "base_pre_rollout_registry_file_sha256": "15192ccd36268aaf8a48b1d056414be775b6a96405b376661df486363ecc4f34",
+    "v7_ranking_queries_path": "run_artifacts/ranking_expansion_v7/pre_rollout/ranking_queries.jsonl",
+    "v7_ranking_queries_file_sha256": "44daeba2f7ba1103d6ba32f844db9436e28a282af50c7995b224b6c0c2d13c77",
+    "v7_h_queries_path": "run_artifacts/ranking_expansion_v7/pre_rollout/h_acquisition_queries.jsonl",
+    "v7_h_queries_file_sha256": "94573cfc721d7349dd5aa9342605b12f6e9ad8c9dbc6825333b6b9760ab3e9ec",
+    "prior_smoke_proposals": [
+      {
+        "version": "v8",
+        "path": "run_artifacts/data_expansion_prior_v8/pre_annotation/proposals/prior_dependency_smoke_natural.jsonl",
+        "file_sha256": "16767f88dc6fc95b84fcb906e993f5334640a4a29f647ea674cde0a1df3cf210"
+      },
+      {
+        "version": "v9",
+        "path": "run_artifacts/data_expansion_prior_v9/pre_annotation/proposals/prior_partial_smoke_natural.jsonl",
+        "file_sha256": "f75fb3eb80fc7b41c5509cda4297c0140b6969a3ed7eb75c7228bdfa6ec3ad0e"
+      },
+      {
+        "version": "v10",
+        "path": "run_artifacts/data_expansion_prior_v10/pre_annotation/proposals/prior_canonical_smoke_natural.jsonl",
+        "file_sha256": "c5a7e138a356010842941cfb714781319ffa054023ece865f767e62a348d94f1"
+      },
+      {
+        "version": "v11",
+        "path": "run_artifacts/data_expansion_prior_v11/pre_annotation/proposals/prior_verified_smoke_natural.jsonl",
+        "file_sha256": "a58ff4a29989cd470c79a853067b1a15cb5d154bcc2834f6fa764d308799e426"
+      }
+    ],
+    "v11_terminal_report_path": "run_artifacts/data_expansion_prior_v11/pre_annotation/evaluation/raw_gate_report.json",
+    "v11_terminal_report_file_sha256": "0729d9825bafc187a7937d4eddf01eeeae32d5dfea3565908cfdcd3f28a4fa8d",
+    "v11_terminal_status": "STOP_PRIOR_VERIFIED_SMOKE_V11_DEFINITION_FAILURE",
+    "v8_v9_v10_v11_rows_are_prompt_development_only": true,
+    "no_failed_smoke_label_is_trainable": true
+  },
+  "sources": {
+    "allowed": ["gsm8k_train", "math_train"],
+    "protected": ["gsm8k_test", "math_test", "svamp"],
+    "gsm8k": {
+      "inherits_v7_revision_license_and_long_chain_filter": true
+    },
+    "math": {
+      "inherits_v7_revision_license_subjects_and_file_hashes": true,
+      "allowed_levels": [2, 3, 4, 5],
+      "minimum_official_solution_words": 25,
+      "reason": "add_fresh_level_2_numeric_train_questions_without_touching_test"
+    },
+    "template_clustering": {
+      "inherits_v7_exact_entity_template_minhash_and_jaccard_contract": true,
+      "namespace": "clir-prior-v12-fresh-acquisition",
+      "exclude_entire_cluster_touching_any_historical_v6_v7_or_prior_smoke_query": true,
+      "one_query_per_new_cluster": true
+    }
+  },
+  "query_pool": {
+    "namespace": "clir-prior-v12-fresh-acquisition",
+    "query_count": 2000,
+    "source_split_counts": {
+      "gsm8k": {"train": 960, "dev": 240},
+      "math": {"train": 640, "dev": 160}
+    },
+    "split_frozen_before_rollout": true,
+    "query_and_cluster_disjoint_train_dev": true,
+    "excluded_from_future_ranking_or_protected_test": true,
+    "selection_does_not_use_rollout_checker_ai_or_clir_score": true
+  },
+  "generation": {
+    "inherits_v7_model_revision_tokenizer_prompt_temperature_top_p_max_tokens_and_backend": true,
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "tokenizer_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "backend": "vllm",
+    "backend_version": "0.5.3.post1",
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "max_new_tokens": 1024,
+    "max_model_length": 4096,
+    "maximum_prompt_tokens": 3072,
+    "prompt_template": "Solve the following math problem step-by-step.\nSimplify your answer as much as possible. Present your final answer as \\boxed{Your Answer}.\n<QUESTION>",
+    "base_seed": 20260831,
+    "seed_namespace": "clir-prior-v12-vllm-query-seed",
+    "candidate_count": 8,
+    "rollout_shards": 40,
+    "queries_per_shard": 50,
+    "expected_candidate_rows": 16000,
+    "saved_prompt_and_output_ids_are_axis_truth": true,
+    "bit_exact_regeneration_claimed": false
+  },
+  "checker_unitizer": {
+    "checker_version": "clir_numeric_multisource_v3",
+    "correctness_semantics": "numeric_value_match_not_full_semantic_correctness",
+    "unitizer_version": "clir_material_claim_unitizer_v2",
+    "truncation_parse_failure_conflicting_answer_or_bad_partition": "audit_only_not_annotation_eligible"
+  },
+  "proposal_pool": {
+    "natural_count": 800,
+    "one_trajectory_per_query": true,
+    "one_query_per_cluster": true,
+    "minimum_material_claims": 6,
+    "maximum_material_claims": 40,
+    "selection_namespace": "clir-prior-v12-proposal",
+    "candidate_choice": "first_eligible_candidate_by_frozen_sha256_priority_within_query_and_stratum",
+    "strata": [
+      {"source": "gsm8k", "checker_status": "numeric_match", "split": "train", "count": 128},
+      {"source": "gsm8k", "checker_status": "numeric_match", "split": "dev", "count": 32},
+      {"source": "gsm8k", "checker_status": "numeric_mismatch", "split": "train", "count": 80},
+      {"source": "gsm8k", "checker_status": "numeric_mismatch", "split": "dev", "count": 20},
+      {"source": "math", "checker_status": "numeric_match", "split": "train", "count": 192},
+      {"source": "math", "checker_status": "numeric_match", "split": "dev", "count": 48},
+      {"source": "math", "checker_status": "numeric_mismatch", "split": "train", "count": 240},
+      {"source": "math", "checker_status": "numeric_mismatch", "split": "dev", "count": 60}
+    ],
+    "all_800_rows_remain_in_raw_denominators": true
+  },
+  "annotation": {
+    "prompt_definition": "v11_verification_first_singleton_key_and_canonical_complete_unchanged",
+    "annotator_a": "user_reported_gpt_5_6_sol_xhigh",
+    "annotator_b": "user_reported_claude_opus_5_high",
+    "different_non_phi_families_required": true,
+    "independent_blind_contexts_required": true,
+    "natural_shards_per_annotator": 16,
+    "natural_rows_per_shard": 50,
+    "hidden_controls_total_per_annotator": 16,
+    "self_repeats_total_per_annotator": 80,
+    "third_model_or_adjudication_used": false,
+    "no_historical_label_visibility": true
+  },
+  "strict_consensus": {
+    "label_name": "silver_dual_ai_strict_consensus_prior_v12_no_human_verification",
+    "row_eligible_only_if": "both_usable_nonlow_exact_singleton_key_and_nonempty_complete_intersection",
+    "key_positive": "exact_consensus_singleton",
+    "key_negative": "all_other_valid_output_units",
+    "complete_positive": "a_intersection_b",
+    "complete_negative": "valid_units_outside_a_union_b",
+    "complete_masked_unknown": "a_symmetric_difference_b",
+    "attention_normalization": "full_valid_trajectory_never_renormalize_covered_subset",
+    "final_target_rows": 500,
+    "final_strata": [
+      {"source": "gsm8k", "checker_status": "numeric_match", "split": "train", "count": 80},
+      {"source": "gsm8k", "checker_status": "numeric_match", "split": "dev", "count": 20},
+      {"source": "gsm8k", "checker_status": "numeric_mismatch", "split": "train", "count": 40},
+      {"source": "gsm8k", "checker_status": "numeric_mismatch", "split": "dev", "count": 10},
+      {"source": "math", "checker_status": "numeric_match", "split": "train", "count": 120},
+      {"source": "math", "checker_status": "numeric_match", "split": "dev", "count": 30},
+      {"source": "math", "checker_status": "numeric_mismatch", "split": "train", "count": 160},
+      {"source": "math", "checker_status": "numeric_mismatch", "split": "dev", "count": 40}
+    ],
+    "selection_after_labels": "within_each_prefrozen_stratum_take_eligible_rows_by_prefrozen_selection_priority",
+    "never_select_by_clir_score_or_confidence_rank": true,
+    "v11_rows_never_enter_scale": true
+  },
+  "gates": {
+    "population_schema_id_package_binding_required": true,
+    "controls_min_per_annotator": "15/16",
+    "self_repeat_min": 0.95,
+    "every_final_stratum_quota_required": true,
+    "selected_complete_positive_iou_mean_min": 0.80,
+    "selected_complete_mask_coverage_mean_min": 0.90,
+    "selected_complete_all_material_rate_max": 0.25,
+    "failure_is_terminal_no_adaptive_extra_rollout_or_relabel": true
+  },
+  "future_materialization_and_training": {
+    "feature_extraction_requires_full_annotation_and_selection_pass": true,
+    "first_experiment": "matched_P0_direct_prior_vs_correctness_only_target_learnability",
+    "second_experiment": "P1_mutual_increment_only_if_P0_learns",
+    "third_experiment": "fixed_gate_off_vs_gate_prior_weight_0_25_on_new_ranking_population",
+    "gate_weight_tuning_forbidden": true,
+    "full_integration_not_unlocked_by_data_acquisition": true
+  },
+  "execution_authorization": {
+    "authorized_by_user_message": "接着做呢",
+    "source_audit_allowed": true,
+    "pre_rollout_freeze_allowed": true,
+    "rollout_allowed": false,
+    "checker_unitizer_materialization_allowed": false,
+    "ai_annotation_allowed": false,
+    "feature_extraction_allowed": false,
+    "training_allowed": false,
+    "next_gate": "clean_commit_then_freeze_and_independent_recompute_then_hash_bound_rollout_authorization"
+  },
+  "claim_boundary": {
+    "labels_are_gold": false,
+    "human_verification": false,
+    "strict_consensus_selection_creates_easy_sample_bias": true,
+    "raw_population_metrics_and_pre_post_selection_distributions_must_be_reported": true,
+    "acquisition_pass_means": "reproducible_dual_ai_silver_training_subset_only",
+    "does_not_establish": [
+      "natural_label_factual_accuracy",
+      "population_wide_prior_definition_stability",
+      "Prior_learnability",
+      "mutual_distillation_benefit",
+      "gate_efficacy",
+      "Best_of_N_efficacy",
+      "Full_integration_efficacy"
+    ]
+  }
+}

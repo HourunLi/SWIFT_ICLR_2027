@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from prepare_clir_prior_scale_v12 import _derive_query_seed, _validate_shard_rows
+from prepare_clir_prior_scale_v12 import (
+    _derive_query_seed,
+    _raw_rows_for_shared_materializer,
+    _validate_shard_rows,
+)
 from src.clir_prior_consensus_scale import (
     PROTOCOL_SCHEMA,
     build_acquisition_shards,
@@ -228,4 +232,22 @@ def test_prior_v12_rollout_rows_bind_exact_frozen_prompt_and_provenance() -> Non
             protocol_file_sha256="protocol-hash",
             authorization_file_sha256="authorization-hash",
             registry_file_sha256="registry-hash",
+        )
+
+
+def test_prior_v12_shared_materializer_aliases_only_the_frozen_split() -> None:
+    raw = [{"id": "row-1", "prior_label_split": "dev", "value": 3}]
+    aliased = _raw_rows_for_shared_materializer(raw)
+    assert aliased == [
+        {
+            "id": "row-1",
+            "prior_label_split": "dev",
+            "acquisition_split": "dev",
+            "value": 3,
+        }
+    ]
+    assert "acquisition_split" not in raw[0]
+    with pytest.raises(ValueError, match="invalid Prior v12 label split"):
+        _raw_rows_for_shared_materializer(
+            [{"id": "row-2", "prior_label_split": "test"}]
         )

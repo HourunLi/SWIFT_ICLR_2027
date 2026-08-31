@@ -33,8 +33,13 @@ from src.clir_prior_consensus_scale import (
     QUERY_SCHEMA,
     build_acquisition_shards,
     select_acquisition_queries,
+    select_prior_proposals,
 )
 from src.clir_scale import build_source_candidates, build_template_clusters
+from src.clir_scale_pre_annotation import (
+    materialize_scale_rows,
+    validate_scale_materialized_rows,
+)
 from src.clir_smoke import (
     atomic_write_json,
     canonical_sha256,
@@ -53,7 +58,12 @@ DEFAULT_OUTPUT = PROJECT_ROOT / "run_artifacts/data_expansion_prior_v12/pre_roll
 DEFAULT_AUTHORIZATION = (
     PROJECT_ROOT / "configs/data_expansion_prior_v12/rollout_authorization.json"
 )
+DEFAULT_PRE_ANNOTATION_AUTHORIZATION = (
+    PROJECT_ROOT
+    / "configs/data_expansion_prior_v12/pre_annotation_authorization.json"
+)
 DEFAULT_ROLLOUT_ROOT = PROJECT_ROOT / "run_artifacts/data_expansion_prior_v12"
+DEFAULT_PRE_ANNOTATION_ROOT = DEFAULT_ROLLOUT_ROOT / "pre_annotation"
 
 
 def _utc_now() -> str:
@@ -285,6 +295,63 @@ def load_rollout_authorization(
     return authorization
 
 
+def load_pre_annotation_authorization(
+    path: Path,
+    *,
+    protocol_path: Path,
+    rollout_authorization_path: Path,
+    pre_rollout_dir: Path,
+    rollout_root: Path,
+) -> dict[str, Any]:
+    authorization = json.loads(path.read_text(encoding="utf-8"))
+    if authorization.get("schema_version") != (
+        "clir-prior-v12-pre-annotation-authorization"
+    ):
+        raise ValueError("unsupported Prior v12 pre-annotation authorization")
+    if authorization.get("status") != "AUTHORIZED_PRE_ANNOTATION_ONLY":
+        raise ValueError("Prior v12 pre-annotation has not been authorized")
+    expected_scope = {
+        "checker_and_unitizer_materialization": True,
+        "natural_proposal_freeze": True,
+        "blind_package_construction": True,
+        "ai_annotation_or_provider_call": False,
+        "label_selection_or_finalization": False,
+        "feature_extraction": False,
+        "training": False,
+        "threshold_quota_query_or_split_change": False,
+        "raw_rollout_overwrite_or_regeneration": False,
+    }
+    if authorization.get("authorized_scope") != expected_scope:
+        raise ValueError("Prior v12 pre-annotation scope drift")
+    parent = authorization["frozen_parent"]
+    expected_files = {
+        "protocol_file_sha256": protocol_path,
+        "rollout_authorization_file_sha256": rollout_authorization_path,
+        "pre_rollout_registry_file_sha256": pre_rollout_dir
+        / "manifest_registry.json",
+        "rollout_completion_report_file_sha256": rollout_root
+        / "rollout_completion_report.json",
+        "combined_raw_file_sha256": rollout_root / "rollouts/combined_raw.jsonl",
+        "combined_raw_sidecar_file_sha256": rollout_root
+        / "rollouts/combined_raw.jsonl.manifest.json",
+    }
+    for key, file_path in expected_files.items():
+        if file_sha256(file_path) != parent.get(key):
+            raise ValueError(f"Prior v12 pre-annotation {key} mismatch")
+    rollout_report = json.loads(
+        (rollout_root / "rollout_completion_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    if rollout_report.get("status") != parent.get("rollout_status"):
+        raise ValueError("Prior v12 rollout status drift")
+    if rollout_report.get("code_commit") != parent.get("rollout_code_commit"):
+        raise ValueError("Prior v12 rollout code commit drift")
+    if authorization["runtime_contract"].get("materialization_is_cpu_only") is not True:
+        raise ValueError("Prior v12 materialization must remain CPU-only")
+    return authorization
+
+
 def _load_rollout_contract(
     args: argparse.Namespace,
 ) -> tuple[
@@ -322,6 +389,99 @@ def _load_rollout_contract(
     if len(query_by_id) != int(protocol["query_pool"]["query_count"]):
         raise ValueError("Prior v12 frozen query count drift")
     return protocol, authorization, shards, query_by_id, rollout_root
+
+
+def _load_pre_annotation_contract(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], dict[str, Any], Path, Path]:
+    base_path = Path(args.base_protocol).resolve()
+    protocol_path = Path(args.protocol).resolve()
+    rollout_authorization_path = Path(args.authorization).resolve()
+    pre_annotation_authorization_path = Path(
+        args.pre_annotation_authorization
+    ).resolve()
+    pre_rollout = Path(args.output).resolve()
+    rollout_root = Path(args.rollout_root).resolve()
+    pre_annotation_root = Path(args.pre_annotation_root).resolve()
+    _, protocol = load_scale_protocol(
+        protocol_path, base_protocol_path=base_path
+    )
+    authorization = load_pre_annotation_authorization(
+        pre_annotation_authorization_path,
+        protocol_path=protocol_path,
+        rollout_authorization_path=rollout_authorization_path,
+        pre_rollout_dir=pre_rollout,
+        rollout_root=rollout_root,
+    )
+    expected_root = _project_path(
+        authorization["runtime_contract"]["output_root"]
+    ).resolve()
+    if pre_annotation_root != expected_root:
+        raise ValueError("Prior v12 pre-annotation root differs from authorization")
+    return protocol, authorization, rollout_root, pre_annotation_root
+
+
+def _raw_rows_for_shared_materializer(
+    rows: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    output = []
+    for raw in rows:
+        row = dict(raw)
+        split = str(row.get("prior_label_split", ""))
+        if split not in {"train", "dev"}:
+            raise ValueError(f"{row.get('id')}: invalid Prior v12 label split")
+        row["acquisition_split"] = split
+        output.append(row)
+    return output
+
+
+def _recompute_materialization(
+    protocol: Mapping[str, Any],
+    rollout_root: Path,
+    *,
+    cache_dir: str,
+) -> tuple[
+    list[dict[str, Any]],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+]:
+    raw_path = rollout_root / "rollouts/combined_raw.jsonl"
+    raw_rows, raw_sidecar = _read_published_jsonl(
+        raw_path, expected_schema="clir-prior-v12-combined-raw-rollouts"
+    )
+    aliased_raw = _raw_rows_for_shared_materializer(raw_rows)
+    try:
+        from transformers import AutoTokenizer
+    except ImportError as exc:
+        raise SystemExit("Prior v12 materialization requires transformers") from exc
+    generation = protocol["generation"]
+    tokenizer = AutoTokenizer.from_pretrained(
+        generation["model_id"],
+        revision=generation["tokenizer_revision"],
+        use_fast=True,
+        cache_dir=cache_dir,
+    )
+    checker = protocol["checker_unitizer"]
+    processed, health = materialize_scale_rows(
+        aliased_raw,
+        tokenizer,
+        checker_version=str(checker["checker_version"]),
+        unitizer_version=str(checker["unitizer_version"]),
+    )
+    validation = validate_scale_materialized_rows(
+        processed,
+        raw_rows=aliased_raw,
+        candidate_count=int(generation["candidate_count"]),
+        checker_version=str(checker["checker_version"]),
+        unitizer_version=str(checker["unitizer_version"]),
+    )
+    if any(
+        row.get("acquisition_split") != row.get("prior_label_split")
+        for row in processed
+    ):
+        raise ValueError("Prior v12 split alias drift after materialization")
+    return processed, health, validation, raw_sidecar
 
 
 def _compact_query(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -1202,6 +1362,200 @@ def command_merge_rollouts(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
+def command_materialize(args: argparse.Namespace) -> None:
+    if _git_dirty():
+        raise RuntimeError("Prior v12 materialization requires a clean Git commit")
+    protocol, _, rollout_root, pre_annotation_root = (
+        _load_pre_annotation_contract(args)
+    )
+    output = pre_annotation_root / "materialized/all_rows.jsonl"
+    sidecar = output.with_suffix(output.suffix + ".manifest.json")
+    report_path = pre_annotation_root / "materialized/materialization_report.json"
+    if output.exists() or sidecar.exists() or report_path.exists():
+        raise FileExistsError("Prior v12 materialized artifacts already exist")
+    processed, health, validation, raw_sidecar = _recompute_materialization(
+        protocol,
+        rollout_root,
+        cache_dir=args.cache_dir,
+    )
+    protocol_path = Path(args.protocol).resolve()
+    preauth_path = Path(args.pre_annotation_authorization).resolve()
+    manifest = publish_manifest(
+        output,
+        processed,
+        schema_version="clir-prior-v12-materialized-rollouts",
+        metadata={
+            "protocol_file_sha256": file_sha256(protocol_path),
+            "pre_annotation_authorization_file_sha256": file_sha256(preauth_path),
+            "raw_file_sha256": raw_sidecar["file_sha256"],
+            "code_commit": _git_head(),
+            "split_alias": "acquisition_split=prior_label_split",
+            **health,
+        },
+    )
+    report = {
+        "schema_version": "clir-prior-v12-materialization-report",
+        "status": "PASS_PRIOR_V12_CHECKER_UNITIZER_MATERIALIZATION",
+        "rows": len(processed),
+        "file_sha256": manifest["file_sha256"],
+        "sidecar_file_sha256": file_sha256(sidecar),
+        "ordered_rows_sha256": manifest["ordered_rows_sha256"],
+        "protocol_file_sha256": file_sha256(protocol_path),
+        "pre_annotation_authorization_file_sha256": file_sha256(preauth_path),
+        "rollout_completion_report_file_sha256": file_sha256(
+            rollout_root / "rollout_completion_report.json"
+        ),
+        "code_commit": _git_head(),
+        "health": health,
+        "validation": validation,
+        "annotation_started": False,
+        "feature_extraction_started": False,
+        "training_started": False,
+        "next_gate": "independent_recompute_then_freeze_exact_800_natural_proposals",
+    }
+    atomic_write_json(report_path, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def command_verify_materialized(args: argparse.Namespace) -> None:
+    protocol, _, rollout_root, pre_annotation_root = (
+        _load_pre_annotation_contract(args)
+    )
+    output = pre_annotation_root / "materialized/all_rows.jsonl"
+    report_path = pre_annotation_root / "materialized/materialization_report.json"
+    frozen, sidecar = _read_published_jsonl(
+        output, expected_schema="clir-prior-v12-materialized-rollouts"
+    )
+    published = json.loads(report_path.read_text(encoding="utf-8"))
+    recomputed, health, validation, _ = _recompute_materialization(
+        protocol,
+        rollout_root,
+        cache_dir=args.cache_dir,
+    )
+    if canonical_sha256(recomputed) != canonical_sha256(frozen):
+        raise ValueError("Prior v12 independent materialization recomputation drift")
+    if health != published.get("health") or validation != published.get("validation"):
+        raise ValueError("Prior v12 materialization summary drift")
+    verification = {
+        "schema_version": "clir-prior-v12-materialization-verification",
+        "status": "PASS_PRIOR_V12_MATERIALIZATION_INDEPENDENT_RECOMPUTE",
+        "materialized_file_sha256": sidecar["file_sha256"],
+        "materialized_sidecar_file_sha256": file_sha256(
+            output.with_suffix(output.suffix + ".manifest.json")
+        ),
+        "materialization_report_file_sha256": file_sha256(report_path),
+        "rows": len(frozen),
+        "health": health,
+        "validation": validation,
+        "next_gate": "freeze_exact_800_natural_proposals",
+    }
+    verification_path = (
+        pre_annotation_root / "materialized/independent_verification.json"
+    )
+    if verification_path.exists():
+        old = json.loads(verification_path.read_text(encoding="utf-8"))
+        if old != verification:
+            raise ValueError("Prior v12 materialization verification drift")
+    else:
+        atomic_write_json(verification_path, verification)
+    print(json.dumps(verification, ensure_ascii=False, indent=2))
+
+
+def _recompute_proposals(
+    protocol: Mapping[str, Any], pre_annotation_root: Path
+) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    materialized_path = pre_annotation_root / "materialized/all_rows.jsonl"
+    rows, sidecar = _read_published_jsonl(
+        materialized_path, expected_schema="clir-prior-v12-materialized-rollouts"
+    )
+    verification_path = (
+        pre_annotation_root / "materialized/independent_verification.json"
+    )
+    verification = json.loads(verification_path.read_text(encoding="utf-8"))
+    if verification.get("status") != (
+        "PASS_PRIOR_V12_MATERIALIZATION_INDEPENDENT_RECOMPUTE"
+    ):
+        raise ValueError("Prior v12 materialization verification is not PASS")
+    proposals, report = select_prior_proposals(rows, protocol)
+    return proposals, report, sidecar
+
+
+def command_select_proposals(args: argparse.Namespace) -> None:
+    if _git_dirty():
+        raise RuntimeError("Prior v12 proposal freeze requires a clean Git commit")
+    protocol, _, _, pre_annotation_root = _load_pre_annotation_contract(args)
+    output = pre_annotation_root / "proposals/prior_natural_800.jsonl"
+    sidecar_path = output.with_suffix(output.suffix + ".manifest.json")
+    report_path = pre_annotation_root / "proposals/proposal_report.json"
+    if output.exists() or sidecar_path.exists() or report_path.exists():
+        raise FileExistsError("Prior v12 proposal artifacts already exist")
+    proposals, selection, materialized_sidecar = _recompute_proposals(
+        protocol, pre_annotation_root
+    )
+    manifest = publish_manifest(
+        output,
+        proposals,
+        schema_version=PROPOSAL_SCHEMA,
+        metadata={
+            "protocol_file_sha256": file_sha256(Path(args.protocol).resolve()),
+            "pre_annotation_authorization_file_sha256": file_sha256(
+                Path(args.pre_annotation_authorization).resolve()
+            ),
+            "materialized_file_sha256": materialized_sidecar["file_sha256"],
+            "code_commit": _git_head(),
+            **selection,
+        },
+    )
+    report = {
+        "schema_version": "clir-prior-v12-proposal-report",
+        "status": "PASS_PRIOR_V12_EXACT_800_NATURAL_PROPOSALS",
+        "file_sha256": manifest["file_sha256"],
+        "sidecar_file_sha256": file_sha256(sidecar_path),
+        "ordered_rows_sha256": manifest["ordered_rows_sha256"],
+        "code_commit": _git_head(),
+        "selection": selection,
+        "annotation_started": False,
+        "feature_extraction_started": False,
+        "training_started": False,
+        "next_gate": "independent_recompute_then_construct_blind_annotation_shards",
+    }
+    atomic_write_json(report_path, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def command_verify_proposals(args: argparse.Namespace) -> None:
+    protocol, _, _, pre_annotation_root = _load_pre_annotation_contract(args)
+    output = pre_annotation_root / "proposals/prior_natural_800.jsonl"
+    frozen, sidecar = _read_published_jsonl(output, expected_schema=PROPOSAL_SCHEMA)
+    recomputed, selection, _ = _recompute_proposals(protocol, pre_annotation_root)
+    if canonical_sha256(recomputed) != canonical_sha256(frozen):
+        raise ValueError("Prior v12 proposal independent recomputation drift")
+    report_path = pre_annotation_root / "proposals/proposal_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if report.get("selection") != selection:
+        raise ValueError("Prior v12 proposal report drift")
+    verification = {
+        "schema_version": "clir-prior-v12-proposal-verification",
+        "status": "PASS_PRIOR_V12_PROPOSAL_INDEPENDENT_RECOMPUTE",
+        "proposal_file_sha256": sidecar["file_sha256"],
+        "proposal_sidecar_file_sha256": file_sha256(
+            output.with_suffix(output.suffix + ".manifest.json")
+        ),
+        "proposal_report_file_sha256": file_sha256(report_path),
+        "natural_rows": len(frozen),
+        "selection": selection,
+        "next_gate": "construct_blind_annotation_shards",
+    }
+    verification_path = pre_annotation_root / "proposals/independent_verification.json"
+    if verification_path.exists():
+        old = json.loads(verification_path.read_text(encoding="utf-8"))
+        if old != verification:
+            raise ValueError("Prior v12 proposal verification drift")
+    else:
+        atomic_write_json(verification_path, verification)
+    print(json.dumps(verification, ensure_ascii=False, indent=2))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-protocol", default=str(DEFAULT_BASE_PROTOCOL))
@@ -1209,6 +1563,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--authorization", default=str(DEFAULT_AUTHORIZATION))
     parser.add_argument("--rollout-root", default=str(DEFAULT_ROLLOUT_ROOT))
+    parser.add_argument(
+        "--pre-annotation-authorization",
+        default=str(DEFAULT_PRE_ANNOTATION_AUTHORIZATION),
+    )
+    parser.add_argument(
+        "--pre-annotation-root", default=str(DEFAULT_PRE_ANNOTATION_ROOT)
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     audit = subparsers.add_parser("audit")
     audit.add_argument("--cache-dir", default="run_artifacts/model_cache")
@@ -1228,6 +1589,18 @@ def build_parser() -> argparse.ArgumentParser:
     verify_rollouts.set_defaults(func=command_verify_rollouts)
     merge = subparsers.add_parser("merge-rollouts")
     merge.set_defaults(func=command_merge_rollouts)
+    materialize = subparsers.add_parser("materialize")
+    materialize.add_argument("--cache-dir", default="run_artifacts/model_cache")
+    materialize.set_defaults(func=command_materialize)
+    verify_materialized = subparsers.add_parser("verify-materialized")
+    verify_materialized.add_argument(
+        "--cache-dir", default="run_artifacts/model_cache"
+    )
+    verify_materialized.set_defaults(func=command_verify_materialized)
+    proposals = subparsers.add_parser("select-proposals")
+    proposals.set_defaults(func=command_select_proposals)
+    verify_proposals = subparsers.add_parser("verify-proposals")
+    verify_proposals.set_defaults(func=command_verify_proposals)
     return parser
 
 

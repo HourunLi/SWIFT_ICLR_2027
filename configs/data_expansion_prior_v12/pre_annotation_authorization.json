@@ -1,0 +1,39 @@
+{
+  "schema_version": "clir-prior-v12-pre-annotation-authorization",
+  "status": "AUTHORIZED_PRE_ANNOTATION_ONLY",
+  "authorized_at_utc": "2026-08-31T08:20:00Z",
+  "authorization_source": {
+    "kind": "explicit_user_confirmation_in_active_codex_thread",
+    "user_instruction": "接着做呢",
+    "confirmation_follows_prior_v12_fresh_strict_consensus_plan": true
+  },
+  "frozen_parent": {
+    "protocol_file_sha256": "04f8915cdd8da27aac2f9c31bea9777c3dc82cca50f8b7e9b048bd878978b9ea",
+    "rollout_authorization_file_sha256": "cb5c9842f7c7cfe58e9f3d99351a5444d07afb30ef2ff81ff0207d8128b9fcf4",
+    "pre_rollout_registry_file_sha256": "9a447ab3760816d2f3284325f0ce0918f945fd6340edb365b12b0520f741eb63",
+    "rollout_completion_report_file_sha256": "77c9a8ed58f0e255034cdf17a0901d447d85ab6df90153923823fbec913ce692",
+    "combined_raw_file_sha256": "ce18c0f7cd0222d20450391e47f43fda9b5368a7189ed21b76303729a74e7552",
+    "combined_raw_sidecar_file_sha256": "961762f1a0eb726581a3aad82e78bd9f9c9bc1031e7361852a78fc2ea5a06b5f",
+    "rollout_status": "PASS_ALL_16000_PRIOR_V12_RAW_ROLLOUTS",
+    "rollout_code_commit": "686e531e786fea4d3f6f503a685d36eb8ffa384a"
+  },
+  "authorized_scope": {
+    "checker_and_unitizer_materialization": true,
+    "natural_proposal_freeze": true,
+    "blind_package_construction": true,
+    "ai_annotation_or_provider_call": false,
+    "label_selection_or_finalization": false,
+    "feature_extraction": false,
+    "training": false,
+    "threshold_quota_query_or_split_change": false,
+    "raw_rollout_overwrite_or_regeneration": false
+  },
+  "runtime_contract": {
+    "cache_dir": "run_artifacts/model_cache",
+    "output_root": "run_artifacts/data_expansion_prior_v12/pre_annotation",
+    "materialization_is_cpu_only": true,
+    "prior_label_split_is_aliased_to_generic_acquisition_split_only_for_shared_materializer": true,
+    "existing_artifact_policy": "verify_or_stop_never_overwrite"
+  },
+  "next_gate": "materialize_all_16000_then_freeze_exact_800_natural_proposals_and_16_shards_per_annotator"
+}

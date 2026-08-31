@@ -15,7 +15,7 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史可训练 48 条；v8--v11 均已按冻结门失败；v12 全新 2,000-query 严格共识扩量协议已通过只读容量审计 | 目前仍只能训练历史 48 条；v8--v11 标签都不能事后挑子集训练，v12 尚未 rollout/标注 | v11 的 Key F1 `.8333`、Complete IoU `.7957` 未过冻结门；v12 将先双标 800 条全新样本，再按预注册共识规则取 500 条，不改模型、loss 或固定 `.25` gate |
+| Dual Prior | 历史可训练 48 条；v8--v11 均已按冻结门失败；v12 的 2,000-query/16,000-trajectory 全新 rollout 已完成并逐 shard 验证 | 目前仍只能训练历史 48 条；v8--v11 标签都不能事后挑子集训练，v12 尚未 materialize/标注 | v11 的 Key F1 `.8333`、Complete IoU `.7957` 未过冻结门；v12 将先双标 800 条全新样本，再按预注册共识规则取 500 条，不改模型、loss 或固定 `.25` gate |
 
 失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8/v9/v10/v11 分别以 `STOP_PRIOR_DEPENDENCY_SMOKE_V8_RAW_GATE_FAILURE`、`STOP_PRIOR_PARTIAL_SMOKE_V9_RAW_GATE_FAILURE`、`STOP_PRIOR_CANONICAL_SMOKE_V10_DEFINITION_FAILURE`、`STOP_PRIOR_VERIFIED_SMOKE_V11_DEFINITION_FAILURE` 终止，不能事后挑子集、裁决或降门训练。v12 只复用冻结定义，绝不复用这些失败轮的标签。
 
@@ -869,9 +869,11 @@ A/B package ordered hash=`6b826261…80fc` / `e042b8e6…468c`。两个公开包
 `prepare_clir_prior_scale_v12.py`：先从与历史/v6/v7/Prior v8--v11 query/cluster 全部隔离的
 GSM8K/MATH train 中冻结 2,000 题，每题生成 8 条；再按 checker × 题源 × train/dev 预冻结格
 选 800 条交给 GPT-5.6-sol xhigh 与 Claude Opus 5 high 独立双标，最后只按事前写死的 exact
-singleton-Key 与 partial-Complete 共识规则取 500 条。只读审计已确认 2,647 个可用新 cluster，
-足以组成 2,000 题且与排除集零重合；rollout、AI 标注、feature 和训练仍须逐阶段 hash-bound
-解锁。v12 若通过，也只能得到无人工复核、偏向定义清楚样本的 Silver 训练子集，不代表总体
+singleton-Key 与 partial-Complete 共识规则取 500 条。只读审计确认 2,647 个可用新 cluster，
+足以组成 2,000 题且与排除集零重合；40 个 rollout shard 已全部完成并逐项复验，共 16,000 条、
+其中 15,822 条正常 stop、178 条截断。combined raw SHA-256 为 `ce18c0f7…e7552`；checker/
+unitizer、AI 标注、feature 和训练仍须逐阶段 hash-bound 解锁。v12 若通过，也只能得到无人工
+复核、偏向定义清楚样本的 Silver 训练子集，不代表总体
 Prior 定义已经稳定，更不自动证明 mutual、`.25` gate 或 Best-of-N 有效。
 
 ## Toy smoke test

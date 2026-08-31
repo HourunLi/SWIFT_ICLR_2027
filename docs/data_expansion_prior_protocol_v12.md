@@ -1,8 +1,8 @@
 # CLIR Prior v12：全新大池双标与预注册严格共识扩量
 
-状态：`FROZEN_PREPARATION_ROLLOUT_NOT_STARTED`。本协议只先授权训练题源审计和
-pre-rollout manifest 冻结；rollout、checker/unitizer、AI 标注、feature 和训练分别由后续
-hash-bound 授权解锁。
+协议冻结状态：`FROZEN_PREPARATION_ROLLOUT_NOT_STARTED`；该机器字段不随执行进度回写。
+执行截至 2026-08-31：pre-rollout 已冻结并独立复算，40 个 rollout shard/16,000 条轨迹已
+全部验证合并；checker/unitizer、AI 标注、feature 和训练仍分别由后续 hash-bound 授权解锁。
 
 ## 1. 为什么另开 v12
 

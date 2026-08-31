@@ -866,6 +866,14 @@ train +100 dev。Complete 交集为正、并集外为负、对称差 mask，不�
 loss 或 main 固定 `.25` gate。该协议会引入明确的 easy-sample bias，所以即使数据门通过也只
 能称 `silver_dual_ai_strict_consensus_prior_v12_no_human_verification`。
 
+pre-rollout 在 clean commit `609f0cb` 冻结并连续两次独立复算通过；rollout 执行器 commit
+`686e531` 随后完成全部 40 shard。每 shard 50 query ×8 candidate，合计 2,000 query、16,000
+trajectory、5,642,715 output tokens；15,822 条 finish=`stop`，178 条 finish=`length`，后者
+只能进审计不能送标。所有 shard 的 prompt token IDs、候选索引、query 顺序、模型/tokenizer
+revision、授权和代码 commit 绑定均通过；combined raw SHA-256=
+`ce18c0f7cd0222d20450391e47f43fda9b5368a7189ed21b76303729a74e7552`。下一步是 CPU-only
+checker/unitizer 与冻结 800 条自然 proposal，尚未开始 AI 标注。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
@@ -884,8 +892,8 @@ loss 或 main 固定 `.25` gate。该协议会引入明确的 easy-sample bias�
   新结果支持 tail/path 风险可学和正向排序点信号，但 exact onset 为 0、±5 只有 4%，
   Best-of-N 增益区间跨 0；恢复的 main gold-tail 也仍未通过 locality/ranking 门。
 - dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8--v11 都已按 frozen raw gate
-  失败，任何共识子集都不能事后计入训练。v12 已通过 fresh-source 只读容量审计，但尚未 rollout、
-  标注或产出训练行；clean 历史 direct target 可学，mutual 增量与 ranking improvement 仍未建立。
+  失败，任何共识子集都不能事后计入训练。v12 fresh rollout 已完成，但尚未 materialize、标注或
+  产出训练行；clean 历史 direct target 可学，mutual 增量与 ranking improvement 仍未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。

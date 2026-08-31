@@ -749,7 +749,7 @@ first-bad-token detector。CH0 的 token/path AUROC 为 `.8630/.8413`，略低�
 `d80fff82adeeaf84a72e9c867811e90519d52c241da12840213731dd104d291e`。原始
 `FAIL_H0_V7_RESERVE` 与全部淘汰行仍保留，结果不覆盖它。
 
-### Dual Prior v8--v11 终止，v12 公开盲包已就绪
+### Dual Prior v8--v12 均终止
 
 Prior 历史可训练数据仍只有 48 条。v8 的依赖图双标和 raw gate 已经完成：eligibility
 `60/60`、path agreement `.95`，但 Key/Complete F1=`.7667/.8040`，非低置信 exact derived
@@ -884,8 +884,42 @@ commit `a669e9a4c3a4a1f1410bedfb8ef14a71725a758e` 构造了 A/B 各 16 个公开
 parent 位于不同 shard。公开字段严格只有 schema、item ID、题目、回复和 units；PRIVATE
 expected signature 未泄露。package report 状态为 `PASS_PRIOR_V12_BLIND_ANNOTATION_SHARDS_READY`，
 独立复算状态为 `PASS_PRIOR_V12_PACKAGE_INDEPENDENT_RECOMPUTE`，report/verification SHA-256=
-`ffe02fb1…f452` / `37837dc0…c27e`。冻结时 A/B label 文件均为 0；下一步才是让 GPT-5.6-sol
+`ffe02fb1…f452` / `37837dc0…c27e`。冻结时 A/B label 文件均为 0；随后才让 GPT-5.6-sol
 xhigh 与 Claude Opus 5 high 在互盲上下文中完成各自 16 shard。
+
+两边随后各完成 16 个 label shard、每 shard 56 行，总计每边 896 行。为了避免看结果后改尺子，
+v12 evaluator、CLI 与测试先在 commit `f7e3a9e6d2d09acee84c1e9931437b884660de20` 锁定，
+再首次读取标签；完整测试为 `175 passed`。评估器逐 shard 绑定 public package，保持全部 800 条
+natural 原始分母，检查 16 controls、80 repeats、八格配额，并只按预冻结 priority 计算候选 500 条
+的 Complete IoU、mask coverage 与全 material 退化率。
+
+首次评估与独立复算的 canonical SHA-256 完全相同；raw report SHA-256=
+`0dce22ba0f3e60483a66de0e882d9084a8f3aba908e7c85a046fde2b9817d0a1`，verification
+SHA-256=`cf68ba49fcda0aad8c742e02a3b3a867d94ba39ad3038528b94c1ab7a4d7f20a`。
+最终状态是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，失败门如下：
+
+| 门 | 实测 | 冻结要求 |
+|---|---:|---:|
+| A controls | `11/16=.6875` | `>=15/16` |
+| B controls | `16/16=1.0` | `>=15/16` |
+| A self-repeat | `51/80=.6375` | `>=.95` |
+| B self-repeat | `51/80=.6375` | `>=.95` |
+| 固定 500 条 Complete positive IoU | `.7065` | `>=.80` |
+| 固定 500 条 Complete mask coverage | `.8709` | `>=.90` |
+
+yield 和反退化门其实通过：800 条自然样本全部双方 usable/non-low；687/800 条满足 exact
+singleton-Key 和非空 Complete intersection；八格可用数分别为 `123/31/58/17/172/43/194/49`，
+均高于目标 `80/20/40/10/120/30/160/40`；两边在固定 500 条上 Complete=全 material 的比例
+都是 0。自然 Complete macro F1=`.7669`，固定 500 条的 IoU/coverage 仍低于门，所以不能通过
+“数量够”替代标签稳定性。
+
+只读失败诊断进一步区分了 Key 与 Complete：A/B repeat 的 eligibility 都是 `80/80`，Key exact
+分别 `76/80`、`78/80`，但 Complete exact 都只有 `51/80`；A 的 29 个重复分歧里 25 个仅改变
+Complete，B 的 29 个里 27 个仅改变 Complete。A 漏掉的 5 个 controls 中，多数也是把题面复述、
+拆分算式或错误传播链纳入/排除 Complete 的范围问题；B 虽 controls 全过，Complete repeat 仍同样
+失稳。因而当前 blocker 是 canonical Complete 在长自然链上的可重复边界，而不是 query 数或 Key
+候选 yield。按冻结协议不发布 500 条 target、不事后挑 687 条、273 条 exact-Complete 或其他子集，
+不重标、不加 rollout、不降门、不抽 feature、不训练。
 
 ## 已知限制
 
@@ -904,10 +938,10 @@ xhigh 与 Claude Opus 5 high 在互盲上下文中完成各自 16 shard。
   600 条是用户授权的事后严格共识探索子集，不是原协议成功，也没有人工准确率保证。
   新结果支持 tail/path 风险可学和正向排序点信号，但 exact onset 为 0、±5 只有 4%，
   Best-of-N 增益区间跨 0；恢复的 main gold-tail 也仍未通过 locality/ranking 门。
-- dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8--v11 都已按 frozen raw gate
-  失败，任何共识子集都不能事后计入训练。v12 rollout、materialization、800 条 proposal 与
-  32 个公开盲包已完成，但尚未标注或产出训练行；clean 历史 direct target 可学，mutual 增量与
-  ranking improvement 仍未建立。
+- dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8--v12 都已按 frozen gate
+  失败，任何共识子集都不能事后计入训练。v12 的 800 条双标虽然 exact-Key yield 足够，但
+  controls、双边 self-repeat 和固定 500 条 Complete IoU/coverage 失败；clean 历史 direct target
+  可学，mutual 增量与 ranking improvement 仍未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -925,12 +959,10 @@ xhigh 与 Claude Opus 5 high 在互盲上下文中完成各自 16 shard。
 3. 下一轮若要确认 H0，应重新预注册并采一批独立 H train/dev 与 ranking population，优先
    把目标表述为 tail/path 风险；若研究目标仍要求精确 onset，先修改/验证 label target 与
    解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
-4. Prior v8--v11 都必须保持终止状态。v12 的 fresh query、rollout、checker/unitizer、800 条
-   proposal 和 A/B 各 16 个公开盲包已经独立复算通过；现在只发送各自公开目录和启动词，绝不
-   发送 `PRIVATE_package_index.jsonl` 或另一模型目录。两边完整写完后，先做 schema/ID/package/
-   control/repeat/raw-denominator 校验，再按冻结严格共识配额裁决是否可发布 400 train +100 dev。
-   即使 v12 数据门通过，也要先做 P0 direct-target learnability，再决定是否解锁 P1 mutual 和
-   固定 `.25` gate off/on；H1、Dual Prior 排名效果与 Full 尚未被重新验证。
+4. Prior v8--v12 都必须保持终止状态。保存 v12 的 32 个标签 shard、raw report 和独立复算，
+   不发布其 prospective 400 train +100 dev、不重标 controls/repeats、不改阈值或另挑容易子集。
+   若仍要继续 Prior，必须先提出并预注册一个不同的 Complete target/机械化表示，在全新样本上
+   先证明自身 repeat/controls，再谈扩量；不能把 v12 的 687 条 strict-Key 行变成新版本训练集。
 
 当前裁决是：Consistency 有部分 held-out relation 机制证据；v7.4 证明严格 H 子集能学到
 tail/path 风险，并给出 H0 最好的 ranking 点估计，但增益区间跨 0、精确 onset 失败；

@@ -15,9 +15,9 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史可训练 48 条；v8--v11 均已按冻结门失败；v12 的 2,000-query/16,000-trajectory rollout、materialization、800 条 proposal 和 32 个盲标 shard 均已验证 | 目前仍只能训练历史 48 条；v8--v11 标签都不能事后挑子集训练，v12 正等待双 AI 标注 | v11 的 Key F1 `.8333`、Complete IoU `.7957` 未过冻结门；v12 将双标 800 条全新样本，再按预注册共识规则取 500 条，不改模型、loss 或固定 `.25` gate |
+| Dual Prior | 历史可训练 48 条；v8--v12 均已按冻结门失败；v12 已完成 800 条双标与独立复算 | 目前仍只能训练历史 48 条；v8--v12 都不能事后挑子集训练 | v12 虽有 687/800 条 exact-Key 严格共识并能凑满八格 500 条，但 controls A=`11/16`、self-repeat A/B=`51/80,51/80`、固定 500 条 Complete IoU/coverage=`.7065/.8709` 均未过门 |
 
-失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8/v9/v10/v11 分别以 `STOP_PRIOR_DEPENDENCY_SMOKE_V8_RAW_GATE_FAILURE`、`STOP_PRIOR_PARTIAL_SMOKE_V9_RAW_GATE_FAILURE`、`STOP_PRIOR_CANONICAL_SMOKE_V10_DEFINITION_FAILURE`、`STOP_PRIOR_VERIFIED_SMOKE_V11_DEFINITION_FAILURE` 终止，不能事后挑子集、裁决或降门训练。v12 只复用冻结定义，绝不复用这些失败轮的标签。
+失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8/v9/v10/v11/v12 分别以各自冻结失败状态终止；v12 的最终状态是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`。这些标签都不能事后挑子集、裁决、重标或降门训练。
 
 ## 2026-08-23 clean integration 审计与训练试跑
 
@@ -779,7 +779,7 @@ seed 44 又明显塌到 `79.48%`，所以只能说“严格子集有可用排序
 SHA-256 为 `d80fff82…291e`。这是扩大后的探索性 Silver 复测，不是原 v7 翻盘，也不是
 Gold、人工验证、protected-test 或 H1/Prior/Full 的证据。
 
-### Dual Prior v8--v11 均停止，v12 预注册严格共识扩量
+### Dual Prior v8--v12 均按冻结门停止
 
 v8 的 60 条依赖图标注已经完成并按冻结门评估。结果不是“待标”：eligibility=`60/60`、
 path agreement=`.95`，但 Key/Complete F1 只有 `.7667/.8040`，非低置信完整训练共识仅
@@ -876,10 +876,21 @@ materialization 通过 16,000/16,000 unitization，得到 15,520 条 supervision
 800 条 proposal 文件 SHA-256 为 `334c7dbf…65bdc`，八个题源/checker/split 格均精确满足配额。
 提交 `a669e9a` 随后构造并独立复算了 32 个公开盲包：A/B 各 16 shard，每 shard 50 natural +1
 control +5 repeat，共每边 896 行；package report/verification SHA-256 为 `ffe02fb1…f452` /
-`37837dc0…c27e`，且冻结时没有 label。现在的下一门是分别运行 GPT-5.6-sol xhigh 与 Claude
-Opus 5 high 双标；feature 和训练仍未解锁。v12 若通过，也只能得到无人工
-复核、偏向定义清楚样本的 Silver 训练子集，不代表总体
-Prior 定义已经稳定，更不自动证明 mutual、`.25` gate 或 Best-of-N 有效。
+`37837dc0…c27e`，且冻结时没有 label。
+
+两边后来各完成 16 个 shard、896 行标签。提交 `f7e3a9e` 在首次读取标签前冻结了 exact
+schema/ID/package evaluator、16-control/80-repeat 门、八格固定配额和选择后 Complete 质量门；
+完整测试为 `175 passed`。首次评估与独立复算逐字节一致，raw report/verification SHA-256 为
+`0dce22ba…d0a1` / `cf68ba49…f20a`，最终状态
+`STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`。
+
+数量并不是失败原因：800 条自然样本全部双方 usable/non-low，687 条达到 exact singleton-Key
+与非空 Complete 交集，八个预冻结格均足以按原 priority 凑满 400 train +100 dev。失败的是
+稳定性与 Complete 质量：A controls=`11/16<15/16`，B=`16/16`；A/B self-repeat 都是
+`51/80=.6375<.95`；固定 500 条的 Complete IoU=`.7065<.80`，mask coverage=`.8709<.90`。
+只读诊断中，Key repeat 实为 A=`76/80`、B=`78/80`，而 Complete repeat 两边都只有 `51/80`；
+说明主要 blocker 是长链 Complete 边界仍不稳定，而不是候选规模不足。协议要求终止：不发布
+这 500 条、不事后挑 687 条或其他容易子集、不重标、不抽 feature、不训练。
 
 ## Toy smoke test
 
@@ -932,7 +943,8 @@ pytest -q
   没有优于 correctness-only。
 - Consistency 已有400个训练正对和150+150 held-out 正负关系的三 seed C0/C1
   复测；均值分离与 score-gap 结构改善，但正对 cosine 下降、cosine AUROC seed 方向
-  混合，且没有新的 Best-of-N population。Hallucination 和 Prior 标签仍很小。
+  混合，且没有新的 Best-of-N population。Hallucination 标签仍有限；Prior v12 虽完成 800 条
+  双标，但因 controls/repeat/Complete 质量门失败，不能转成训练数据。
 - clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代缺失的数据 provenance 上游与 protected-test protocol。
 - clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired
   summarizer；v6.1 新增了单独的 held-out consistency relation evaluator，但尚未重建

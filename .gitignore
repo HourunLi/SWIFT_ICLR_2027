@@ -39,6 +39,8 @@ __pycache__/
 !/configs/data_expansion_prior_v8/**
 !/configs/data_expansion_prior_v9/
 !/configs/data_expansion_prior_v9/**
+!/configs/data_expansion_prior_v10/
+!/configs/data_expansion_prior_v10/**
 
 # The clean integration branch tracks only explicitly added runtime scripts.
 /scripts/*

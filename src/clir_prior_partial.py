@@ -178,13 +178,16 @@ def select_partial_prior_smoke_rows(
     excluded_query_ids: set[str],
     excluded_cluster_ids: set[str],
     selection: Mapping[str, Any],
+    namespace: str = "clir-prior-v9",
+    proposal_schema: str = PROPOSAL_SCHEMA,
+    version_label: str = "Prior v9",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     quotas = {
         (str(entry["source"]), str(entry["checker_status"])): int(entry["count"])
         for entry in selection["strata"]
     }
     if sum(quotas.values()) != int(selection["natural_count"]):
-        raise ValueError("Prior v9 strata do not sum to natural_count")
+        raise ValueError(f"{version_label} strata do not sum to natural_count")
     min_claims = int(selection["minimum_material_claims"])
     max_claims = int(selection["maximum_material_claims"])
 
@@ -229,14 +232,14 @@ def select_partial_prior_smoke_rows(
             chosen = min(
                 rows,
                 key=lambda row: stable_priority(
-                    "clir-prior-v9-candidate", query_id, row["id"]
+                    f"{namespace}-candidate", query_id, row["id"]
                 ),
             )
             one_per_query.append(chosen)
         candidates[stratum] = sorted(
             one_per_query,
             key=lambda row: stable_priority(
-                "clir-prior-v9-query",
+                f"{namespace}-query",
                 stratum[0],
                 stratum[1],
                 row["query_id"],
@@ -265,10 +268,10 @@ def select_partial_prior_smoke_rows(
             cluster_id = str(row["cluster_id"])
             if query_id in used_queries or cluster_id in used_clusters:
                 continue
-            proposal_id = stable_priority("clir-prior-v9-proposal", row["id"])
+            proposal_id = stable_priority(f"{namespace}-proposal", row["id"])
             selected.append(
                 {
-                    "schema_version": PROPOSAL_SCHEMA,
+                    "schema_version": proposal_schema,
                     "proposal_id": proposal_id,
                     "trajectory_id": str(row["id"]),
                     "query_id": query_id,
@@ -283,7 +286,7 @@ def select_partial_prior_smoke_rows(
                     "output_token_count": int(row["output_token_count"]),
                     "units": _material_units(row),
                     "selection_priority": stable_priority(
-                        "clir-prior-v9-query",
+                        f"{namespace}-query",
                         stratum[0],
                         stratum[1],
                         query_id,
@@ -298,7 +301,7 @@ def select_partial_prior_smoke_rows(
                 break
         if selected_here != quotas[stratum]:
             raise ValueError(
-                f"insufficient Prior v9 capacity for {stratum}: "
+                f"insufficient {version_label} capacity for {stratum}: "
                 f"{selected_here}/{quotas[stratum]}"
             )
 
@@ -419,13 +422,20 @@ def _control_items() -> list[dict[str, Any]]:
 
 
 def build_blind_packages(
-    proposals: Sequence[Mapping[str, Any]], *, repeat_count_a: int
+    proposals: Sequence[Mapping[str, Any]],
+    *,
+    repeat_count_a: int,
+    repeat_count_b: int = 0,
+    namespace: str = "clir-prior-v9",
+    package_schema: str = PACKAGE_SCHEMA,
+    private_schema: str = PRIVATE_SCHEMA,
+    control_items: Sequence[Mapping[str, Any]] | None = None,
 ) -> tuple[
     list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]
 ]:
     natural = [
         {
-            "schema_version": PACKAGE_SCHEMA,
+            "schema_version": package_schema,
             "item_id": str(row["proposal_id"]),
             "question": str(row["question"]),
             "response": str(row["response"]),
@@ -433,11 +443,25 @@ def build_blind_packages(
         }
         for row in proposals
     ]
-    controls = _control_items()
-    repeats = sorted(
+    controls = [dict(row) for row in (control_items or _control_items())]
+    repeat_namespace_a = (
+        "clir-prior-v9-repeat"
+        if namespace == "clir-prior-v9"
+        else f"{namespace}-repeat-a"
+    )
+    repeat_item_namespace_a = (
+        "clir-prior-v9-repeat-item"
+        if namespace == "clir-prior-v9"
+        else f"{namespace}-repeat-item-a"
+    )
+    repeats_a = sorted(
         natural,
-        key=lambda row: stable_priority("clir-prior-v9-repeat", row["item_id"]),
+        key=lambda row: stable_priority(repeat_namespace_a, row["item_id"]),
     )[:repeat_count_a]
+    repeats_b = sorted(
+        natural,
+        key=lambda row: stable_priority(f"{namespace}-repeat-b", row["item_id"]),
+    )[:repeat_count_b]
 
     private: list[dict[str, Any]] = []
     package_a = [dict(row) for row in natural]
@@ -446,7 +470,7 @@ def build_blind_packages(
         for annotator in ("a", "b"):
             private.append(
                 {
-                    "schema_version": PRIVATE_SCHEMA,
+                    "schema_version": private_schema,
                     "annotator": annotator,
                     "item_id": row["item_id"],
                     "kind": "natural",
@@ -462,39 +486,49 @@ def build_blind_packages(
         for annotator in ("a", "b"):
             private.append(
                 {
-                    "schema_version": PRIVATE_SCHEMA,
+                    "schema_version": private_schema,
                     "annotator": annotator,
                     "item_id": control["item_id"],
                     "kind": "control",
                     "expected_signature": list(control["expected_signature"]),
                 }
             )
-    for parent in repeats:
-        repeat_id = stable_priority("clir-prior-v9-repeat-item", parent["item_id"])
-        repeated = dict(parent)
-        repeated["item_id"] = repeat_id
-        package_a.append(repeated)
-        private.append(
-            {
-                "schema_version": PRIVATE_SCHEMA,
-                "annotator": "a",
-                "item_id": repeat_id,
-                "kind": "repeat",
-                "natural_item_id": parent["item_id"],
-            }
-        )
+    for annotator, repeats, package in (
+        ("a", repeats_a, package_a),
+        ("b", repeats_b, package_b),
+    ):
+        for parent in repeats:
+            repeat_item_namespace = (
+                repeat_item_namespace_a
+                if annotator == "a"
+                else f"{namespace}-repeat-item-b"
+            )
+            repeat_id = stable_priority(repeat_item_namespace, parent["item_id"])
+            repeated = dict(parent)
+            repeated["item_id"] = repeat_id
+            package.append(repeated)
+            private.append(
+                {
+                    "schema_version": private_schema,
+                    "annotator": annotator,
+                    "item_id": repeat_id,
+                    "kind": "repeat",
+                    "natural_item_id": parent["item_id"],
+                }
+            )
 
     package_a.sort(
-        key=lambda row: stable_priority("clir-prior-v9-package-a", row["item_id"])
+        key=lambda row: stable_priority(f"{namespace}-package-a", row["item_id"])
     )
     package_b.sort(
-        key=lambda row: stable_priority("clir-prior-v9-package-b", row["item_id"])
+        key=lambda row: stable_priority(f"{namespace}-package-b", row["item_id"])
     )
     private.sort(key=lambda row: (row["annotator"], row["item_id"]))
     report = {
         "natural": len(natural),
         "controls_per_annotator": len(controls),
-        "a_repeats": len(repeats),
+        "a_repeats": len(repeats_a),
+        "b_repeats": len(repeats_b),
         "package_a_rows": len(package_a),
         "package_b_rows": len(package_b),
         "package_a_ordered_rows_sha256": canonical_sha256(package_a),

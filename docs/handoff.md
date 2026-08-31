@@ -749,32 +749,37 @@ first-bad-token detector。CH0 的 token/path AUROC 为 `.8630/.8413`，略低�
 `d80fff82adeeaf84a72e9c867811e90519d52c241da12840213731dd104d291e`。原始
 `FAIL_H0_V7_RESERVE` 与全部淘汰行仍保留，结果不覆盖它。
 
-### Dual Prior v8 依赖图 smoke 准备状态
+### Dual Prior v8 终止与 v9 局部共识 smoke 准备状态
 
-Prior 仍是最后一个没有完成独立扩标的模块：历史可训练数据只有 48 条。v3 的
-Key/Complete F1 虽为 `.9167/.9267`，但 exact joint 只有 25/60、最低裁决比例
-35/60=`.5833`。因此 v8 按 v6 交接建议改标注对象：AI 不直接输出 Key/Complete，而是输出
-parent→child 依赖边、直接结论 unit 和错误路径的 first flaw；代码把 conclusion 的反向
-传递闭包固定为 Complete，supported 的 conclusion 或 flawed 的 first flaw 固定为 Key。
+Prior 历史可训练数据仍只有 48 条。v8 的依赖图双标和 raw gate 已经完成：eligibility
+`60/60`、path agreement `.95`，但 Key/Complete F1=`.7667/.8040`，非低置信 exact derived
+target 只有 `8/60`，最低裁决比例 `.8667`，first-flaw exact `.6563`，controls A/B=`4/6,5/6`。
+最终状态为 `STOP_PRIOR_DEPENDENCY_SMOKE_V8_RAW_GATE_FAILURE`；raw report SHA-256
+`e7e14002…0693`。按冻结协议不发第三模型、不抽 feature、不训练，也不挑 v8 子集救场。
 
-代码、协议、双 AI 提示和 fail-closed evaluator 已在 clean commit
-`3d3ff0209e6416667652abfce44cd4e34871958c` 冻结。只读复用 v6 已 materialize 的
-16,000 rows，不重新 rollout：排除 v6.1 C inventory 的 612 query/602 cluster，并确认整个
-v6 pool 与 v7 H/ranking 的 query/cluster 都零重合。发布结果为 60 natural、60 distinct
-query/cluster，GSM8K/MATH × numeric match/mismatch 各 15；A 包 78 行，B 包 66 行。
+只读诊断解释了为什么另开 v9。v8 的 52 条 Complete mismatch 中 44 条只由闭包边界造成，
+37 条还是 A 为 B 的严格子集；两边对自然语言“主线”接近，却很难给出完全相同的边集合。
+相反，历史 v3 直接集合标注的 Key exact 为 55/60、unit agreement `.9909`；Complete exact
+26/60、unit agreement `.9341`、ambiguous fraction `.0659`、positive intersection/union
+`.8503`，且 60/60 行都有非空 Complete 交集。这些只用于冻结 v9 设计，不能回头训练 v3。
 
-natural/A/B/private ordered hashes 分别为 `42875e17…1695`、`33f5aa16…f8dc`、
-`43d0e2aa…6380`、`c801fe4d…2796`。准备状态
-`PASS_PRIOR_DEPENDENCY_SMOKE_V8_PACKAGES_READY`，独立复算
-`PASS_PRIOR_DEPENDENCY_SMOKE_V8_RECOMPUTATION`。当前没有标签；协议仍写明 annotation、
-adjudication、feature extraction 和 training 未授权。发送时只能把 annotator_a 的公开单 shard
-给 GPT-5.6-sol xhigh，把 annotator_b 的公开单 shard 给 Claude Opus 5 high，绝不能发送
-`PRIVATE_package_index.jsonl`。
+v9 在提交 `3331edf542dfd7e836281b290118a88de3a67c5b` 上回到 direct Key/Complete：Key 只有
+A/B 双方 usable、非低置信且 exact nonempty set 时整行训练；Complete 双方都选为正、都不选
+为负、只一边选的 unit 显式 mask。Key/Complete attention 仍在完整 trajectory 上归一化，
+loss 只看 coverage；没有修改 Prior 网络、mutual 或 main 固定 `.25` gate coupling。
 
-raw 门要求 eligibility≥.95、common usable≥50、path≥.90、Key/Complete F1 均≥.90、
-非低置信 exact derived target≥42/60、裁决下界≤.30、两边 controls 6/6、A repeat≥.95，
-并有 first-flaw 与 Complete 非全集退化门。任一失败即停止，不用第三模型救 smoke。通过也
-只解锁另行冻结的 400-train/150-heldout scale 协议，不直接解锁 P0/P1/gate 训练或 Full。
+本轮从 v6 已 materialize 的 16,000 rows 重新选 60 个全新 query/cluster，排除 v6.1 C 和 v8
+全部 query/cluster，并确认与 v7 H/ranking 零重合。四格仍各 15。natural ordered hash 为
+`ba0133d0…5852`；A/B 包 78/66 行，ordered hash=`e816f353…71d1` / `fa131ce2…7847`。
+状态 `PASS_PRIOR_PARTIAL_SMOKE_V9_PACKAGES_READY`，独立复算
+`PASS_PRIOR_PARTIAL_SMOKE_V9_RECOMPUTATION`。
+
+当前没有 v9 标签，annotation 仍需用户把两个公开单 shard 分别交给 GPT-5.6-sol xhigh 和
+Claude Opus 5 high；`PRIVATE_package_index.jsonl` 不得发送。raw 门除了 Key/Complete F1
+`.90`，还要求 exact Key、非空 Complete 共识及两者同时可训练均至少 50/60，Complete unit
+agreement≥.90、ambiguous≤.10、positive IoU≥.80、平均 coverage≥.90、controls 6/6、A repeat
+≥.95。完整 joint exact 只报告、不作门。任一门失败即停止；全过也只解锁另冻的
+400-train/150-heldout scale 协议。
 
 ## 已知限制
 
@@ -793,9 +798,9 @@ raw 门要求 eligibility≥.95、common usable≥50、path≥.90、Key/Complete
   600 条是用户授权的事后严格共识探索子集，不是原协议成功，也没有人工准确率保证。
   新结果支持 tail/path 风险可学和正向排序点信号，但 exact onset 为 0、±5 只有 4%，
   Best-of-N 增益区间跨 0；恢复的 main gold-tail 也仍未通过 locality/ranking 门。
-- dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8 的 60 条 dependency smoke
-  只完成选样/建包/复算，尚未产生标签。clean direct target 可学，但 mutual 增量与 ranking
-  improvement 都未建立。
+- dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8 依赖图 smoke 已 raw gate
+  失败，v9 的 60 条 direct-set partial-consensus smoke 只完成选样/建包/复算，尚未产生标签。
+  clean direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -813,8 +818,9 @@ raw 门要求 eligibility≥.95、common usable≥50、path≥.90、Key/Complete
 3. 下一轮若要确认 H0，应重新预注册并采一批独立 H train/dev 与 ranking population，优先
    把目标表述为 tail/path 风险；若研究目标仍要求精确 onset，先修改/验证 label target 与
    解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
-4. Prior v8 的两个公开单 shard 已准备并复算；下一步是在用户确认后分别交给
-   GPT-5.6-sol xhigh 与 Claude Opus 5 high，先过 raw gate，再决定是否另冻 scale 协议。
+4. Prior v9 的两个公开单 shard 已准备并复算；下一步分别交给 GPT-5.6-sol xhigh 与
+   Claude Opus 5 high。两边完成后只运行 v9 raw evaluator；先过全部局部共识门，再决定是否
+   另冻 scale 协议。v8 必须保持终止状态。
    H1、Dual Prior 效果和 Full 没有被包准备工作重新验证。
 
 当前裁决是：Consistency 有部分 held-out relation 机制证据；v7.4 证明严格 H 子集能学到

@@ -10,6 +10,7 @@ from prepare_clir_prior_scale_v12 import (
 from src.clir_prior_consensus_scale import (
     PROTOCOL_SCHEMA,
     build_acquisition_shards,
+    build_prior_annotation_shards,
     select_acquisition_queries,
     select_prior_proposals,
 )
@@ -251,3 +252,61 @@ def test_prior_v12_shared_materializer_aliases_only_the_frozen_split() -> None:
         _raw_rows_for_shared_materializer(
             [{"id": "row-2", "prior_label_split": "test"}]
         )
+
+
+def test_prior_v12_annotation_shards_have_frozen_natural_control_repeat_mix() -> None:
+    proposals = [
+        {
+            "proposal_id": f"proposal-{index:04d}",
+            "question": f"question {index}",
+            "response": f"response {index}",
+            "units": [
+                {"unit_index": 0, "kind": "material_claim", "text": "claim"}
+            ],
+        }
+        for index in range(800)
+    ]
+    protocol = {
+        "annotation": {
+            "natural_shards_per_annotator": 16,
+            "natural_rows_per_shard": 50,
+            "hidden_controls_total_per_annotator": 16,
+            "self_repeats_total_per_annotator": 80,
+        }
+    }
+    packages, private, report = build_prior_annotation_shards(proposals, protocol)
+    assert set(packages) == {"a", "b"}
+    assert report["rows_per_shard"] == 56
+    assert len(private) == 2 * (800 + 16 + 80)
+    for annotator in ("a", "b"):
+        assert len(packages[annotator]) == 16
+        assert all(len(rows) == 56 for rows in packages[annotator])
+        assert all(
+            "expected_signature" not in row
+            for rows in packages[annotator]
+            for row in rows
+        )
+        assert all(
+            set(row) == {"schema_version", "item_id", "question", "response", "units"}
+            for rows in packages[annotator]
+            for row in rows
+        )
+        shard_by_item = {
+            row["item_id"]: shard_index
+            for shard_index, rows in enumerate(packages[annotator])
+            for row in rows
+        }
+        private_by_item = {
+            row["item_id"]: row
+            for row in private
+            if row["annotator"] == annotator
+        }
+        assert all(
+            shard_by_item[item_id]
+            != shard_by_item[private_row["natural_item_id"]]
+            for item_id, private_row in private_by_item.items()
+            if private_row["kind"] == "repeat"
+        )
+    control_private = [row for row in private if row["kind"] == "control"]
+    assert len(control_private) == 32
+    assert all("expected_signature" in row for row in control_private)

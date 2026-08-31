@@ -13,7 +13,7 @@ from collections import Counter, defaultdict
 import math
 from typing import Any, Mapping, Sequence
 
-from src.clir_prior_partial import _material_units
+from src.clir_prior_partial import _material_units, build_blind_packages
 from src.clir_smoke import canonical_sha256, stable_priority
 
 
@@ -23,6 +23,227 @@ PROPOSAL_SCHEMA = "clir-prior-v12-natural-proposal"
 PACKAGE_SCHEMA = "clir-prior-v12-annotation-package"
 PRIVATE_SCHEMA = "clir-prior-v12-private-index"
 LABEL_SCHEMA = "clir-prior-v12-label"
+
+
+def prior_v12_control_items() -> list[dict[str, Any]]:
+    """Return 16 fresh hidden controls for the scale-v12 annotation pass."""
+
+    definitions = [
+        (
+            "early_arithmetic_error",
+            "Nine bags hold seven oranges each, and four loose oranges are added. How many oranges are there?",
+            [
+                "Nine bags contain 9×7=61 oranges.",
+                "Adding the loose oranges gives 61+4=65 oranges.",
+                "Therefore there are 65 oranges.",
+            ],
+            "usable",
+            [0],
+            [0, 1],
+        ),
+        (
+            "later_arithmetic_error",
+            "Six racks hold eight mugs each, and five loose mugs are added. How many mugs are there?",
+            [
+                "The racks contain 6×8=48 mugs.",
+                "Adding the loose mugs gives 48+5=54 mugs.",
+                "Therefore there are 54 mugs.",
+            ],
+            "usable",
+            [1],
+            [0, 1],
+        ),
+        (
+            "late_target_error",
+            "A train covers 180 miles in 3 hours. What is its speed in miles per hour?",
+            [
+                "Dividing distance by time gives 180/3=60 miles per hour.",
+                "Therefore the train travels 60 miles in total.",
+                "The final answer is 60.",
+            ],
+            "usable",
+            [1],
+            [0, 1],
+        ),
+        (
+            "late_unit_error",
+            "A recipe needs 3 cups of water per batch. How much water is needed for 4 batches?",
+            [
+                "Four batches need 3×4=12 cups of water.",
+                "Therefore the recipe needs 12 liters of water.",
+                "The final answer is 12.",
+            ],
+            "usable",
+            [1],
+            [0, 1],
+        ),
+        (
+            "late_object_error",
+            "A jar contains 12 red marbles and 7 blue marbles. How many marbles are in the jar?",
+            [
+                "Adding the colors gives 12+7=19 marbles in total.",
+                "Therefore the jar contains 19 red marbles.",
+                "The final answer is 19.",
+            ],
+            "usable",
+            [1],
+            [0, 1],
+        ),
+        (
+            "split_calculation",
+            "Eight packets hold six stickers each, with five loose stickers. How many stickers are there?",
+            [
+                "The packet calculation is 8×6.",
+                "Evaluating it gives 48 stickers in packets.",
+                "The total calculation is 48+5.",
+                "Evaluating it gives 53 stickers.",
+                "Therefore the answer is 53 stickers.",
+            ],
+            "usable",
+            [3],
+            [0, 1, 2, 3],
+        ),
+        (
+            "given_restatement",
+            "Leo read 14 pages Monday and 9 Tuesday, but 4 Tuesday pages were rereads. How many different pages did he read?",
+            [
+                "The daily counts total 14+9=23 pages.",
+                "The problem says that 4 pages were rereads.",
+                "Subtracting the rereads gives 23-4=19 different pages.",
+                "The answer is 19 pages.",
+            ],
+            "usable",
+            [2],
+            [0, 2],
+        ),
+        (
+            "unused_branch",
+            "Two notebooks cost 5 dollars each and three pens cost 2 dollars each. What is the total cost?",
+            [
+                "Three pens cost 3×2=6 dollars.",
+                "The word notebook has eight letters.",
+                "Two notebooks cost 2×5=10 dollars.",
+                "Adding the costs gives 6+10=16 dollars.",
+                "The final answer is 16 dollars.",
+            ],
+            "usable",
+            [3],
+            [0, 2, 3],
+        ),
+        (
+            "duplicate_result",
+            "A shelf has seven rows of four books and two loose books. How many books are there?",
+            [
+                "The rows contain 7×4=28 books.",
+                "So the row count is 28 books.",
+                "Adding the loose books gives 28+2=30 books.",
+                "Thus the answer is 30 books.",
+            ],
+            "usable",
+            [2],
+            [0, 2],
+        ),
+        (
+            "duplicate_equation",
+            "Solve x+7=19 for x.",
+            [
+                "Subtracting 7 from both sides gives x=12.",
+                "Equivalently, x=19-7=12.",
+                "Therefore x=12.",
+            ],
+            "usable",
+            [0],
+            [0],
+        ),
+        (
+            "self_contained_chain",
+            "Five boxes hold eleven cards each, and three loose cards are added. How many cards are there?",
+            [
+                "Five boxes contain 5×11=55 cards.",
+                "Adding the loose cards gives 55+3=58 cards.",
+                "Therefore the answer is 58 cards.",
+            ],
+            "usable",
+            [1],
+            [0, 1],
+        ),
+        (
+            "later_algebra_error",
+            "Solve 3x+5=20 for x.",
+            [
+                "Subtracting 5 gives 3x=15.",
+                "Dividing by 3 gives x=6.",
+                "Therefore x=6.",
+            ],
+            "usable",
+            [1],
+            [0, 1],
+        ),
+        (
+            "decimal_chain",
+            "Four tickets cost 2.50 dollars each and there is a 1.25 dollar fee. What is the total?",
+            [
+                "The tickets cost 4×2.50=10.00 dollars.",
+                "Adding the fee gives 10.00+1.25=11.25 dollars.",
+                "The final answer is 11.25 dollars.",
+            ],
+            "usable",
+            [1],
+            [0, 1],
+        ),
+        (
+            "unused_formula",
+            "A rectangle is 8 meters long and 5 meters wide. What is its area?",
+            [
+                "The perimeter formula is 2(length+width).",
+                "The area is 8×5=40 square meters.",
+                "Therefore the answer is 40 square meters.",
+            ],
+            "usable",
+            [1],
+            [1],
+        ),
+        (
+            "answer_only",
+            "What is 18 plus 9?",
+            ["27"],
+            "no_auditable_reasoning",
+            [],
+            [],
+        ),
+        (
+            "refusal_only",
+            "What is 24 divided by 6?",
+            ["I cannot solve this problem."],
+            "no_auditable_reasoning",
+            [],
+            [],
+        ),
+    ]
+    output = []
+    for name, question, texts, eligibility, key, complete in definitions:
+        output.append(
+            {
+                "schema_version": PACKAGE_SCHEMA,
+                "item_id": stable_priority("clir-prior-v12-control", name),
+                "question": question,
+                "response": "\n".join(texts),
+                "units": [
+                    {
+                        "unit_index": index,
+                        "kind": "material_claim",
+                        "text": text,
+                    }
+                    for index, text in enumerate(texts)
+                ],
+                "expected_signature": (
+                    eligibility,
+                    tuple(key),
+                    tuple(complete),
+                ),
+            }
+        )
+    return output
 
 
 def _proportional_quotas(
@@ -405,6 +626,185 @@ def select_prior_proposals(
     }
 
 
+def build_prior_annotation_shards(
+    proposals: Sequence[Mapping[str, Any]], protocol: Mapping[str, Any]
+) -> tuple[
+    dict[str, list[list[dict[str, Any]]]],
+    list[dict[str, Any]],
+    dict[str, Any],
+]:
+    """Build 16 isolated A/B shards with 50 natural, 1 control, 5 repeats."""
+
+    annotation = protocol["annotation"]
+    shard_count = int(annotation["natural_shards_per_annotator"])
+    natural_per_shard = int(annotation["natural_rows_per_shard"])
+    controls = prior_v12_control_items()
+    repeat_count = int(annotation["self_repeats_total_per_annotator"])
+    if len(proposals) != shard_count * natural_per_shard:
+        raise ValueError("Prior v12 proposal count does not fill annotation shards")
+    if len(controls) != int(annotation["hidden_controls_total_per_annotator"]):
+        raise ValueError("Prior v12 hidden-control count drift")
+    if repeat_count % shard_count:
+        raise ValueError("Prior v12 repeats do not divide evenly across shards")
+    repeats_per_shard = repeat_count // shard_count
+    namespace = "clir-prior-v12"
+    package_a, package_b, private, base_report = build_blind_packages(
+        proposals,
+        repeat_count_a=repeat_count,
+        repeat_count_b=repeat_count,
+        namespace=namespace,
+        package_schema=PACKAGE_SCHEMA,
+        private_schema=PRIVATE_SCHEMA,
+        control_items=controls,
+    )
+    private_lookup = {
+        (str(row["annotator"]), str(row["item_id"])): row for row in private
+    }
+    if len(private_lookup) != len(private):
+        raise ValueError("Prior v12 private item identities are not unique")
+    natural_ids = sorted(
+        (str(row["proposal_id"]) for row in proposals),
+        key=lambda item_id: stable_priority(
+            f"{namespace}-natural-shard-order", item_id
+        ),
+    )
+    natural_shard = {
+        item_id: index // natural_per_shard
+        for index, item_id in enumerate(natural_ids)
+    }
+    control_ids = sorted(
+        (str(row["item_id"]) for row in controls),
+        key=lambda item_id: stable_priority(
+            f"{namespace}-control-shard-order", item_id
+        ),
+    )
+    control_shard = {item_id: index for index, item_id in enumerate(control_ids)}
+
+    packages: dict[str, list[list[dict[str, Any]]]] = {}
+    enriched_private: list[dict[str, Any]] = []
+    for annotator, flat in (("a", package_a), ("b", package_b)):
+        repeat_ids = sorted(
+            (
+                str(row["item_id"])
+                for row in private
+                if row["annotator"] == annotator and row["kind"] == "repeat"
+            ),
+            key=lambda item_id: stable_priority(
+                f"{namespace}-{annotator}-repeat-shard-order", item_id
+            ),
+        )
+        repeat_parent_shard = {
+            item_id: natural_shard[
+                str(private_lookup[(annotator, item_id)]["natural_item_id"])
+            ]
+            for item_id in repeat_ids
+        }
+        repeat_slots = [
+            (shard_index, slot_index)
+            for shard_index in range(shard_count)
+            for slot_index in range(repeats_per_shard)
+        ]
+        slot_owner: dict[tuple[int, int], str] = {}
+
+        def assign_repeat(item_id: str, seen: set[tuple[int, int]]) -> bool:
+            ordered_slots = sorted(
+                repeat_slots,
+                key=lambda slot: stable_priority(
+                    f"{namespace}-{annotator}-repeat-slot",
+                    item_id,
+                    slot[0],
+                    slot[1],
+                ),
+            )
+            for slot in ordered_slots:
+                if slot[0] == repeat_parent_shard[item_id] or slot in seen:
+                    continue
+                seen.add(slot)
+                previous = slot_owner.get(slot)
+                if previous is None or assign_repeat(previous, seen):
+                    slot_owner[slot] = item_id
+                    return True
+            return False
+
+        for item_id in repeat_ids:
+            if not assign_repeat(item_id, set()):
+                raise AssertionError("Prior v12 could not isolate blind repeats")
+        if len(slot_owner) != repeat_count:
+            raise AssertionError("Prior v12 repeat-slot population drift")
+        repeat_shard = {
+            item_id: shard_index
+            for (shard_index, _), item_id in slot_owner.items()
+        }
+        if any(
+            repeat_shard[item_id] == repeat_parent_shard[item_id]
+            for item_id in repeat_ids
+        ):
+            raise AssertionError("Prior v12 repeat shares its natural parent shard")
+        shards: list[list[dict[str, Any]]] = [[] for _ in range(shard_count)]
+        for raw in flat:
+            row = dict(raw)
+            item_id = str(row["item_id"])
+            hidden = private_lookup[(annotator, item_id)]
+            kind = str(hidden["kind"])
+            if kind == "natural":
+                shard_index = natural_shard[item_id]
+            elif kind == "control":
+                shard_index = control_shard[item_id]
+            elif kind == "repeat":
+                shard_index = repeat_shard[item_id]
+            else:
+                raise ValueError(f"unsupported Prior v12 package kind: {kind}")
+            shards[shard_index].append(row)
+            private_row = dict(hidden)
+            private_row["annotation_shard_id"] = f"{annotator}-{shard_index:02d}"
+            enriched_private.append(private_row)
+        for shard_index, rows in enumerate(shards):
+            rows.sort(
+                key=lambda row: stable_priority(
+                    f"{namespace}-{annotator}-shard-{shard_index:02d}",
+                    str(row["item_id"]),
+                )
+            )
+            kinds = Counter(
+                str(private_lookup[(annotator, str(row["item_id"]))]["kind"])
+                for row in rows
+            )
+            expected = {
+                "natural": natural_per_shard,
+                "control": 1,
+                "repeat": repeats_per_shard,
+            }
+            if dict(kinds) != expected:
+                raise AssertionError(
+                    f"Prior v12 shard {annotator}-{shard_index:02d} drift: {kinds}"
+                )
+        packages[annotator] = shards
+    enriched_private.sort(
+        key=lambda row: (str(row["annotator"]), str(row["item_id"]))
+    )
+    report = {
+        **base_report,
+        "shards_per_annotator": shard_count,
+        "natural_per_shard": natural_per_shard,
+        "controls_per_shard": 1,
+        "repeats_per_shard": repeats_per_shard,
+        "rows_per_shard": natural_per_shard + 1 + repeats_per_shard,
+        "annotator_shards": {
+            annotator: [
+                {
+                    "shard_id": f"{annotator}-{index:02d}",
+                    "rows": len(rows),
+                    "ordered_rows_sha256": canonical_sha256(rows),
+                }
+                for index, rows in enumerate(shards)
+            ]
+            for annotator, shards in packages.items()
+        },
+        "private_index_ordered_rows_sha256": canonical_sha256(enriched_private),
+    }
+    return packages, enriched_private, report
+
+
 __all__ = [
     "LABEL_SCHEMA",
     "PACKAGE_SCHEMA",
@@ -413,6 +813,8 @@ __all__ = [
     "PROTOCOL_SCHEMA",
     "QUERY_SCHEMA",
     "build_acquisition_shards",
+    "build_prior_annotation_shards",
+    "prior_v12_control_items",
     "select_acquisition_queries",
     "select_prior_proposals",
 ]

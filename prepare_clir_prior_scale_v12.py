@@ -29,10 +29,13 @@ from prepare_clir_ranking import (
     load_protocol as load_base_protocol,
 )
 from src.clir_prior_consensus_scale import (
+    PACKAGE_SCHEMA,
+    PRIVATE_SCHEMA,
     PROTOCOL_SCHEMA,
     PROPOSAL_SCHEMA,
     QUERY_SCHEMA,
     build_acquisition_shards,
+    build_prior_annotation_shards,
     select_acquisition_queries,
     select_prior_proposals,
 )
@@ -65,6 +68,15 @@ DEFAULT_PRE_ANNOTATION_AUTHORIZATION = (
 )
 DEFAULT_ROLLOUT_ROOT = PROJECT_ROOT / "run_artifacts/data_expansion_prior_v12"
 DEFAULT_PRE_ANNOTATION_ROOT = DEFAULT_ROLLOUT_ROOT / "pre_annotation"
+DEFAULT_ANNOTATION_PROMPT = (
+    PROJECT_ROOT / "configs/data_expansion_prior_v12/annotation_prompt.md"
+)
+DEFAULT_LAUNCH_PROMPT_A = (
+    PROJECT_ROOT / "configs/data_expansion_prior_v12/launch_prompt_a.txt"
+)
+DEFAULT_LAUNCH_PROMPT_B = (
+    PROJECT_ROOT / "configs/data_expansion_prior_v12/launch_prompt_b.txt"
+)
 
 
 def _utc_now() -> str:
@@ -1564,6 +1576,279 @@ def command_verify_proposals(args: argparse.Namespace) -> None:
     print(json.dumps(verification, ensure_ascii=False, indent=2))
 
 
+def _annotation_package_path(
+    pre_annotation_root: Path, annotator: str, shard_index: int
+) -> Path:
+    return (
+        pre_annotation_root
+        / f"packages/annotator_{annotator}/prior_v12_{annotator}_{shard_index:02d}.jsonl"
+    )
+
+
+def _assert_no_annotation_labels(pre_annotation_root: Path) -> None:
+    existing = []
+    for directory_name in ("labels_a", "labels_b"):
+        directory = pre_annotation_root / directory_name
+        if directory.exists():
+            existing.extend(path for path in directory.rglob("*") if path.is_file())
+    if existing:
+        raise ValueError(
+            "Prior v12 package readiness requires zero annotation labels: "
+            f"found {len(existing)} files"
+        )
+
+
+def _recompute_annotation_packages(
+    protocol: Mapping[str, Any], pre_annotation_root: Path
+) -> tuple[
+    dict[str, list[list[dict[str, Any]]]],
+    list[dict[str, Any]],
+    dict[str, Any],
+    dict[str, Any],
+]:
+    proposal_path = pre_annotation_root / "proposals/prior_natural_800.jsonl"
+    proposals, proposal_sidecar = _read_published_jsonl(
+        proposal_path, expected_schema=PROPOSAL_SCHEMA
+    )
+    verification_path = pre_annotation_root / "proposals/independent_verification.json"
+    verification = json.loads(verification_path.read_text(encoding="utf-8"))
+    if verification.get("status") != (
+        "PASS_PRIOR_V12_PROPOSAL_INDEPENDENT_RECOMPUTE"
+    ):
+        raise ValueError("Prior v12 proposal verification is not PASS")
+    if verification.get("proposal_file_sha256") != proposal_sidecar["file_sha256"]:
+        raise ValueError("Prior v12 proposal verification binding drift")
+    packages, private, construction = build_prior_annotation_shards(
+        proposals, protocol
+    )
+    return packages, private, construction, proposal_sidecar
+
+
+def command_build_packages(args: argparse.Namespace) -> None:
+    if _git_dirty():
+        raise RuntimeError("Prior v12 package construction requires a clean Git commit")
+    protocol, _, _, pre_annotation_root = _load_pre_annotation_contract(args)
+    _assert_no_annotation_labels(pre_annotation_root)
+    package_root = pre_annotation_root / "packages"
+    report_path = package_root / "package_report.json"
+    verification_path = package_root / "independent_verification.json"
+    private_path = package_root / "PRIVATE_package_index.jsonl"
+    if package_root.exists() and any(package_root.rglob("*")):
+        raise FileExistsError("Prior v12 annotation package artifacts already exist")
+    for required in (
+        DEFAULT_ANNOTATION_PROMPT,
+        DEFAULT_LAUNCH_PROMPT_A,
+        DEFAULT_LAUNCH_PROMPT_B,
+    ):
+        if not required.is_file():
+            raise FileNotFoundError(required)
+    packages, private, construction, proposal_sidecar = (
+        _recompute_annotation_packages(protocol, pre_annotation_root)
+    )
+    code_commit = _git_head()
+    protocol_path = Path(args.protocol).resolve()
+    metadata = {
+        "protocol_file_sha256": file_sha256(protocol_path),
+        "proposal_file_sha256": proposal_sidecar["file_sha256"],
+        "proposal_ordered_rows_sha256": proposal_sidecar["ordered_rows_sha256"],
+        "annotation_prompt_file_sha256": file_sha256(DEFAULT_ANNOTATION_PROMPT),
+        "code_commit": code_commit,
+        "labels_are_gold": False,
+        "human_verification": False,
+    }
+    manifests: dict[str, dict[str, Any]] = {}
+    for annotator in ("a", "b"):
+        for shard_index, rows in enumerate(packages[annotator]):
+            key = f"{annotator}-{shard_index:02d}"
+            manifests[key] = publish_manifest(
+                _annotation_package_path(
+                    pre_annotation_root, annotator, shard_index
+                ),
+                rows,
+                schema_version=PACKAGE_SCHEMA,
+                metadata={**metadata, "annotation_shard_id": key},
+            )
+    private_manifest = publish_manifest(
+        private_path,
+        private,
+        schema_version=PRIVATE_SCHEMA,
+        metadata={
+            **metadata,
+            "visibility": "PRIVATE_NEVER_SEND_TO_ANNOTATORS",
+        },
+    )
+    report = {
+        "schema_version": "clir-prior-v12-package-report",
+        "status": "PASS_PRIOR_V12_BLIND_ANNOTATION_SHARDS_READY",
+        "protocol_file_sha256": file_sha256(protocol_path),
+        "pre_annotation_authorization_file_sha256": file_sha256(
+            Path(args.pre_annotation_authorization).resolve()
+        ),
+        "proposal_file_sha256": proposal_sidecar["file_sha256"],
+        "proposal_verification_file_sha256": file_sha256(
+            pre_annotation_root / "proposals/independent_verification.json"
+        ),
+        "annotation_prompt": {
+            "path": str(DEFAULT_ANNOTATION_PROMPT.resolve()),
+            "file_sha256": file_sha256(DEFAULT_ANNOTATION_PROMPT),
+        },
+        "launch_prompts": {
+            "a_file_sha256": file_sha256(DEFAULT_LAUNCH_PROMPT_A),
+            "b_file_sha256": file_sha256(DEFAULT_LAUNCH_PROMPT_B),
+        },
+        "code_commit": code_commit,
+        "construction": construction,
+        "public_shards": {
+            key: {
+                "path": manifest["path"],
+                "row_count": manifest["row_count"],
+                "file_sha256": manifest["file_sha256"],
+                "sidecar_file_sha256": file_sha256(
+                    Path(manifest["path"]).with_suffix(
+                        Path(manifest["path"]).suffix + ".manifest.json"
+                    )
+                ),
+                "ordered_rows_sha256": manifest["ordered_rows_sha256"],
+            }
+            for key, manifest in sorted(manifests.items())
+        },
+        "private_index": {
+            "path": private_manifest["path"],
+            "row_count": private_manifest["row_count"],
+            "file_sha256": private_manifest["file_sha256"],
+            "sidecar_file_sha256": file_sha256(
+                private_path.with_suffix(private_path.suffix + ".manifest.json")
+            ),
+            "ordered_rows_sha256": private_manifest["ordered_rows_sha256"],
+        },
+        "natural_rows_per_annotator": int(protocol["proposal_pool"]["natural_count"]),
+        "rows_per_annotator": sum(
+            len(rows) for rows in packages["a"]
+        ),
+        "annotation_started": False,
+        "feature_extraction_started": False,
+        "training_started": False,
+        "claim_boundary": (
+            "blind package readiness only; no label accuracy, Prior learnability, "
+            "gate efficacy, Best-of-N, or Full evidence"
+        ),
+        "next_gate": "independent_package_recompute_then_user_launches_two_blind_annotators",
+    }
+    atomic_write_json(report_path, report)
+    if verification_path.exists():
+        raise FileExistsError("Prior v12 package verification unexpectedly exists")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def command_verify_packages(args: argparse.Namespace) -> None:
+    protocol, _, _, pre_annotation_root = _load_pre_annotation_contract(args)
+    _assert_no_annotation_labels(pre_annotation_root)
+    packages, private, construction, proposal_sidecar = (
+        _recompute_annotation_packages(protocol, pre_annotation_root)
+    )
+    package_root = pre_annotation_root / "packages"
+    report_path = package_root / "package_report.json"
+    published = json.loads(report_path.read_text(encoding="utf-8"))
+    mismatches: list[str] = []
+    expected_public_paths: set[Path] = set()
+    public_hashes: dict[str, str] = {}
+    for annotator in ("a", "b"):
+        for shard_index, expected_rows in enumerate(packages[annotator]):
+            key = f"{annotator}-{shard_index:02d}"
+            path = _annotation_package_path(
+                pre_annotation_root, annotator, shard_index
+            )
+            expected_public_paths.add(path.resolve())
+            actual_rows, sidecar = _read_published_jsonl(
+                path, expected_schema=PACKAGE_SCHEMA
+            )
+            if canonical_sha256(actual_rows) != canonical_sha256(expected_rows):
+                mismatches.append(key)
+            if any(
+                set(row)
+                != {"schema_version", "item_id", "question", "response", "units"}
+                for row in actual_rows
+            ):
+                mismatches.append(f"{key}:public_field_leak")
+            public_hashes[key] = sidecar["file_sha256"]
+    actual_public_paths = {
+        path.resolve()
+        for annotator in ("a", "b")
+        for path in (package_root / f"annotator_{annotator}").glob("*.jsonl")
+    }
+    if actual_public_paths != expected_public_paths:
+        mismatches.append("public_file_population")
+    private_path = package_root / "PRIVATE_package_index.jsonl"
+    actual_private, private_sidecar = _read_published_jsonl(
+        private_path, expected_schema=PRIVATE_SCHEMA
+    )
+    if canonical_sha256(actual_private) != canonical_sha256(private):
+        mismatches.append("private_index")
+    expected_report_bindings = {
+        "status": "PASS_PRIOR_V12_BLIND_ANNOTATION_SHARDS_READY",
+        "protocol_file_sha256": file_sha256(Path(args.protocol).resolve()),
+        "proposal_file_sha256": proposal_sidecar["file_sha256"],
+        "construction": construction,
+    }
+    for key, expected in expected_report_bindings.items():
+        if published.get(key) != expected:
+            mismatches.append(f"report:{key}")
+    if published.get("annotation_prompt", {}).get("file_sha256") != file_sha256(
+        DEFAULT_ANNOTATION_PROMPT
+    ):
+        mismatches.append("annotation_prompt_hash")
+    expected_launch_hashes = {
+        "a_file_sha256": file_sha256(DEFAULT_LAUNCH_PROMPT_A),
+        "b_file_sha256": file_sha256(DEFAULT_LAUNCH_PROMPT_B),
+    }
+    if published.get("launch_prompts") != expected_launch_hashes:
+        mismatches.append("launch_prompt_hashes")
+    for key, actual_hash in public_hashes.items():
+        if published.get("public_shards", {}).get(key, {}).get(
+            "file_sha256"
+        ) != actual_hash:
+            mismatches.append(f"report:{key}:file_sha256")
+    if published.get("private_index", {}).get(
+        "file_sha256"
+    ) != private_sidecar["file_sha256"]:
+        mismatches.append("report:private_index:file_sha256")
+    verification = {
+        "schema_version": "clir-prior-v12-package-verification",
+        "status": (
+            "PASS_PRIOR_V12_PACKAGE_INDEPENDENT_RECOMPUTE"
+            if not mismatches
+            else "FAIL_PRIOR_V12_PACKAGE_INDEPENDENT_RECOMPUTE"
+        ),
+        "mismatches": mismatches,
+        "protocol_file_sha256": file_sha256(Path(args.protocol).resolve()),
+        "proposal_file_sha256": proposal_sidecar["file_sha256"],
+        "package_report_file_sha256": file_sha256(report_path),
+        "annotation_prompt_file_sha256": file_sha256(DEFAULT_ANNOTATION_PROMPT),
+        "published_code_commit": published.get("code_commit"),
+        "verified_at_code_commit": _git_head(),
+        "public_shards": len(public_hashes),
+        "rows_per_public_shard": int(construction["rows_per_shard"]),
+        "public_rows_total": sum(
+            len(rows)
+            for annotator in ("a", "b")
+            for rows in packages[annotator]
+        ),
+        "private_rows": len(private),
+        "labels_present": False,
+        "next_gate": "user_runs_annotator_a_and_b_in_separate_blind_contexts",
+    }
+    verification_path = package_root / "independent_verification.json"
+    if verification_path.exists():
+        old = json.loads(verification_path.read_text(encoding="utf-8"))
+        if old != verification:
+            raise ValueError("Prior v12 package verification drift")
+    else:
+        atomic_write_json(verification_path, verification)
+    print(json.dumps(verification, ensure_ascii=False, indent=2))
+    if mismatches:
+        raise SystemExit(1)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-protocol", default=str(DEFAULT_BASE_PROTOCOL))
@@ -1609,6 +1894,10 @@ def build_parser() -> argparse.ArgumentParser:
     proposals.set_defaults(func=command_select_proposals)
     verify_proposals = subparsers.add_parser("verify-proposals")
     verify_proposals.set_defaults(func=command_verify_proposals)
+    packages = subparsers.add_parser("build-packages")
+    packages.set_defaults(func=command_build_packages)
+    verify_packages = subparsers.add_parser("verify-packages")
+    verify_packages.set_defaults(func=command_verify_packages)
     return parser
 
 

@@ -1,0 +1,18 @@
+你是 CLIR Prior v12 的独立标注者 B，模型身份记录为 Claude Opus 5、high。请在这个独立上下文中完成全部 16 个公开 shard。
+
+先完整读取标注规则：
+/prodcpfs/user/panzhixin/ICLR_2027/configs/data_expansion_prior_v12/annotation_prompt.md
+
+然后按编号 00 到 15，逐个读取且只读取以下目录中的公开盲包：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v12/pre_annotation/packages/annotator_b/prior_v12_b_00.jsonl
+……
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v12/pre_annotation/packages/annotator_b/prior_v12_b_15.jsonl
+
+每个输入文件固定 56 行。请为每个 shard 单独写出对应结果，不要合并文件：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v12/pre_annotation/labels_b/prior_v12_b_00.jsonl
+……
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v12/pre_annotation/labels_b/prior_v12_b_15.jsonl
+
+可以创建 labels_b 目录，但不要修改输入、协议、代码或任何现有产物。不要读取任何 `PRIVATE_*` 文件、annotator_a 目录、labels_a、历史标签、checker 或参考答案。每行都必须先按规则重新验算全部 unit，再标 singleton Key 和 canonical Complete。
+
+全部写完后自行机械检查：恰好 16 个输出文件，每个 56 行，总计 896 行；每个输出文件的 item_id 集合与同编号输入完全一致且无重复；每行均为合法单行 JSON；无 Markdown、代码围栏或额外字段。发现格式或漏行问题时只修对应输出文件，不能查看任何被禁止的信息。

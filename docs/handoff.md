@@ -749,6 +749,33 @@ first-bad-token detector。CH0 的 token/path AUROC 为 `.8630/.8413`，略低�
 `d80fff82adeeaf84a72e9c867811e90519d52c241da12840213731dd104d291e`。原始
 `FAIL_H0_V7_RESERVE` 与全部淘汰行仍保留，结果不覆盖它。
 
+### Dual Prior v8 依赖图 smoke 准备状态
+
+Prior 仍是最后一个没有完成独立扩标的模块：历史可训练数据只有 48 条。v3 的
+Key/Complete F1 虽为 `.9167/.9267`，但 exact joint 只有 25/60、最低裁决比例
+35/60=`.5833`。因此 v8 按 v6 交接建议改标注对象：AI 不直接输出 Key/Complete，而是输出
+parent→child 依赖边、直接结论 unit 和错误路径的 first flaw；代码把 conclusion 的反向
+传递闭包固定为 Complete，supported 的 conclusion 或 flawed 的 first flaw 固定为 Key。
+
+代码、协议、双 AI 提示和 fail-closed evaluator 已在 clean commit
+`3d3ff0209e6416667652abfce44cd4e34871958c` 冻结。只读复用 v6 已 materialize 的
+16,000 rows，不重新 rollout：排除 v6.1 C inventory 的 612 query/602 cluster，并确认整个
+v6 pool 与 v7 H/ranking 的 query/cluster 都零重合。发布结果为 60 natural、60 distinct
+query/cluster，GSM8K/MATH × numeric match/mismatch 各 15；A 包 78 行，B 包 66 行。
+
+natural/A/B/private ordered hashes 分别为 `42875e17…1695`、`33f5aa16…f8dc`、
+`43d0e2aa…6380`、`c801fe4d…2796`。准备状态
+`PASS_PRIOR_DEPENDENCY_SMOKE_V8_PACKAGES_READY`，独立复算
+`PASS_PRIOR_DEPENDENCY_SMOKE_V8_RECOMPUTATION`。当前没有标签；协议仍写明 annotation、
+adjudication、feature extraction 和 training 未授权。发送时只能把 annotator_a 的公开单 shard
+给 GPT-5.6-sol xhigh，把 annotator_b 的公开单 shard 给 Claude Opus 5 high，绝不能发送
+`PRIVATE_package_index.jsonl`。
+
+raw 门要求 eligibility≥.95、common usable≥50、path≥.90、Key/Complete F1 均≥.90、
+非低置信 exact derived target≥42/60、裁决下界≤.30、两边 controls 6/6、A repeat≥.95，
+并有 first-flaw 与 Complete 非全集退化门。任一失败即停止，不用第三模型救 smoke。通过也
+只解锁另行冻结的 400-train/150-heldout scale 协议，不直接解锁 P0/P1/gate 训练或 Full。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
@@ -766,7 +793,9 @@ first-bad-token detector。CH0 的 token/path AUROC 为 `.8630/.8413`，略低�
   600 条是用户授权的事后严格共识探索子集，不是原协议成功，也没有人工准确率保证。
   新结果支持 tail/path 风险可学和正向排序点信号，但 exact onset 为 0、±5 只有 4%，
   Best-of-N 增益区间跨 0；恢复的 main gold-tail 也仍未通过 locality/ranking 门。
-- dual prior 只有 48 条历史 Key/Complete 标注 trajectory；clean direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
+- dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8 的 60 条 dependency smoke
+  只完成选样/建包/复算，尚未产生标签。clean direct target 可学，但 mutual 增量与 ranking
+  improvement 都未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -784,7 +813,9 @@ first-bad-token detector。CH0 的 token/path AUROC 为 `.8630/.8413`，略低�
 3. 下一轮若要确认 H0，应重新预注册并采一批独立 H train/dev 与 ranking population，优先
    把目标表述为 tail/path 风险；若研究目标仍要求精确 onset，先修改/验证 label target 与
    解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
-4. Prior 扩量继续作为独立工作流；H1、Dual Prior 和 Full 没有被本轮 v7.4 重新验证。
+4. Prior v8 的两个公开单 shard 已准备并复算；下一步是在用户确认后分别交给
+   GPT-5.6-sol xhigh 与 Claude Opus 5 high，先过 raw gate，再决定是否另冻 scale 协议。
+   H1、Dual Prior 效果和 Full 没有被包准备工作重新验证。
 
 当前裁决是：Consistency 有部分 held-out relation 机制证据；v7.4 证明严格 H 子集能学到
 tail/path 风险，并给出 H0 最好的 ranking 点估计，但增益区间跨 0、精确 onset 失败；

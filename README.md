@@ -15,7 +15,7 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 48 条与 H 共用的轨迹、每个 head 14,307 个 token 标签 | 是，但有效独立样本仍只有 48 条 | 双 AI 标 Key（最关键步骤）和 Complete（支撑结论所需步骤集合） |
+| Dual Prior | 历史可训练 48 条；v8 另有 60 条 dependency smoke 盲包待标 | 现在仍只能训练历史 48 条，v8 尚无标签 | 旧版让 AI 直接选 Key/Complete；v8 改成 AI 标依赖边和结论/首错锚点，再由程序确定性生成两个集合 |
 
 失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。
 
@@ -776,6 +776,32 @@ seed 44 又明显塌到 `79.48%`，所以只能说“严格子集有可用排序
 最终汇总状态是 `COMPLETE_H0_V7_4_POSTHOC_EXPLORATORY_EVALUATION`，本地 summary
 SHA-256 为 `d80fff82…291e`。这是扩大后的探索性 Silver 复测，不是原 v7 翻盘，也不是
 Gold、人工验证、protected-test 或 H1/Prior/Full 的证据。
+
+### Dual Prior 扩量 v8（60 条依赖图 smoke 已备好，尚未标注）
+
+历史 Prior 只有 48 条可训练轨迹。v3 虽然 Key/Complete F1 达到 `.9167/.9267`，但只有
+25/60 条两个集合同时完全一致，最低需裁决比例 `35/60=.5833`，主要问题是两位 AI 对
+Complete 应该包含多宽判断不一。v8 不再让 AI 直接猜集合：AI 只标“哪一步依赖哪一步”、
+哪一步直接得到结论，以及错误链的第一个致命错误；程序统一从 conclusion 向前求传递闭包
+得到 Complete，再得到 Key。
+
+协议见 [`docs/data_expansion_prior_protocol_v8.md`](docs/data_expansion_prior_protocol_v8.md)，
+入口是 `prepare_clir_prior.py`。本轮复用已经通过 checker/unitizer 的 v6 16,000-row 池，
+排除新 Consistency 使用的全部 612 个 query/602 个 cluster，并核验与 v7 H/ranking
+query/cluster 零重合。最终冻结 60 个不同 query、60 个不同 cluster，GSM8K/MATH ×
+numeric match/mismatch 四格各 15 条；选样不看 AI 标签或 CLIR 分数。
+
+公开 A/B 盲包分别为 78/66 行（每边 60 natural +6 hidden controls，A 另有 12 blind
+repeats），已在 clean commit `3d3ff02` 上发布并独立复算通过：
+
+- natural ordered SHA-256：`42875e17…1695`；
+- A/B package ordered SHA-256：`33f5aa16…f8dc` / `43d0e2aa…6380`；
+- 状态：`PASS_PRIOR_DEPENDENCY_SMOKE_V8_PACKAGES_READY`；
+- 独立复算：`PASS_PRIOR_DEPENDENCY_SMOKE_V8_RECOMPUTATION`。
+
+现在只是“包准备好了”，没有 Prior v8 标签，也没有解锁 feature、训练、gate 或 Full。
+若双 AI raw 门全部通过，下一步也只是另冻一个 train 400 / heldout 150 的 scale 协议；
+随后依次验证 P0 direct、P1 mutual，以及 gate-off 对固定 `.25`，不再扫描 gate 权重。
 
 ## Toy smoke test
 

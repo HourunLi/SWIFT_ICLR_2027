@@ -1,0 +1,161 @@
+{
+  "schema_version": "clir-prior-dependency-smoke-v8",
+  "status": "FROZEN_PRE_ANNOTATION_PREPARATION",
+  "frozen_at_utc": "2026-08-31",
+  "scope": "prior_dependency_graph_smoke_before_scale",
+  "evidence_tier": "preregistered_pipeline_smoke",
+  "canonical_document": "docs/data_expansion_prior_protocol_v8.md",
+  "parent_artifacts": {
+    "v6_materialized_rows": {
+      "path": "run_artifacts/data_expansion_scale_v6/pre_annotation/materialized/combined_rows.jsonl",
+      "file_sha256": "ca37d0273a3928053efb7e1804e01c6d5d2fdddf7f6bd9ab750aa1f6bb8ea4fd",
+      "rows": 16000,
+      "queries": 2000,
+      "checker_version": "clir_numeric_multisource_v3",
+      "unitizer_version": "clir_material_claim_unitizer_v2"
+    },
+    "v6_consistency_selected_inventory": {
+      "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/selected_feature_inventory.jsonl",
+      "file_sha256": "0e3c796d62e1b5024ab6619ed7626054a98dec5850c8532b5982f7f9dd4528db",
+      "rows": 1357,
+      "queries": 612,
+      "use": "query_and_template_cluster_exclusion_only"
+    },
+    "v7_h_selected_rows": {
+      "path": "run_artifacts/ranking_expansion_v7/pre_annotation/salvage_v7_4/h_salvage_selected_all.jsonl",
+      "file_sha256": "b3aecfe8eec3c59d047a47f693b3d70e9a3dd59f53216f266d4d8c77fd7d7650",
+      "rows": 600,
+      "use": "read_only_overlap_audit"
+    },
+    "v7_ranking_evaluation_rows": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/ranking_evaluation.jsonl",
+      "file_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7",
+      "rows": 14272,
+      "queries": 892,
+      "use": "read_only_overlap_audit"
+    }
+  },
+  "selection": {
+    "natural_count": 60,
+    "acquisition_split": "train_acquisition_only",
+    "one_trajectory_per_query": true,
+    "one_query_per_template_cluster": true,
+    "exclude_all_v6_consistency_selected_queries_and_clusters": true,
+    "minimum_material_claims": 6,
+    "maximum_material_claims": 40,
+    "requires_supervision_eligible_normal_stop_exact_unitization": true,
+    "strata": [
+      {"source": "gsm8k", "checker_status": "numeric_match", "count": 15},
+      {"source": "gsm8k", "checker_status": "numeric_mismatch", "count": 15},
+      {"source": "math", "checker_status": "numeric_match", "count": 15},
+      {"source": "math", "checker_status": "numeric_mismatch", "count": 15}
+    ],
+    "annotators_cannot_see_source_checker_reference_or_selection_stratum": true,
+    "selection_does_not_use_clir_score_or_ai_label": true,
+    "smoke_queries_permanently_burned_for_prompt_development": true
+  },
+  "annotation_target": {
+    "annotator_outputs": [
+      "eligibility",
+      "path_status",
+      "conclusion_unit_indices",
+      "dependency_edges",
+      "first_flaw_unit_index",
+      "confidence",
+      "rationale"
+    ],
+    "complete_derivation": "backward_transitive_closure_from_conclusion_units_over_parent_to_child_dependency_edges",
+    "key_derivation_supported": "conclusion_unit_indices",
+    "key_derivation_flawed": "singleton_first_flaw_unit_on_complete_closure",
+    "uncertain_is_not_trainable": true,
+    "premise_restatement_plan_unused_branch_duplicate_equation_and_final_wrapper_excluded_unless_causally_used": true,
+    "candidate_actual_path_not_shortest_recomputed_proof": true
+  },
+  "packages": {
+    "natural_per_annotator": 60,
+    "hidden_controls_per_annotator": 6,
+    "annotator_a_self_repeats": 12,
+    "annotator_a_rows": 78,
+    "annotator_b_rows": 66,
+    "single_shard_per_annotator": true,
+    "different_deterministic_blind_order": true,
+    "private_manifest_must_not_be_sent": true
+  },
+  "annotators": {
+    "a": {
+      "user_reported_model": "gpt-5.6-sol",
+      "reasoning_effort": "xhigh",
+      "model_family": "OpenAI GPT",
+      "exact_revision": "unverified",
+      "temperature": "unverified"
+    },
+    "b": {
+      "user_reported_model": "claude-opus-5",
+      "reasoning_effort": "high",
+      "model_family": "Anthropic Claude",
+      "exact_revision": "unverified",
+      "temperature": "unverified"
+    },
+    "different_non_phi_families_required": true,
+    "independent_new_contexts_required": true,
+    "no_cross_model_or_h_label_visibility": true
+  },
+  "raw_gates": {
+    "eligibility_agreement_min": 0.95,
+    "common_usable_min": 50,
+    "path_agreement_min": 0.90,
+    "key_macro_f1_min": 0.90,
+    "complete_macro_f1_min": 0.90,
+    "exact_training_consensus_min": 42,
+    "exact_training_consensus_rate_min": 0.70,
+    "minimum_adjudication_fraction_max": 0.30,
+    "common_flawed_min": 12,
+    "first_flaw_exact_rate_min": 0.75,
+    "controls_exact_required_per_annotator": "6/6",
+    "self_repeat_min": 0.95,
+    "complete_all_material_rate_max": 0.25,
+    "all_natural_rows_remain_in_denominator": true,
+    "raw_failure_action": "STOP_NO_ADJUDICATION_NO_SCALE_NO_FEATURES_NO_TRAINING"
+  },
+  "scale_unlock_if_all_raw_gates_pass": {
+    "action": "freeze_a_separate_uninspected_scale_protocol",
+    "target_train_rows": 400,
+    "target_heldout_rows": 150,
+    "allowed_range_train": [300, 500],
+    "allowed_range_heldout": [100, 200],
+    "scale_queries_must_exclude_all_smoke_queries_and_clusters": true,
+    "final_train_labels_require_exact_non_low_a_b_derived_target_consensus": true,
+    "no_third_model_rescue_by_default": true
+  },
+  "future_training_order": {
+    "first": "direct_key_complete_P0_learnability",
+    "second": "mutual_prior_P1_increment",
+    "third": "fixed_gate_off_vs_gate_prior_weight_0.25",
+    "gate_weight_tuning_forbidden": true,
+    "new_query_disjoint_ranking_population_required_for_gate_efficacy": true,
+    "full_integration_not_unlocked_by_smoke": true
+  },
+  "execution_authorization": {
+    "read_only_parent_audit_allowed": true,
+    "deterministic_smoke_selection_and_package_preparation_allowed": true,
+    "annotation_allowed": false,
+    "adjudication_allowed": false,
+    "feature_extraction_allowed": false,
+    "training_allowed": false,
+    "next_authorization": "user_sends_exactly_one_public_package_to_each_primary_annotator_after_package_verification"
+  },
+  "claim_boundary": {
+    "planned_label_name": "silver_dual_ai_dependency_prior_v8",
+    "planned_labels_are_gold": false,
+    "human_verification": false,
+    "smoke_pass_means": "dependency_target_operability_and_stability_only",
+    "smoke_pass_does_not_mean": [
+      "natural_label factual accuracy",
+      "Prior learnability",
+      "mutual Prior benefit",
+      "gate efficacy",
+      "Best-of-N efficacy",
+      "Full integration efficacy"
+    ]
+  }
+}

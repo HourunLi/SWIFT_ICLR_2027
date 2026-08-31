@@ -921,6 +921,27 @@ Complete，B 的 29 个里 27 个仅改变 Complete。A 漏掉的 5 个 controls
 候选 yield。按冻结协议不发布 500 条 target、不事后挑 687 条、273 条 exact-Complete 或其他子集，
 不重标、不加 rollout、不降门、不抽 feature、不训练。
 
+### Prior v13 机械局部审核烟测
+
+用户授权“试一下，不然再考虑拿 v12 训练”，但这不改写 v12 的终局。只读回放显示，单纯把
+unit 投影到较大 block 几乎没有帮助：A Complete repeat `51/80→51/80`，B 仅
+`51/80→53/80`。因此 v13 前瞻性改了标注对象：机器安全合并碎片、提示角色、每个 child 最多
+提出两个 parent；AI 审核 `main_step/premise/formula/duplicate/wrapper/unused_branch`、局部边、
+最终 block 和 raw-unit singleton Key，程序机械回溯得到 Complete。AI 不再直接输出 Complete。
+
+冻结协议是 `configs/data_expansion_prior_v13/protocol.json`，说明在
+`docs/data_expansion_prior_protocol_v13.md`，入口为 `prepare_clir_prior_mechanical_v13.py`，
+实现 commit 为 `83775b769b550a23efa3b35ff5773c479fafd230`。从 v12 从未送标的 acquisition train
+轨迹中确定性抽了 48 条，排除 v12 800 proposal 的全部 query/cluster；八个
+GSM8K/MATH × match/mismatch × medium/long 格各 6 条，48 个 query/cluster 全不重复。
+
+A/B 各 4 shard，每 shard 12 natural +2 controls +4 repeats=`18`，每边 72 行；parent/repeat
+不共 shard。package/verify 状态分别是 `PASS_PRIOR_V13_FRESH_BLIND_PACKAGES_READY` 与
+`PASS_PRIOR_V13_PACKAGE_INDEPENDENT_RECOMPUTE`，report hashes 为 `8de2a666…1422` 与
+`abfaad27…fdd`，冻结时 labels 不存在。A 用 GPT-5.6-sol xhigh，B 用 Claude Opus 5 high；
+两边必须互盲、无裁决。通过仍只授权另立 v14 扩量，不授权训练 v13 smoke；失败则终止 v13，
+以后若用 v12 子集只能另立 post-hoc exploratory 版本并明确不构成 v12 翻盘。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
@@ -941,7 +962,8 @@ Complete，B 的 29 个里 27 个仅改变 Complete。A 漏掉的 5 个 controls
 - dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8--v12 都已按 frozen gate
   失败，任何共识子集都不能事后计入训练。v12 的 800 条双标虽然 exact-Key yield 足够，但
   controls、双边 self-repeat 和固定 500 条 Complete IoU/coverage 失败；clean 历史 direct target
-  可学，mutual 增量与 ranking improvement 仍未建立。
+  可学，mutual 增量与 ranking improvement 仍未建立。v13 目前只是 48 条新样本的机械化定义
+  烟测盲包，尚无标签结果，也不增加训练账本。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -961,8 +983,10 @@ Complete，B 的 29 个里 27 个仅改变 Complete。A 漏掉的 5 个 controls
    解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
 4. Prior v8--v12 都必须保持终止状态。保存 v12 的 32 个标签 shard、raw report 和独立复算，
    不发布其 prospective 400 train +100 dev、不重标 controls/repeats、不改阈值或另挑容易子集。
-   若仍要继续 Prior，必须先提出并预注册一个不同的 Complete target/机械化表示，在全新样本上
-   先证明自身 repeat/controls，再谈扩量；不能把 v12 的 687 条 strict-Key 行变成新版本训练集。
+   当前只执行已冻结的 v13 机械局部审核：分别完成 A/B 四个 shard 后运行 evaluator。全门通过
+   才另立 v14 扩量；失败就停止 v13，不临场改 prompt。若之后仍决定训练 v12 的严格子集，必须
+   另立 post-hoc exploratory 版本并保留偏差声明，不能把 v12 的 687 条 strict-Key 行包装成
+   原协议成功。
 
 当前裁决是：Consistency 有部分 held-out relation 机制证据；v7.4 证明严格 H 子集能学到
 tail/path 风险，并给出 H0 最好的 ranking 点估计，但增益区间跨 0、精确 onset 失败；

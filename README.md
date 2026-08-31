@@ -15,7 +15,7 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史可训练 48 条；v8/v9/v10 均已按冻结门失败；v11 全新确认协议已冻结 | 现在仍只能训练历史 48 条；v10 的 54 条共识行也不能事后训练 | v10 的自然标签门全过，但 A 漏掉一条算术控制题；v11 保持定义与门槛不变，只强制“逐单元验算后再选最早错误”并换全新样本/控制 |
+| Dual Prior | 历史可训练 48 条；v8/v9/v10 均已按冻结门失败；v11 两个全新 80 行确认包已发布并复算 | 现在仍只能训练历史 48 条；v10 的 54 条共识行也不能事后训练，v11 尚未标注 | v10 的自然标签门全过，但 A 漏掉一条算术控制题；v11 保持定义与门槛不变，只强制“逐单元验算后再选最早错误”并换全新样本/控制 |
 
 失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8/v9/v10 分别以 `STOP_PRIOR_DEPENDENCY_SMOKE_V8_RAW_GATE_FAILURE`、`STOP_PRIOR_PARTIAL_SMOKE_V9_RAW_GATE_FAILURE`、`STOP_PRIOR_CANONICAL_SMOKE_V10_DEFINITION_FAILURE` 终止，不能事后挑子集、裁决或降门训练。v11 是用户另行批准的全新确认轮，不会翻转这些历史结果。
 
@@ -851,8 +851,13 @@ loss 或固定 `.25` gate，只在提示词前增加“按 unit 顺序重新验�
 选择 60 个新的 query/cluster，排除 v6.1 C、v7 H/ranking、v8、v9、v10；8 个控制题也全部
 换新，A/B 仍各 60 natural +8 controls +12 repeats。协议见
 [`docs/data_expansion_prior_protocol_v11.md`](docs/data_expansion_prior_protocol_v11.md)，入口为
-`prepare_clir_prior_v11.py`。本段记录的是冻结设计与用户授权；包发布前仍没有 v11 标签、
-feature 或训练许可。
+`prepare_clir_prior_v11.py`。代码/协议 commit `1b0e35d` 上的正式准备与独立复算已经通过：
+状态为 `PASS_PRIOR_VERIFIED_SMOKE_V11_PACKAGES_READY` /
+`PASS_PRIOR_VERIFIED_SMOKE_V11_RECOMPUTATION`；natural ordered hash=`26aec3c9…28e4`，
+A/B package ordered hash=`6b826261…80fc` / `e042b8e6…468c`。两个公开包各 80 行、ID 唯一，
+没有 source/checker/reference/control-answer 字段，且当前标签目录为空。下一步只需分别发送
+`configs/data_expansion_prior_v11/launch_prompt_a.txt` 与 `launch_prompt_b.txt`；仍不允许发送
+PRIVATE 文件、抽 feature 或训练。
 
 ## Toy smoke test
 

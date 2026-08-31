@@ -832,6 +832,16 @@ SHA-256=`2ecc2e80…3025`。按原协议不得重标控制、降门、挑 54 行
 self-repeat 与全部 v10 raw 门。协议为 `docs/data_expansion_prior_protocol_v11.md`，入口为
 `prepare_clir_prior_v11.py`。该授权只解锁新包和双标，不解锁 feature、训练或旧数据救场。
 
+冻结 commit `1b0e35db0e6f2023083241582527b29a2322df9a` 随后正式发布 v11 包并连续两次独立
+重算通过。60 条 natural 来自 60 个不同 query 和 60 个不同 cluster，四格各 15；与 v6.1 C、
+v7 H、v7 ranking、v8、v9、v10 的 query/cluster overlap 均为 0。natural ordered hash=
+`26aec3c9…28e4`；A/B package ordered hash=`6b826261…80fc` / `e042b8e6…468c`，文件 hash=
+`5a7899e1…d043` / `7d6d0a1a…26aa`。每包 80 行且 80 个唯一 ID，公开字段仅为 item ID、题目、
+回复和 units；无 source/checker/reference/expected-signature 泄露。状态为
+`PASS_PRIOR_VERIFIED_SMOKE_V11_PACKAGES_READY` /
+`PASS_PRIOR_VERIFIED_SMOKE_V11_RECOMPUTATION`。当前标签目录不存在；下一步只发 A/B 各自的
+公开 launch prompt，不能发 `PRIVATE_package_index.jsonl`。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
@@ -851,8 +861,8 @@ self-repeat 与全部 v10 raw 门。协议为 `docs/data_expansion_prior_protoco
   Best-of-N 增益区间跨 0；恢复的 main gold-tail 也仍未通过 locality/ranking 门。
 - dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8 依赖图、v9 direct-set
   partial-consensus 与 v10 canonical smoke 都已按 frozen raw gate 失败。v10 的 54/60 共识
-  支持不能事后计入训练。v11 是全新 verification-first 确认轮，当前只冻结代码/协议；clean
-  历史 direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
+  支持不能事后计入训练。v11 是全新 verification-first 确认轮，两个盲包已验证但尚未标注；
+  clean 历史 direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -870,8 +880,8 @@ self-repeat 与全部 v10 raw 门。协议为 `docs/data_expansion_prior_protoco
 3. 下一轮若要确认 H0，应重新预注册并采一批独立 H train/dev 与 ranking population，优先
    把目标表述为 tail/path 风险；若研究目标仍要求精确 onset，先修改/验证 label target 与
    解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
-4. Prior v8/v9/v10 都必须保持终止状态。v11 先在 clean commit 上发布并复算两份全新 80 行
-   盲包，再分别交给 GPT-5.6-sol xhigh 与 Claude Opus 5 high；不发 PRIVATE 文件。若 v11
+4. Prior v8/v9/v10 都必须保持终止状态。v11 两份全新 80 行盲包已在 clean commit 上发布并
+   复算；下一步分别交给 GPT-5.6-sol xhigh 与 Claude Opus 5 high，不发 PRIVATE 文件。若 v11
    只失败于 count/yield，可另冻大池严格共识筛选；若定义/控制/重复门失败则停止。H1、Dual
    Prior 效果和 Full 尚未被重新验证。
 

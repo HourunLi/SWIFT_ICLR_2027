@@ -384,6 +384,54 @@ def test_token_labels_must_match_feature_length(tmp_path: Path):
         raise AssertionError("Expected strict token-label validation")
 
 
+def test_dataset_and_collate_preserve_explicit_partial_prior_masks(tmp_path: Path):
+    feature = tmp_path / "feature.pt"
+    torch.save(torch.randn(4, 8, dtype=torch.bfloat16), feature)
+    data = tmp_path / "partial-prior.jsonl"
+    write_jsonl(
+        data,
+        [
+            {
+                "id": "partial",
+                "query_id": "q",
+                "hidden_states_path": str(feature),
+                "key_prior_target": [0, 1, 0, 0],
+                "key_prior_mask": [1, 1, 0, 1],
+                "complete_prior_target": [1, 1, 0, 0],
+                "complete_prior_mask": [1, 1, 0, 1],
+            }
+        ],
+    )
+
+    item = CLIRTrajectoryDataset(data)[0]
+    assert item["key_prior_mask"].dtype == torch.bool
+    assert item["complete_prior_mask"].tolist() == [True, True, False, True]
+
+    batch = clir_collate([item])
+    assert batch["key_prior_mask"].tolist() == [[True, True, False, True]]
+    assert batch["complete_prior_mask"].tolist() == [[True, True, False, True]]
+
+
+def test_explicit_prior_mask_requires_matching_target(tmp_path: Path):
+    feature = tmp_path / "feature.pt"
+    torch.save(torch.randn(3, 8), feature)
+    data = tmp_path / "mask-without-target.jsonl"
+    write_jsonl(
+        data,
+        [
+            {
+                "id": "bad",
+                "query_id": "q",
+                "hidden_states_path": str(feature),
+                "key_prior_mask": [1, 0, 1],
+            }
+        ],
+    )
+
+    with pytest.raises(ValueError, match="key_prior_mask.*key_prior_target"):
+        CLIRTrajectoryDataset(data)[0]
+
+
 def test_collate_cannot_silently_truncate_custom_sequence_targets():
     item = {
         "row_index": 0,

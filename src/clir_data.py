@@ -60,6 +60,8 @@ TOKEN_SEQUENCE_FIELDS = {
     "progress_targets",
     "key_prior_target",
     "complete_prior_target",
+    "key_prior_mask",
+    "complete_prior_mask",
     "key_prior",
     "complete_prior",
 }
@@ -283,6 +285,8 @@ def extract_metadata(row: Dict[str, Any], time: int) -> Dict[str, Any]:
         "progress_targets": ("progress_targets", "progress", "progress_target"),
         "key_prior_target": ("key_prior_target", "key_prior"),
         "complete_prior_target": ("complete_prior_target", "complete_prior"),
+        "key_prior_mask": ("key_prior_mask",),
+        "complete_prior_mask": ("complete_prior_mask",),
     }
     for output_key, aliases in sequence_aliases.items():
         value = first_present(row, aliases)
@@ -290,10 +294,24 @@ def extract_metadata(row: Dict[str, Any], time: int) -> Dict[str, Any]:
             tensor = exact_length_1d(value, time, output_key)
             if not torch.isfinite(tensor).all():
                 raise ValueError(f"Token label `{output_key}` contains NaN or Inf")
-            if output_key in {"key_prior_target", "complete_prior_target"}:
+            if output_key in {
+                "key_prior_target",
+                "complete_prior_target",
+                "key_prior_mask",
+                "complete_prior_mask",
+            }:
                 if not ((tensor == 0.0) | (tensor == 1.0)).all():
                     raise ValueError(f"Token label `{output_key}` must be binary")
+            if output_key in {"key_prior_mask", "complete_prior_mask"}:
+                tensor = tensor.bool()
             item[output_key] = tensor
+
+    for target_key, mask_key in (
+        ("key_prior_target", "key_prior_mask"),
+        ("complete_prior_target", "complete_prior_mask"),
+    ):
+        if mask_key in item and target_key not in item:
+            raise ValueError(f"`{mask_key}` requires `{target_key}`")
 
     reconstruction_value = first_present(
         row, ("complete_reconstruction_target", "csr_target")
@@ -547,7 +565,17 @@ def add_optional_sequence(
             raise ValueError(f"{key} must have length {length}, got {tensor.numel()}")
         if length > 0:
             values[row, :length] = tensor
-            mask[row, :length] = True
+            explicit_mask = item.get(mask_key)
+            if explicit_mask is None:
+                mask[row, :length] = True
+            else:
+                explicit_mask = torch.as_tensor(explicit_mask).bool().flatten()
+                if explicit_mask.numel() != length:
+                    raise ValueError(
+                        f"{mask_key} must have length {length}, "
+                        f"got {explicit_mask.numel()}"
+                    )
+                mask[row, :length] = explicit_mask
             has_any = True
     if has_any:
         output[key] = values

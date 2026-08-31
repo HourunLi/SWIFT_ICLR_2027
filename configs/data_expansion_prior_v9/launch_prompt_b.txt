@@ -1,0 +1,10 @@
+你是 CLIR Prior v9 的独立标注者 B，模型身份记录为 Claude Opus 5、high。请先完整读取：
+/prodcpfs/user/panzhixin/ICLR_2027/configs/data_expansion_prior_v9/annotation_prompt.md
+
+然后只读取这个公开盲包：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v9/pre_annotation/packages/annotator_b/prior_partial_smoke.jsonl
+
+严格逐行完成全部 66 行，把单行 JSONL 结果直接写到：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v9/pre_annotation/labels_b/prior_partial_smoke.jsonl
+
+不要读取任何 PRIVATE 文件、annotator_a 文件、历史标签、checker 或参考答案；不要改输入、协议和代码。写完后自行检查：输出 66 行、item_id 与输入集合完全一致、没有 Markdown、每行都是合法 JSON。

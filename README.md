@@ -563,9 +563,11 @@ exact-ID materialization、MATH train parquet 和抽取。v2/v3/v5 source export
 | `progress_targets` | 等长 token target；当前默认关闭 |
 | `key_prior_target` | 等长的 key evidence `0/1` target |
 | `complete_prior_target` | 等长的 complete support `0/1` target |
+| `key_prior_mask` | 可选的等长 `0/1` coverage；`0` 表示该 token 的 Key 标签未知，不计 loss |
+| `complete_prior_mask` | 可选的等长 `0/1` coverage；`0` 表示该 token 的 Complete 标签有分歧，不计 loss |
 | `complete_reconstruction_target` | 外部生成的固定宽度向量；当前默认关闭 |
 
-`token_advantage`、`progress_targets`、`key_prior_target` 和 `complete_prior_target` 必须与 trajectory feature 的 token 长度完全一致；不一致直接报错，不做截断或补零。`correctness`、onset 和各 auxiliary target 都有独立 mask，因此一份 manifest 可以混合不同监督覆盖的 row。
+`token_advantage`、`progress_targets`、Prior target 及其显式 mask 必须与 trajectory feature 的 token 长度完全一致；不一致直接报错，不做截断或补零。Prior mask 不能脱离对应 target 单独出现；未提供显式 Prior mask 时保持历史行为，即该 target 的全部有效 token 都有 coverage。`correctness`、onset 和各 auxiliary target 都有独立 mask，因此一份 manifest 可以混合不同监督覆盖的 row。Key/Complete attention 仍在完整有效 trajectory 上归一化，coverage 只控制 loss，不对子集重新 softmax。
 
 ## Exact-ID 全层特征抽取
 

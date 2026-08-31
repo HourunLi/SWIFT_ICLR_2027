@@ -193,6 +193,11 @@ L_key_direct
 L_complete_direct
 ```
 
+`key_prior_mask` / `complete_prior_mask` 可以进一步标出 token-level label coverage：
+mask 为 1 的位置参与对应 BCE，为 0 的位置表示未标注或双标分歧，不能当负例。未提供显式
+mask 时，保持整条有效 trajectory 全覆盖的历史语义。两张 attention map 始终在完整有效
+trajectory 上归一化，不能只在 coverage 子集上重新 softmax。
+
 当前还保留双向 stop-gradient mutual distillation。每条 trajectory 内先对 token squared error 求和，再在 trajectory 间取均值，避免目标强度随序列长度被 `1/T` 稀释：
 
 ```text

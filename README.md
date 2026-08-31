@@ -15,9 +15,9 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史可训练 48 条；v8 依赖图 smoke 已失败；v9 已准备 60 条全新 direct-set 盲包 | 现在仍只能训练历史 48 条；v9 尚无标签 | v9 只接收 exact Key 共识；Complete 双方一致位置训练、分歧位置显式 mask，不改 Prior 网络和固定 `.25` gate 路径 |
+| Dual Prior | 历史可训练 48 条；v8 依赖图与 v9 direct-set partial-consensus smoke 均已失败 | 现在仍只能训练历史 48 条；v9 不得抽 feature、训练或扩量 | v9 的局部 mask 代码可用，但新鲜双标只有 39/60 行同时满足可训练 Key+Complete，未达到冻结的 50/60 数据门 |
 
-失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8 已以 `STOP_PRIOR_DEPENDENCY_SMOKE_V8_RAW_GATE_FAILURE` 终止，不能从中事后挑行训练。
+失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8/v9 分别以 `STOP_PRIOR_DEPENDENCY_SMOKE_V8_RAW_GATE_FAILURE` / `STOP_PRIOR_PARTIAL_SMOKE_V9_RAW_GATE_FAILURE` 终止，不能事后挑子集、裁决或降门训练。
 
 ## 2026-08-23 clean integration 审计与训练试跑
 
@@ -779,7 +779,7 @@ seed 44 又明显塌到 `79.48%`，所以只能说“严格子集有可用排序
 SHA-256 为 `d80fff82…291e`。这是扩大后的探索性 Silver 复测，不是原 v7 翻盘，也不是
 Gold、人工验证、protected-test 或 H1/Prior/Full 的证据。
 
-### Dual Prior 扩量 v8 已失败；v9 局部共识 smoke 已备好
+### Dual Prior 扩量 v8/v9 均停止
 
 v8 的 60 条依赖图标注已经完成并按冻结门评估。结果不是“待标”：eligibility=`60/60`、
 path agreement=`.95`，但 Key/Complete F1 只有 `.7667/.8040`，非低置信完整训练共识仅
@@ -799,17 +799,28 @@ mutual 和 main 固定 `.25` gate coupling 均未改变。
 H/ranking 均零重合。GSM8K/MATH × numeric match/mismatch 仍各 15 条。
 
 公开 A/B 盲包分别为 78/66 行（每边 60 natural +6 hidden controls，A 另有 12 blind
-repeats），已发布并独立复算：
+repeats），发布和独立复算均通过：
 
 - natural ordered SHA-256：`ba0133d0…5852`；
 - A/B package ordered SHA-256：`e816f353…71d1` / `fa131ce2…7847`；
 - 状态：`PASS_PRIOR_PARTIAL_SMOKE_V9_PACKAGES_READY`；
 - 独立复算：`PASS_PRIOR_PARTIAL_SMOKE_V9_RECOMPUTATION`。
 
-现在只有公开盲包，没有 v9 标签；feature、训练、gate 和 Full 仍未解锁。下一步只把 A 的
-单 shard 交给 GPT-5.6-sol xhigh，把 B 的单 shard 交给 Claude Opus 5 high，绝不能发送
-`PRIVATE_package_index.jsonl`。raw 门全过后也只是另冻 train 400 / heldout 150 的 scale
-协议，再依次验证 P0 direct、P1 mutual 和 gate-off 对固定 `.25`。
+GPT-5.6-sol xhigh 与 Claude Opus 5 high 随后完成全部标签，schema、population 和 ID 契约均
+通过，但 raw 数据门失败。eligibility 为 60/60，双方非低置信 usable 为 53；Key/Complete
+macro F1 只有 `.7778/.7280`，非低置信 exact Key 为 39/60，能够同时训练 Key+Complete 的也
+只有 39/60。Complete unit agreement=`.7891`、分歧比例=`.2109`、正集合交并比=`.5665`、
+平均 coverage=`.7999`，均未达到 `.90/.10/.80/.90` 的冻结门；controls A/B=`4/6,5/6`，
+A self-repeat=`12/12`。
+
+这不是少量随机边界噪声：在 53 条双方非低置信行里，B 的 Complete 是 A 的严格子集 47 条，
+两边平均 Complete 大小约为 `10.87` 对 `6.03`。因此局部 mask 会屏蔽约五分之一 unit，不能
+把剩余 39 行包装成扩量成功。最终状态为
+`STOP_PRIOR_PARTIAL_SMOKE_V9_RAW_GATE_FAILURE`，raw report SHA-256=`30695a1a…1f3`；
+不裁决、不挑子集、不扩 400/150、不抽 feature、不训练。Prior 网络和固定 `.25` gate 路径仍
+保留在代码中，但独立 Prior 扩量的最早 blocker 已回到“Complete 到底包含多宽”的标签定义。
+不含原始标签的机器摘要见
+[`configs/data_expansion_prior_v9/completion.json`](configs/data_expansion_prior_v9/completion.json)。
 
 ## Toy smoke test
 

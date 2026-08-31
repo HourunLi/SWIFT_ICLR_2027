@@ -1,0 +1,62 @@
+{
+  "schema_version": "clir-prior-partial-smoke-completion-v9",
+  "status": "STOP_PRIOR_PARTIAL_SMOKE_V9_RAW_GATE_FAILURE",
+  "evaluated_at_utc": "2026-08-31",
+  "evaluated_at_code_commit": "e1f2ea73ae228303164fa6e1427632ee135576fe",
+  "implementation_commit": "3331edf542dfd7e836281b290118a88de3a67c5b",
+  "protocol_file_sha256": "a7e8787514909e6838c2222b57112a36305a003fa95104025c24ecc7124ffa46",
+  "package_verification_file_sha256": "b1a6785116706b88403c16a1fa595ff069100397af59a20ddb0d0ac5e0e75b83",
+  "labels": {
+    "annotator_a_rows": 78,
+    "annotator_a_file_sha256": "5733cde957d882cd7ce7f304a4c665e1b9ae669257714a90aeae30be1ba41873",
+    "annotator_b_rows": 66,
+    "annotator_b_file_sha256": "31f4082bbdc8fb804b705fa368dbc8345750aa878baf14d138f5b7e5ae5a8158"
+  },
+  "raw_gate_report_file_sha256": "30695a1a18455b25baeaf60292eb077b52150b7370648854fc0cf308fa7751f3",
+  "metrics": {
+    "natural_denominator": 60,
+    "eligibility_agreement": 1.0,
+    "common_usable": 60,
+    "common_nonlow_usable": 53,
+    "key_macro_f1": 0.7777777777777778,
+    "complete_macro_f1": 0.7280167506362004,
+    "key_exact_nonlow_rows": 39,
+    "complete_exact_nonlow_rows_diagnostic": 5,
+    "exact_joint_nonlow_rows_diagnostic": 3,
+    "complete_nonempty_consensus_rows": 53,
+    "partial_paired_trainable_rows": 39,
+    "complete_unit_decision_agreement": 0.7890841813135985,
+    "complete_ambiguous_unit_fraction": 0.21091581868640152,
+    "complete_positive_intersection_over_union": 0.5665399239543726,
+    "complete_row_mask_coverage_mean": 0.7999348920188145,
+    "complete_set_relations_on_common_nonlow": {
+      "b_strict_subset_a": 47,
+      "equal": 5,
+      "overlap_or_disjoint": 1
+    },
+    "controls_a": "4/6",
+    "controls_b": "5/6",
+    "annotator_a_self_repeat": "12/12"
+  },
+  "failed_gates": [
+    "key_macro_f1",
+    "complete_macro_f1",
+    "key_exact_nonlow_rows",
+    "partial_paired_trainable_rows",
+    "complete_unit_decision_agreement",
+    "complete_ambiguous_unit_fraction",
+    "complete_positive_intersection_over_union",
+    "complete_row_mask_coverage_mean",
+    "controls_a",
+    "controls_b"
+  ],
+  "authorization": {
+    "adjudication_allowed": false,
+    "posthoc_subset_salvage_allowed": false,
+    "scale_annotation_allowed": false,
+    "feature_extraction_allowed": false,
+    "training_allowed": false,
+    "gpu_required": false
+  },
+  "claim_boundary": "terminal dual-AI operability failure; no Gold, factual-accuracy, Prior-learnability, gate-efficacy, ranking, or Full evidence"
+}

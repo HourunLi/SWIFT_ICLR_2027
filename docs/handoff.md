@@ -749,7 +749,7 @@ first-bad-token detector。CH0 的 token/path AUROC 为 `.8630/.8413`，略低�
 `d80fff82adeeaf84a72e9c867811e90519d52c241da12840213731dd104d291e`。原始
 `FAIL_H0_V7_RESERVE` 与全部淘汰行仍保留，结果不覆盖它。
 
-### Dual Prior v8 终止与 v9 局部共识 smoke 准备状态
+### Dual Prior v8/v9 终止状态
 
 Prior 历史可训练数据仍只有 48 条。v8 的依赖图双标和 raw gate 已经完成：eligibility
 `60/60`、path agreement `.95`，但 Key/Complete F1=`.7667/.8040`，非低置信 exact derived
@@ -774,12 +774,25 @@ loss 只看 coverage；没有修改 Prior 网络、mutual 或 main 固定 `.25` 
 状态 `PASS_PRIOR_PARTIAL_SMOKE_V9_PACKAGES_READY`，独立复算
 `PASS_PRIOR_PARTIAL_SMOKE_V9_RECOMPUTATION`。
 
-当前没有 v9 标签，annotation 仍需用户把两个公开单 shard 分别交给 GPT-5.6-sol xhigh 和
-Claude Opus 5 high；`PRIVATE_package_index.jsonl` 不得发送。raw 门除了 Key/Complete F1
-`.90`，还要求 exact Key、非空 Complete 共识及两者同时可训练均至少 50/60，Complete unit
-agreement≥.90、ambiguous≤.10、positive IoU≥.80、平均 coverage≥.90、controls 6/6、A repeat
-≥.95。完整 joint exact 只报告、不作门。任一门失败即停止；全过也只解锁另冻的
-400-train/150-heldout scale 协议。
+GPT-5.6-sol xhigh 与 Claude Opus 5 high 已完成全部 v9 标签。A/B 文件分别为 78/66 行，
+SHA-256=`5733cde9…1873` / `31f4082b…8158`；schema、population、item ID 和包绑定全部通过。
+raw evaluator 在提交 `e1f2ea73ae228303164fa6e1427632ee135576fe` 上两次确定性重算得到
+同一 report SHA-256 `30695a1a…1f3`，最终状态
+`STOP_PRIOR_PARTIAL_SMOKE_V9_RAW_GATE_FAILURE`。
+
+通过项是 eligibility 60/60、common usable 60、common non-low 53、Complete 非空交集 53、
+A self-repeat 12/12 和非全集退化。失败项是 Key/Complete F1 `.7778/.7280`、exact non-low
+Key 39/60、Key+Complete 同时可训练 39/60、Complete unit agreement `.7891`、ambiguous
+`.2109`、positive IoU `.5665`、平均 mask coverage `.7999`，以及 controls A/B=`4/6,5/6`。
+完整 joint exact 诊断只有 3/60。
+
+只读诊断显示这不是均匀随机误差。全部 60 条中，B Complete 是 A 严格子集 53 条；在 raw
+metric 的 53 条 non-low 行中是 47 条，equal 只有 5 条。A/B 平均 Complete 大小分别约
+`10.87/6.03`。Key 全 60 行 exact 42，但 B 有 7 条 low，冻结可训练 exact 只剩 39。
+两边还同时把错误链控制题的 Key 从预注册“最早致命错误”选成了后续结论步骤；A 另把一条
+冗余输入复述放入 Complete。故 v9 不能用局部 mask 掩盖成成功：协议明确禁止裁决、第三模型、
+post-hoc 子集、scale、feature 和训练。远端保留的无标签结果摘要为
+`configs/data_expansion_prior_v9/completion.json`。
 
 ## 已知限制
 
@@ -798,9 +811,10 @@ agreement≥.90、ambiguous≤.10、positive IoU≥.80、平均 coverage≥.90�
   600 条是用户授权的事后严格共识探索子集，不是原协议成功，也没有人工准确率保证。
   新结果支持 tail/path 风险可学和正向排序点信号，但 exact onset 为 0、±5 只有 4%，
   Best-of-N 增益区间跨 0；恢复的 main gold-tail 也仍未通过 locality/ranking 门。
-- dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8 依赖图 smoke 已 raw gate
-  失败，v9 的 60 条 direct-set partial-consensus smoke 只完成选样/建包/复算，尚未产生标签。
-  clean direct target 可学，但 mutual 增量与 ranking improvement 都未建立。
+- dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8 依赖图和 v9 direct-set
+  partial-consensus smoke 都已 raw gate 失败。v9 的显式 mask 工程路径可用，但 39/60 的成对
+  可训练支持不足，不能扩量。clean 历史 direct target 可学，但 mutual 增量与 ranking
+  improvement 都未建立。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -818,10 +832,10 @@ agreement≥.90、ambiguous≤.10、positive IoU≥.80、平均 coverage≥.90�
 3. 下一轮若要确认 H0，应重新预注册并采一批独立 H train/dev 与 ranking population，优先
    把目标表述为 tail/path 风险；若研究目标仍要求精确 onset，先修改/验证 label target 与
    解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
-4. Prior v9 的两个公开单 shard 已准备并复算；下一步分别交给 GPT-5.6-sol xhigh 与
-   Claude Opus 5 high。两边完成后只运行 v9 raw evaluator；先过全部局部共识门，再决定是否
-   另冻 scale 协议。v8 必须保持终止状态。
-   H1、Dual Prior 效果和 Full 没有被包准备工作重新验证。
+4. Prior v8/v9 都必须保持终止状态。不要裁决 v9、从 39 行挑子集、降低 coverage/F1 门，
+   或直接扩到 400/150。若继续 Prior，必须先由用户批准一个使用全新自然样本的 v10 定义实验；
+   在此之前也可以暂停 Prior，先完成独立 C/H ranking 复测。H1、Dual Prior 效果和 Full 没有
+   被 v9 重新验证。
 
 当前裁决是：Consistency 有部分 held-out relation 机制证据；v7.4 证明严格 H 子集能学到
 tail/path 风险，并给出 H0 最好的 ranking 点估计，但增益区间跨 0、精确 onset 失败；

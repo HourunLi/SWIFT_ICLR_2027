@@ -8,7 +8,7 @@ import hashlib
 import os
 from pathlib import Path
 import tempfile
-from typing import Dict, List
+from typing import Dict, List, Optional, Sequence
 
 import torch
 from torch.utils.data import DataLoader
@@ -29,7 +29,7 @@ from src.consistency_localized_reward import (
 )
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Score CLIR trajectories.")
     parser.add_argument("--input_jsonl", required=True, help="JSONL file to score.")
     parser.add_argument(
@@ -58,8 +58,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--onset_threshold", type=float, default=0.5)
     parser.add_argument("--amp_dtype", default="bfloat16", choices=["none", "bfloat16"])
+    parser.add_argument(
+        "--scalar_only",
+        action="store_true",
+        help=(
+            "Write only checkpoint identity, scalar CLIR score, and Best-of-N "
+            "selection fields. Intended for large ranking populations that do "
+            "not need per-token diagnostics."
+        ),
+    )
     parser.add_argument("--overwrite", action="store_true")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def resolve_device(name: str) -> torch.device:
@@ -145,7 +154,12 @@ def main() -> None:
     checkpoint_sha256 = file_sha256(args.model)
 
     rows: List[Dict] = [
-        {**row, "clir_checkpoint_sha256": checkpoint_sha256} for row in dataset.rows
+        {
+            **row,
+            "clir_checkpoint_sha256": checkpoint_sha256,
+            "clir_scoring_mode": "scalar_only" if args.scalar_only else "full",
+        }
+        for row in dataset.rows
     ]
     scored_row_indices: List[int] = []
     scored_scores: List[float] = []
@@ -187,22 +201,29 @@ def main() -> None:
             raise FloatingPointError(
                 "Non-finite scoring outputs: " + ", ".join(non_finite)
             )
-        path_probs = path_hallucination_probability(
-            outputs["hallucination_logits"], outputs["mask"]
-        )
-        path_log_clean = path_no_hallucination_log_probability(
-            outputs["hallucination_logits"], outputs["mask"]
-        )
-        pseudo_onsets = infer_pseudo_onsets(
-            outputs["hallucination_logits"],
-            outputs["mask"],
-            threshold=args.onset_threshold,
-        )
+        if not args.scalar_only:
+            path_probs = path_hallucination_probability(
+                outputs["hallucination_logits"], outputs["mask"]
+            )
+            path_log_clean = path_no_hallucination_log_probability(
+                outputs["hallucination_logits"], outputs["mask"]
+            )
+            pseudo_onsets = infer_pseudo_onsets(
+                outputs["hallucination_logits"],
+                outputs["mask"],
+                threshold=args.onset_threshold,
+            )
 
         for local_idx, row_index in enumerate(row_indices):
             row = rows[row_index]
-            valid_length = int(batch["mask"][local_idx].sum().detach().cpu())
             row["clir_score"] = float(outputs["scores"][local_idx].detach().cpu())
+            if args.scalar_only:
+                scored_row_indices.append(row_index)
+                scored_scores.append(row["clir_score"])
+                scored_query_ids.append(str(query_ids_raw[local_idx]))
+                continue
+
+            valid_length = int(batch["mask"][local_idx].sum().detach().cpu())
             row["clir_path_hallucination_prob"] = float(
                 path_probs[local_idx].detach().cpu()
             )

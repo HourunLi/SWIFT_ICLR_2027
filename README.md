@@ -646,7 +646,7 @@ python score_clir.py \
   --output_jsonl outputs/validation_scored.jsonl
 ```
 
-打分默认 `batch_size=2` 和 BF16 autocast，是针对 101376 维全层 feature 的保守设置；需要 FP32 时显式传 `--amp_dtype none`。
+打分默认 `batch_size=2` 和 BF16 autocast，是针对 101376 维全层 feature 的保守设置；需要 FP32 时显式传 `--amp_dtype none`。大规模 ranking 若只需要最终打分，可显式加 `--scalar_only`；它仍保留 checkpoint SHA、`clir_score` 和每题 Best-of-N 标记，但不会复制逐 token 诊断数组。
 
 输出保留原 row，并增加：
 

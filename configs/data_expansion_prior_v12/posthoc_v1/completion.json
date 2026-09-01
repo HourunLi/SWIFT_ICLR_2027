@@ -1,0 +1,107 @@
+{
+  "schema_version": "clir-prior-v12-posthoc-completion-v1",
+  "status": "COMPLETE_PRIOR_V12_POSTHOC_EXPLORATORY_R0_P0_RANKING_EVALUATION",
+  "evidence_tier": "posthoc_exploratory_silver_no_human_verification",
+  "terminal_statuses_preserved": {
+    "prior_v12": "STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE",
+    "prior_v13": "FAIL_PRIOR_V13_SCHEMA"
+  },
+  "implementation_commits": {
+    "selection_features_and_configs": "e8878061ca65ca43d4be8c35e6d489d4a4ab772a",
+    "training_authorization": "1a75b4c37f3a436a5a969ea03f7fe66f441c2b0d",
+    "scalar_only_scoring": "cc4135972d847fb0b997c2a11360429534cbeeee",
+    "ranking_authorization": "18a525e612f8e2cea32dd827dfe7cd42cdc1d64e",
+    "ranking_summarizer": "40e5dc5e28116c7ded8fcfdb8b1f0f1da863336c"
+  },
+  "selected_data": {
+    "natural_denominator": 800,
+    "exact_key_and_complete_before_repeat_exclusion": 266,
+    "excluded_available_repeat_failures": 13,
+    "selected_total": 253,
+    "train": 202,
+    "dev": 51,
+    "selected_ordered_proposal_ids_sha256": "18103bb5b276e6468cae8ad45800086e5cd72cdebc71b586e96f9037fe6c0515",
+    "human_verified": false,
+    "easy_consensus_selection_bias": true
+  },
+  "features": {
+    "trajectory_tensors": 253,
+    "condition_tensors": 253,
+    "raw_bf16_bytes": 21209075712,
+    "finalization_report_sha256": "2f2aed6dca7f86691463f8973356983ceb2d2d0b06c690eb053f4a876f548cd8"
+  },
+  "training": {
+    "cells": ["r0", "p0"],
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "shared_rows": 4170,
+    "p0_prior_rows": 250,
+    "p0_prior_rows_legacy": 48,
+    "p0_prior_rows_new": 202,
+    "completion_report_sha256": "b22f303ec497f16827be7652576b92f2c060d66b535bfd10e81df83c702ac7a2",
+    "all_six_checkpoints_load_and_are_finite": true
+  },
+  "prior_dev_three_seed_means": {
+    "rows": 51,
+    "r0": {
+      "key_auroc": 0.4883040708891848,
+      "key_average_precision": 0.06254251995927723,
+      "key_binary_cross_entropy": 0.6159678437266195,
+      "complete_auroc": 0.5274199185799395,
+      "complete_average_precision": 0.38053466158849104,
+      "complete_binary_cross_entropy": 0.6825807354216827,
+      "correctness_auroc": 0.8975609756097561,
+      "correctness_binary_cross_entropy": 0.4908881217668981
+    },
+    "p0": {
+      "key_auroc": 0.9037848156676889,
+      "key_average_precision": 0.5956456981595042,
+      "key_binary_cross_entropy": 0.14531070169997746,
+      "complete_auroc": 0.9612414300932789,
+      "complete_average_precision": 0.9352090061048714,
+      "complete_binary_cross_entropy": 0.27016276620824,
+      "correctness_auroc": 0.8829268292682928,
+      "correctness_binary_cross_entropy": 0.5003283846346905
+    },
+    "mechanism_report_sha256": "ee879efed2532aa50c10b6d1f2197d3d950000b6d7ab2ad6dc195c7165f6e20c"
+  },
+  "ranking": {
+    "population": {
+      "rows": 14272,
+      "queries": 892,
+      "candidates_per_query": 16,
+      "reused_exploratory_not_fresh_confirmatory": true
+    },
+    "bon_mean": {
+      "1": {"r0": 0.827354260089686, "p0": 0.827354260089686, "delta": 0.0},
+      "2": {"r0": 0.8486547085201793, "p0": 0.8512705530642751, "delta": 0.002615844544095665},
+      "4": {"r0": 0.8579970104633782, "p0": 0.8576233183856502, "delta": -0.0003736920777279522},
+      "8": {"r0": 0.8617339312406577, "p0": 0.8460388639760836, "delta": -0.01569506726457399},
+      "16": {"r0": 0.8572496263079222, "p0": 0.8553811659192826, "delta": -0.0018684603886397607}
+    },
+    "bon_16_delta_by_seed": {
+      "42": -0.006726457399103139,
+      "43": 0.002242152466367713,
+      "44": -0.0011210762331838565
+    },
+    "bon_16_fixed_seed_query_95_ci": [-0.013079222720478328, 0.008968609865470852],
+    "bon_16_hierarchical_seed_query_95_ci": [-0.01569506726457399, 0.011210762331838564],
+    "bon_8_delta_by_seed": {
+      "42": -0.017937219730941704,
+      "43": -0.01905829596412556,
+      "44": -0.010089686098654708
+    },
+    "bon_8_fixed_seed_query_95_ci": [-0.026532137518684606, -0.004857997010463379],
+    "bon_8_hierarchical_seed_query_95_ci": [-0.02952167414050822, -0.002242152466367713],
+    "within_query_pairwise_mean": {"r0": 0.6682018217173268, "p0": 0.6593746801760311},
+    "summary_sha256": "dd8cc22b11e3ff201b316c0c4c1b4a268f710fb9c680106476511335c9ff5bf2"
+  },
+  "decision": {
+    "direct_key_complete_learnability": "supported_on_the_posthoc_exact_silver_dev",
+    "final_ranking_improvement": "not_supported",
+    "bon_8_result": "three_seed_negative_with_both_frozen_intervals_below_zero",
+    "mutual_gate_or_full_unlocked": false,
+    "no_more_tuning_on_the_same_prior_dev_or_reused_ranking_population": true
+  },
+  "claim_boundary": "not Gold, human verified, v12/v13 pass, fresh confirmatory ranking, protected test, mutual-prior, gate, or Full evidence"
+}

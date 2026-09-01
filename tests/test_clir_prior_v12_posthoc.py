@@ -254,3 +254,27 @@ def test_posthoc_ranking_selection_uses_stable_frozen_prefixes() -> None:
     assert queries == ["q0", "q1"]
     assert indices[16].tolist() == [15, 14]
     assert labels[16].tolist() == [0.0, 1.0]
+
+
+def test_posthoc_completion_preserves_failures_and_does_not_unlock_full() -> None:
+    root = Path(__file__).resolve().parents[1]
+    completion = json.loads(
+        (
+            root
+            / "configs/data_expansion_prior_v12/posthoc_v1/completion.json"
+        ).read_text()
+    )
+    assert completion["status"] == (
+        "COMPLETE_PRIOR_V12_POSTHOC_EXPLORATORY_R0_P0_RANKING_EVALUATION"
+    )
+    assert completion["terminal_statuses_preserved"] == {
+        "prior_v12": "STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE",
+        "prior_v13": "FAIL_PRIOR_V13_SCHEMA",
+    }
+    assert completion["selected_data"]["selected_total"] == 253
+    assert completion["selected_data"]["train"] == 202
+    assert completion["selected_data"]["dev"] == 51
+    assert completion["ranking"]["bon_mean"]["16"]["delta"] < 0
+    assert completion["ranking"]["bon_mean"]["8"]["delta"] < 0
+    assert completion["decision"]["final_ranking_improvement"] == "not_supported"
+    assert completion["decision"]["mutual_gate_or_full_unlocked"] is False

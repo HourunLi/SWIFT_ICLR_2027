@@ -59,3 +59,31 @@ population，属于探索性复用，不是新的确认性测试。
 - 253 条由事后完全一致筛选产生，存在显著 easy-sample selection bias；
 - dev 的数值不匹配行较少，不能据此宣称 Prior 对错误推理普遍有效；
 - 没有人工复核，不能声称标签客观准确。
+
+## 执行结果
+
+这条路线已经执行完，不再是待运行协议。
+
+- 800 条原始 proposal 中，266 条同时满足 A/B exact singleton-Key 与 exact nonempty
+  Complete；再排除 13 条任一已观测 self-repeat target 漂移的 parent，最终为 253 条，
+  其中 train/dev=`202/51`。
+- selected-only feature inventory、最长样本全宽 preflight、506 个 trajectory/condition
+  tensor 和完整复验均通过。raw BF16 feature 为 `21,209,075,712` bytes，约 `19.75 GiB`。
+- matched R0/P0 六次训练均完成 3 epochs，checkpoint 可加载、state tensor 全 finite。
+  两边共享 4,170 行；P0 实际使用旧 48 + 新 202 =250 条 direct Prior supervision。
+- 51-row dev 上，P0 三 seed 的 Key AUROC/AP/BCE 均值为
+  `.9038/.5956/.1453`，Complete 为 `.9612/.9352/.2702`；R0 分别为
+  `.4883/.0625/.6160` 与 `.5274/.3805/.6826`。因此 direct target 可学。
+- 冻结的 892-query ×16-candidate 复用排序评估也已完成。主指标 BoN@16 为
+  R0 `.85725`、P0 `.85538`，P0−R0=`-.00187`，fixed-seed query 95% interval
+  `[-.01308,+.00897]`，exploratory hierarchical interval `[-.01570,+.01121]`。
+  BoN@8 为 R0 `.86173`、P0 `.84604`，三个 seed 都下降；两区间为
+  `[-.02653,-.00486]` 与 `[-.02952,-.00224]`。pairwise 从 `.66820` 降到 `.65937`。
+
+最终状态是
+`COMPLETE_PRIOR_V12_POSTHOC_EXPLORATORY_R0_P0_RANKING_EVALUATION`。本地冻结排序
+summary SHA-256 为 `dd8cc22b11e3ff201b316c0c4c1b4a268f710fb9c680106476511335c9ff5bf2`。
+结论只能写成：post-hoc exact 双 AI Silver Prior 在 held-out 子集上非常可学，但 gate-off
+共享表示路径没有改善最终排序，K=8 反而稳定回退。排序 population 是复用的探索性数据；
+原 v12/v13 失败状态、无人工复核和 easy-sample selection bias 全部保留。mutual、gate、Full
+仍未解锁。

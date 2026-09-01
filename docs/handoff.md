@@ -1,6 +1,6 @@
 # CLIR clean integration 交接说明
 
-本分支从 `main` 的十余文件结构重新出发，只整合 `panzhixin` 分支中可复用的工程进展和通过相应门的模块部分。它不是对 `panzhixin` 的压缩复制，也没有继承其大量标注流水账、版本化 runner 或失败实现。当前远端顶端只保留训练/打分/评测代码、测试、可运行配置、README、本 handoff、核心方法说明、关键 smoke 协议，以及 v6 Consistency 和 v7 排序/H0 扩量主协议；阶段报告、PDF、v1 协议及审查过程材料的最后完整快照是提交 `596a5e4`，需要时可从 Git 历史恢复。rollout、双盲包、原始标签、feature 和 checkpoint 继续只留在被忽略的 `run_artifacts/`；2026-08-26 重新生成的阶段 PDF 也只作为本地产物交付，不进入精简远端。
+本分支从 `main` 的十余文件结构重新出发，只整合 `panzhixin` 分支中可复用的工程进展和通过相应门的模块部分。它不是对 `panzhixin` 的压缩复制，也没有继承其大量标注流水账、版本化 runner 或失败实现。当前远端顶端只保留训练/打分/评测代码、测试、可运行配置、README、本 handoff、核心方法说明、关键 smoke 协议，以及 v6 Consistency、v7 排序/H0 和 v12-posthoc Prior 的关键扩量协议；阶段报告、PDF、v1 协议及审查过程材料的最后完整快照是提交 `596a5e4`，需要时可从 Git 历史恢复。rollout、双盲包、原始标签、feature、checkpoint 和大型 scored JSONL 继续只留在被忽略的 `run_artifacts/`；2026-08-26 重新生成的阶段 PDF 也只作为本地产物交付，不进入精简远端。
 
 当前唯一运行配置是 `configs/best_current.json`。这里的 “best current” 指当前最清晰、最可维护的**整合方案**；历史上最高的单次联合矩阵 BoN@16 是 correctness-only J0 `.920`，不是三模块联合成功。
 
@@ -954,6 +954,72 @@ IoU/coverage、role 或 edge 指标；不能把“只有一个 schema 错误”�
 通过。v13 到此终止，不启动 v14、不抽 feature、不训练 smoke。以后若用 v12 子集，只能另立
 post-hoc exploratory 版本，并明确不构成 v12 或 v13 翻盘。
 
+### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
+
+用户随后明确选择“V12吧”，授权的不是修复原 v12，而是单独命名的事后探索路线。
+实现/协议 commit `e8878061ca65ca43d4be8c35e6d489d4a4ab772a` 保留
+`STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE` 与 `FAIL_PRIOR_V13_SCHEMA`，并冻结：
+A/B usable、非 low、singleton Key exact、nonempty Complete exact；任一已观测 self-repeat
+target 漂移则排除其 natural parent；不补固定 quota、不按 score/训练结果选行。
+
+800 条 natural 中 266 条满足 exact Key+Complete，13 条因已观察 repeat 漂移被排除，得到
+253 条（202 train/51 dev）。八个 source × checker × split 格均保留，但这是容易共识样本，
+不代表 800 条总体。selected ID hash=`18103bb5…c0515`。Key/Complete 分别有 5,000/27,249
+个正 token；完整输出轴其他 token 都是负例，两个 coverage mask 均为全 1，attention 仍对完整
+trajectory 归一化。253 trajectory +253 condition 的 exact 33×3072 BF16 feature 全量复验通过，
+raw bytes=`21,209,075,712`；finalization report SHA-256=`2f2aed6d…8cd8`。
+
+训练授权 commit `1a75b4c37f3a436a5a969ea03f7fe66f441c2b0d` 只允许 matched R0/P0，
+seeds 42/43/44、3 epochs。两边共享 4,170 行：3,968 条历史训练行 +202 条新 Prior train；
+历史行本身已有 48 条 Prior target，因此 R0 忽略全部 250 条现存 target，P0 对旧 48 +新 202
+使用 direct Key/Complete。两 cell 的唯一配置差是 `prior_weight=0/1`；Consistency、H0/H1、
+mutual、gate、MIL、pseudo-tail、progress、reconstruction、Full 全关。六个 checkpoint 均完成、
+可加载且 state tensor finite；completion report SHA-256=`b22f303e…7a2`。
+
+51-row Prior dev 的三 seed 均值如下：
+
+| Head/metric | R0 | P0 |
+|---|---:|---:|
+| Key AUROC | `.4883` | **`.9038`** |
+| Key AP / BCE | `.0625 / .6160` | **`.5956 / .1453`** |
+| Complete AUROC | `.5274` | **`.9612`** |
+| Complete AP / BCE | `.3805 / .6826` | **`.9352 / .2702`** |
+| correctness AUROC / BCE | `.8976 / .4909` | `.8829 / .5003` |
+
+这建立了很强的 direct-Prior held-out 可学习性。它没有建立标签客观准确性：51 条同样来自
+post-hoc exact 双 AI Silver 子集，且无人工复核。
+
+排序评估协议在任何 scored output 完成前由 commit `18a525e` 冻结，汇总器 commit
+`40e5dc5` 又在看到结果前锁定逐行原始字段、checkpoint hash、16-candidate population、finite
+score、stable tie、K=1/2/4/8/16 与 10,000 次 paired bootstrap。六份 scalar-only score
+全部通过 14,272 rows/892 queries 的逐行验收；summary SHA-256=
+`dd8cc22b11e3ff201b316c0c4c1b4a268f710fb9c680106476511335c9ff5bf2`。
+
+| K | R0 mean | P0 mean | P0−R0 |
+|---:|---:|---:|---:|
+| 1 | `.82735` | `.82735` | `.00000` |
+| 2 | `.84865` | `.85127` | `+.00262` |
+| 4 | `.857997` | `.85762` | `-.00037` |
+| 8 | **`.86173`** | `.84604` | **`-.01570`** |
+| 16 | **`.85725`** | `.85538` | `-.00187` |
+
+BoN@16 逐 seed delta=`-.00673/+.00224/-.00112`，fixed-seed query interval
+`[-.01308,+.00897]`，hierarchical seed+query interval `[-.01570,+.01121]`，因此主指标
+没有增益，也不能确认稳定损害。BoN@8 三 seed 全负，逐 seed为
+`-.01794/-.01906/-.01009`；两个区间 `[-.02653,-.00486]` 与
+`[-.02952,-.00224]` 均低于 0。within-query pairwise 也从 `.66820` 降到 `.65937`。
+
+后看结果后的描述性 selection audit（不作为预注册 gate）发现，K=16 的 P0/R0 每 seed 有
+744/708/691 个 query 选择不同候选，即 `83.4%/79.4%/77.5%`；三 seed 总计 78 次错→对、
+83 次对→错、1,982 次换了候选但 correctness 不变。也就是说 direct Prior 通过 shared encoder
+确实间接改变了 score，而不是完全没接上；问题是这种变化没有提高顶部排序，K=8 还稳定回退。
+
+最终状态是
+`COMPLETE_PRIOR_V12_POSTHOC_EXPLORATORY_R0_P0_RANKING_EVALUATION`。允许声称 direct
+Key/Complete 对这个 exact Silver 子集可学；不允许声称 v12/v13 通过、Prior 已提高
+Best-of-N、结果是新 protected/confirmatory test，或 mutual/gate/Full 已解锁。也不能继续在
+同一 51-row dev 或 892-query ranking 上调 epoch、direct weight、subset 或 gate weight。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
@@ -971,12 +1037,11 @@ post-hoc exploratory 版本，并明确不构成 v12 或 v13 翻盘。
   600 条是用户授权的事后严格共识探索子集，不是原协议成功，也没有人工准确率保证。
   新结果支持 tail/path 风险可学和正向排序点信号，但 exact onset 为 0、±5 只有 4%，
   Best-of-N 增益区间跨 0；恢复的 main gold-tail 也仍未通过 locality/ranking 门。
-- dual prior 仍只有 48 条历史可训练 Key/Complete trajectory；v8--v13 都已按 frozen gate
-  失败，任何共识子集都不能事后计入训练。v12 的 800 条双标虽然 exact-Key yield 足够，但
-  controls、双边 self-repeat 和固定 500 条 Complete IoU/coverage 失败；clean 历史 direct target
-  可学，mutual 增量与 ranking improvement 仍未建立。v13 的 144 个 package rows 已完成，
-  但因 B 的一个不可用控制项保留了非空 block role 而在 schema 门终止；没有自然样本机制指标，
-  也不增加训练账本。
+- dual prior 的原协议可训练账本仍只有历史 48 条，v8--v13 都保持 frozen failure；但用户
+  另行授权的 v12-posthoc exact 路线现在新增 202 train +51 dev。它证明 direct target 可学，
+  不证明标签总体稳定或客观准确；复用 ranking 上 BoN@16 无增益、BoN@8 三 seed 一致回退。
+  mutual 增量、固定 `.25` gate 的新数据效果与 Full 仍未建立。v13 仍因 B 的一个不可用控制项
+  保留非空 block role 而在 schema 门终止，没有自然样本机制指标。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -995,15 +1060,17 @@ post-hoc exploratory 版本，并明确不构成 v12 或 v13 翻盘。
    把目标表述为 tail/path 风险；若研究目标仍要求精确 onset，先修改/验证 label target 与
    解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
 4. Prior v8--v13 都必须保持终止状态。保存 v12 的 32 个标签 shard、raw report 和独立复算，
-   不发布其 prospective 400 train +100 dev、不重标 controls/repeats、不改阈值或另挑容易子集。
-   v13 已在 schema 门终止，不删除错误控制项中的 role、不重跑、不启动 v14。若之后仍决定训练
-   v12 的严格子集，必须另立 post-hoc exploratory 版本并保留偏差声明，不能把 v12 的 687 条
-   strict-Key 行包装成原协议成功，也不能称 v13 的机械定义已通过稳定性验证。
+   不发布其 prospective 400 train +100 dev、不重标 controls/repeats、不改原门；v13 不删除错误
+   control role、不重跑、不启动 v14。另立的 v12-posthoc 253-row manifest、506 个 feature、六个
+   checkpoint、dev/ranking summary 与原失败证据并存，不能重命名为原 v12 pass。
+5. 不再在这 51 条 Prior dev 或 892 题复用 ranking 上调 direct weight、epoch 或 subset。若继续
+   main-style coupling，先另冻一个只比较 P0 与固定 `.25` PG0 的三 seed 阶段，并明确同一 ranking
+   只能给探索性诊断；正式 gate/Full 效果结论需要新的 query/cluster-disjoint ranking population。
 
 当前裁决是：Consistency 有部分 held-out relation 机制证据；v7.4 证明严格 H 子集能学到
 tail/path 风险，并给出 H0 最好的 ranking 点估计，但增益区间跨 0、精确 onset 失败；
-C+H0 没有超过 H0，负交互点估计仍不确定。H1、Prior、Full 没有因本轮获得新证据。
-因此可以保留这 400 条作为探索性 H0 训练子集和 200 条独立诊断集，但不能称 H0 已确认，
-更不能把原 v7 写成通过。
+C+H0 没有超过 H0，负交互点估计仍不确定。v12-posthoc 则证明扩量后的 direct Prior target
+可学，但没有提高 BoN@16，且 BoN@8 出现三 seed 一致回退。H1、mutual、新数据 gate 与 Full
+没有因本轮获得新证据。原 v7/v12/v13 都不能写成通过。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

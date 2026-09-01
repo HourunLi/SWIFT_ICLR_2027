@@ -264,7 +264,7 @@ complete reconstruction
 | Consistency loss 能改变 held-out relation geometry | v6.1 400 train positives、150 heldout positives、150 hard negatives 的三 seed C0/C1 中，冻结均值 separation 增量 `+.1760`、relation bootstrap `[+.1389,+.2155]`；但正对 cosine 下降、AUROC seed 方向混合，只支持 hard-negative separation/去塌缩的部分机制结论 |
 | Sparse-span H head 在 16-row dev 上超过位置基线 | 只有点估计；bootstrap 跨 0，后续 blind/position control 失败；且不是当前默认实现 |
 | Main onset-tail shaping 会改善 reward ranking | 未验证假设；历史 absolute/relative/clean-matched 实现均暴露问题 |
-| Direct key/complete targets 可学习 | 48/16、3 seeds 的 standalone gate 通过 |
+| Direct key/complete targets 可学习 | 历史 48/16 standalone 已通过；另立的 v12-posthoc exact Silver 用 202 train/51 dev、3 seeds 得到 Key/Complete AUROC `.904/.961`，进一步支持 direct target 可学，但同一实验的 BoN@16 `-.19` point、BoN@8 `-1.57` points，不能把机制可学写成最终排序收益 |
 | Mutual distillation 降低 branch discrepancy 且不明显损伤 localization | standalone 3/3 seeds 保护门通过 |
 | Shared gate-prior alignment 改善 Best-of-N | 未建立。v2 同 dev 调参中 `.25` 的 BoN@16 `.9187` vs P0 `.9180`，两个配对区间跨 0；`10` 的 raw point estimate `.9207` 也未形成独立验证。默认 `.25` 是方法身份约束下的 dev-tuned 工程值，不是 efficacy 结论 |
 | 三模块联合优于 correctness-only | 未建立；历史 JALL BoN@16 `.912`，J0 `.920`，扩展门失败 |

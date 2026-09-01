@@ -15,9 +15,9 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史可训练 48 条；v8--v13 均已按冻结门失败 | 目前仍只能训练历史 48 条；v13 smoke 不可训练 | v12 的 blocker 是 Complete 边界；v13 改用机械回溯，但 B 有 1 条隐藏控制项违反不可用行的空结构 schema，冻结 evaluator 在计算自然样本指标前即终止 |
+| Dual Prior | 历史 48 条；另有 v12-posthoc 202 train +51 dev | 只允许已登记的探索性 R0/P0；原 v12/v13 仍不可训练 | v12 原 blocker 是 Complete 边界，v13 在 schema 门终止；后续明确授权的 post-hoc exact-consensus 子集能学会 Key/Complete，但未改善最终排序 |
 
-失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8--v13 分别以各自冻结失败状态终止；v12 是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，v13 是 `FAIL_PRIOR_V13_SCHEMA`。这些标签都不能事后挑子集、裁决、重标或降门训练。
+失败批次不能直接混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8--v13 分别保留各自冻结失败状态；v12 是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，v13 是 `FAIL_PRIOR_V13_SCHEMA`。后续用户另行授权并明确命名的 `v12-posthoc` 只是一条带 easy-sample bias 的探索路线，不修改原门、不重标、不降阈值，也不能写成 v12/v13 通过。
 
 ## 2026-08-23 clean integration 审计与训练试跑
 
@@ -920,6 +920,53 @@ Complete 稳定性结果。报告 SHA-256 为 `179d1006…577f`，且 `trainable
 启动 v14、抽 feature 或训练 v13。若仍要使用 v12 严格共识子集，只能另立明确的 post-hoc
 探索版本，并保留 v12/v13 的失败结论。
 
+### Dual Prior v12-posthoc：可学，但没有改善最终排序
+
+用户随后明确选择“V12吧”，因此新建了独立的
+[`posthoc_v1`](configs/data_expansion_prior_v12/posthoc_v1) 路线；它不修改 v12/v13 的失败报告。
+机械规则只保留 A/B 都 usable、非 low、singleton Key 完全相同、非空 Complete 集合完全相同的
+行；若某个 natural parent 被任一侧抽到 self-repeat 且 target 漂移，也整行排除。800 条原始
+proposal 中有 266 条满足双边 exact Key+Complete，再排除 13 条已观察到 repeat 不稳定的行，
+最终得到 253 条：202 train、51 dev。标签名明确包含
+`posthoc_dual_ai_exact`，没有人工复核，也明显偏向两个 AI 都容易判断的样本。
+
+253 条 selected-only exact-token 全层 BF16 feature 已完成逐 tensor 验证，原始 feature 约
+`19.75 GiB`。第一阶段只比较 matched R0/P0，均为 3 epochs、seeds 42/43/44：两边共享
+4,170 条训练行；R0 只用 correctness，P0 额外使用旧 48 + 新 202 =250 条 direct
+Key/Complete 监督。Consistency、H0/H1、mutual、gate、MIL、pseudo-tail 和 Full 全关。
+六个 checkpoint 均可加载且全部 finite。
+
+51 条独立 Prior dev 表明 direct target 确实学会了，而不只是 loss 能下降：
+
+| 指标（三 seed 均值） | R0 | P0 |
+|---|---:|---:|
+| Key AUROC / AP / BCE | `.488 / .063 / .616` | **`.904 / .596 / .145`** |
+| Complete AUROC / AP / BCE | `.527 / .381 / .683` | **`.961 / .935 / .270`** |
+| correctness AUROC / BCE | `.898 / .491` | `.883 / .500` |
+
+但同一批 892 query ×16 candidate 的冻结 v7.4 排序复用集没有出现最终收益：
+
+| K | R0 BoN | P0 BoN | P0−R0 |
+|---:|---:|---:|---:|
+| 1 | `82.74%` | `82.74%` | `0.00` point |
+| 2 | `84.87%` | `85.13%` | `+0.26` point |
+| 4 | `85.80%` | `85.76%` | `-0.04` point |
+| 8 | **`86.17%`** | `84.60%` | **`-1.57` points** |
+| 16 | **`85.72%`** | `85.54%` | `-0.19` point |
+
+主指标 BoN@16 的逐 seed 差为 `-.67/+.22/-.11` points；fixed-seed query interval
+`[-1.31,+.90]`、exploratory seed+query interval `[-1.57,+1.12]` points，均跨 0。
+BoN@8 则三个 seed 都下降，两个区间分别为 `[-2.65,-.49]` 和 `[-2.95,-.22]` points。
+题内 correct-vs-wrong pairwise 也从 R0 `.6682` 降到 P0 `.6594`。事后描述性检查显示，
+P0 在 K=16 每个 seed 改了约 `77%--83%` 的候选选择，但三 seed 合计只有 78 次错→对、
+83 次对→错，其余 1,982 次换候选不改变 correctness；说明共享表示路径确实会传导到 score，
+只是当前传导没有形成净收益。
+
+准确裁决是：**扩量后的 direct Key/Complete 已建立很强的 held-out 可学习性，但 gate-off 的
+间接共享表示路径没有改善最终答案选择，K=8 还有稳定回退。** 排序集是复用的探索性 population，
+不是新 protected test；原 v12/v13 仍失败。mutual、固定 `.25` gate 和 Full 仍未因本轮自动
+解锁，若继续必须另冻下一阶段，不能在这 51 条 dev 或 892 题上再挑 epoch、权重或子集。
+
 ## Toy smoke test
 
 Toy 数据只验证代码路径，不能证明方法有效：
@@ -971,8 +1018,9 @@ pytest -q
   没有优于 correctness-only。
 - Consistency 已有400个训练正对和150+150 held-out 正负关系的三 seed C0/C1
   复测；均值分离与 score-gap 结构改善，但正对 cosine 下降、cosine AUROC seed 方向
-  混合，且没有新的 Best-of-N population。Hallucination 标签仍有限；Prior v12 虽完成 800 条
-  双标，但因 controls/repeat/Complete 质量门失败，不能转成训练数据。
+  混合，且没有新的 Best-of-N population。Hallucination 标签仍有限。Prior v12 原门仍失败；
+  另立的 post-hoc exact 子集新增 202 train +51 dev，证明 direct Key/Complete 可学，但复用
+  ranking 上 BoN@16 无增益、BoN@8 三 seed 一致回退，不能替代新的确认性数据。
 - clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代缺失的数据 provenance 上游与 protected-test protocol。
 - clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired
   summarizer；v6.1 新增了单独的 held-out consistency relation evaluator，但尚未重建

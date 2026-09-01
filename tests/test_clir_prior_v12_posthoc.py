@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from prepare_clir_prior_v12_posthoc import build_parser
+from summarize_clir_prior_v12_posthoc import _selection, load_authorization
 from src.clir_prior_v12_posthoc import (
     LABEL_NAME,
     ORIGINAL_V12_STATUS,
@@ -200,3 +201,56 @@ def test_training_authorization_freezes_legacy_plus_new_prior_supervision() -> N
     assert supervision["new_prior_target_tokens"] == 63298
     assert supervision["total_prior_target_tokens"] == 77605
     assert authorization["next_gate"]["mutual_gate_or_full_unlocked"] is False
+
+
+def test_ranking_authorization_freezes_paired_primary_before_results() -> None:
+    root = Path(__file__).resolve().parents[1]
+    path = (
+        root
+        / "configs/data_expansion_prior_v12/posthoc_v1/"
+        "ranking_evaluation_authorization.json"
+    )
+    authorization = json.loads(path.read_text())
+    assert authorization["status"] == (
+        "AUTHORIZED_FROZEN_EXPLORATORY_R0_P0_RANKING_EVALUATION"
+    )
+    assert authorization["frozen_before_scored_outputs_completed"] is True
+    assert authorization["grid"] == {
+        "cells": ["r0", "p0"],
+        "seeds": [42, 43, 44],
+        "same_candidate_population_required": True,
+        "all_six_runs_required": True,
+    }
+    metrics = authorization["metrics"]
+    assert metrics["primary"] == (
+        "paired_query_level_p0_minus_r0_Best_of_N_accuracy_at_K_16"
+    )
+    assert metrics["k"] == [1, 2, 4, 8, 16]
+    assert metrics["bootstrap_replicates"] == 10_000
+    assert authorization["decision_and_claim_rules"][
+        "mutual_gate_or_full_remain_locked_by_this_authorization"
+    ] is True
+    assert load_authorization(path) == authorization
+
+
+def test_posthoc_ranking_selection_uses_stable_frozen_prefixes() -> None:
+    rows = []
+    for query in ("q0", "q1"):
+        for index in range(16):
+            score = float(index)
+            if query == "q1" and index in (14, 15):
+                score = 20.0
+            rows.append(
+                {
+                    "id": f"{query}-{index}",
+                    "query_id": query,
+                    "candidate_index": index,
+                    "correctness": int(index % 2 == 0),
+                    "clir_score": score,
+                    "clir_selected_best_of_n": index == (15 if query == "q0" else 14),
+                }
+            )
+    queries, labels, indices = _selection(rows, [1, 2, 4, 8, 16])
+    assert queries == ["q0", "q1"]
+    assert indices[16].tolist() == [15, 14]
+    assert labels[16].tolist() == [0.0, 1.0]

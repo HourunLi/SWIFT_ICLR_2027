@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from prepare_clir_prior_gate import build_parser, load_protocol, verify_config_pair
-from summarize_clir_prior_gate import _prior_run_metrics
+from summarize_clir_prior_gate import _prior_run_metrics, load_ranking_authorization
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +41,21 @@ def test_gate_preflight_parser_defaults_to_frozen_protocol() -> None:
     )
     assert args.command == "preflight"
     assert args.device == "cpu"
+
+
+def test_gate_ranking_authorization_freezes_primary_and_defers_full() -> None:
+    path = CONFIG_ROOT / "gate_v1/ranking_evaluation_authorization.json"
+    authorization = load_ranking_authorization(path)
+    assert authorization["frozen_before_pg0_scored_outputs"] is True
+    assert authorization["grid"]["cells"] == ["p0", "pg0"]
+    assert authorization["grid"]["seeds"] == [42, 43, 44]
+    assert authorization["metrics"]["primary"] == (
+        "paired_query_level_pg0_minus_p0_Best_of_N_accuracy_at_K_16"
+    )
+    assert authorization["metrics"]["bootstrap_replicates"] == 10_000
+    assert authorization["decision_and_claim_rules"][
+        "three_module_full_requires_a_separate_post_gate_protocol"
+    ] is True
 
 
 def test_prior_run_metrics_include_alignment_and_protection_targets() -> None:

@@ -986,6 +986,15 @@ K=16 时 PG0 每 seed 改变 `30%--57%` 的候选，说明 Gate 确实直接影�
 并按预注册规则在当前探索性 screen 被拒绝。** 用户要求三模块阶段仍保留 main-style `.25`
 路径，所以后续只把它作为固定方法身份测试交互，不在这批 51/892 数据上重新调权重。
 
+### 三模块扩量组合 v1：已冻结数据合并与八格设计
+
+[`three_module_expansion_v1`](configs/three_module_expansion_v1) 已冻结 materialization-only
+协议，说明见 [`docs/three_module_expansion_v1.md`](docs/three_module_expansion_v1.md)。它用
+同一份 5,370-row 训练清单跑 C/H0/Prior+`.25` Gate 的完整 `2×2×2` 八格、三 seed、三
+epoch。当前只允许机械合并与独立复核；在 exact manifest hash、单独 training authorization
+和 full-width preflight 完成前不得训练。H1、mutual、MIL、pseudo-tail、progress 和
+reconstruction 全关，892×16 ranking 仍只算复用的探索性评估。
+
 ## Toy smoke test
 
 Toy 数据只验证代码路径，不能证明方法有效：

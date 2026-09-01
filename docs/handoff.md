@@ -1105,9 +1105,12 @@ summary SHA-256 分别为 `ca09b9a9…b117` / `4e33d529…c4f9`。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；
    它通过 Gate/Prior 对齐门，却在 K=16 三 seed 全负。不得在这 51 条 Prior dev 或 892 题复用
    ranking 上再调 direct weight、Gate 权重、epoch 或 subset。
-6. 用户已授权后续三模块组合。训练前必须另冻 unified manifest 与 matched cells；Full 固定为
-   Consistency + H0 + direct Prior + 原版 `.25` main-style Gate。H1、mutual、MIL、pseudo-tail、
-   progress、reconstruction 继续关闭，除非另行授权。同一 892 题只能给探索性诊断；正式
+6. 用户已授权后续三模块组合；materialization-only 协议已冻结在
+   `configs/three_module_expansion_v1/protocol.json`，完整说明在
+   `docs/three_module_expansion_v1.md`。它固定统一 5,370-row manifest 和 C/H/P 的 `2×2×2`
+   八格；Full 是 Consistency + H0 + direct Prior + 原版 `.25` main-style Gate。H1、mutual、
+   MIL、pseudo-tail、progress、reconstruction 全关。发布并独立复核 exact manifest 后还要另冻
+   training authorization 和通过 full-width preflight；同一 892 题只能给探索性诊断，正式
    Gate/Full 结论仍需要新的 query/cluster-disjoint ranking population。
 
 当前裁决是：Consistency 有部分 held-out relation 机制证据；v7.4 证明严格 H 子集能学到

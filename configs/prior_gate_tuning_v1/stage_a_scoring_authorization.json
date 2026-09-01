@@ -1,0 +1,67 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-stage-a-scoring-authorization",
+  "status": "AUTHORIZED_PRIOR_GATE_TUNING_V1_STAGE_A_SCORING",
+  "authorized_at_utc": "2026-09-01",
+  "authorization_source": {
+    "kind": "explicit_user_instruction_in_active_codex_thread",
+    "instruction": "ok，可以",
+    "scope": "score the pre-registered CH, direct-P/Gate=0, and Full(.25) cells on the open tuning split only"
+  },
+  "evidence_tier": "prospective_train_source_weight_tuning_not_confirmation",
+  "training_completion_path": "run_artifacts/prior_gate_tuning_v1/stage_a/training/completion_report.json",
+  "training_completion_sha256": "3b0a1c9fd1202f13f2059081624d1e7015012f95f5de5580e4bbdf3b249d6335",
+  "training_completion_status": "PASS_PRIOR_GATE_TUNING_V1_STAGE_A_9_CHECKPOINTS",
+  "ranking_input_path": "run_artifacts/prior_gate_tuning_v1/features_v1/final/tuning_features.jsonl",
+  "ranking_input_sha256": "94be8c01a2067242ac0095f7db15c8bf6704cb7fc18e6eddbafa88b4d0c377fd",
+  "ranking_rows": 12800,
+  "ranking_queries": 800,
+  "candidates_per_query": 16,
+  "cells": [
+    "ch",
+    "direct_gate0",
+    "full_025"
+  ],
+  "seeds": [42, 43, 44],
+  "run_count": 9,
+  "k": [1, 2, 4, 8, 16],
+  "bootstrap_replicates": 10000,
+  "bootstrap_seed": 20260901,
+  "scorer_path": "score_clir_checkpoint_set.py",
+  "scorer_sha256": "069cd534130ef324569b8e732813a3b69e6f2fad30613b4f3829d66ae45fac06",
+  "summarizer_path": "summarize_clir_gate_tuning_stage_a.py",
+  "summarizer_sha256": "44772572b35923bd79234c410043eaafca8cb3a51dc82957f2ad89bc2c55e159",
+  "runtime": {
+    "num_shards": 8,
+    "batch_size": 2,
+    "num_workers": 0,
+    "pin_memory": false,
+    "amp_dtype": "bfloat16",
+    "shard_output_root": "run_artifacts/prior_gate_tuning_v1/stage_a/scoring/shards",
+    "merged_output_root": "run_artifacts/prior_gate_tuning_v1/stage_a/scoring/merged",
+    "one_worker_per_l20z": true,
+    "each_feature_payload_loaded_by_exactly_one_worker": true,
+    "all_nine_checkpoints_reused_on_that_worker": true
+  },
+  "attribution": {
+    "direct_prior_effect": "direct_gate0_minus_ch_at_K16",
+    "gate_effect_given_direct_prior": "full_025_minus_direct_gate0_at_K16",
+    "axis_rule": "if_both_means_nonnegative_tune_none_else_open_only_the_more_negative_axis",
+    "axis_decision_uses_only_mean_across_seeds": true,
+    "bootstrap_intervals_are_diagnostics_not_a_replacement_axis_rule": true
+  },
+  "frozen_parent_audit": {
+    "stage_a_training_authorization_sha256": "c9f8d8b9cb3c86ba885806261f0a274874dfbca454fa327d833c029e5ec01284",
+    "stage_a_preflight_sha256": "fad08e2a81e3210eead3e1a154c86c29a295f436430af77c7f719f29bbb5633e"
+  },
+  "confirmation_scoring_allowed": false,
+  "confirmation_outcomes_opened": false,
+  "claim_boundary": {
+    "allowed": "select zero or one pre-registered tuning axis from fresh tuning data",
+    "forbidden": [
+      "opening confirmation outcomes",
+      "calling this a confirmation or protected-test result",
+      "changing both direct-P and Gate weights",
+      "selecting a weight before completing the frozen axis decision"
+    ]
+  }
+}

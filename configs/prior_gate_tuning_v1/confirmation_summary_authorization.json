@@ -1,0 +1,25 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-confirmation-summary-authorization",
+  "status": "AUTHORIZED_PRIOR_GATE_TUNING_V1_CONFIRMATION_SUMMARY",
+  "authorized_at_utc": "2026-09-01",
+  "authorization_source": {
+    "kind": "successful_hash_bound_one_time_confirmation_score_merge",
+    "user_instruction": "ok，可以",
+    "scope": "apply the pre-registered confirmation decision rule to the complete sealed-population score merge"
+  },
+  "scoring_authorization_path": "configs/prior_gate_tuning_v1/confirmation_scoring_authorization.json",
+  "scoring_authorization_sha256": "949b0219d5ee73259b66a4f0292ab6bfbb95c2b6c5baac35b41eff6ab9ffdb63",
+  "weight_lock_path": "configs/prior_gate_tuning_v1/confirmation_lock.json",
+  "weight_lock_sha256": "3fbd59a96ba3b337439e452bed3fc2bce27fd3e9da41e767931a0733f52f1273",
+  "merge_report_path": "run_artifacts/prior_gate_tuning_v1/confirmation/scoring/merged/merge_report.json",
+  "merge_report_sha256": "570b26dff6044a6a1eeed2c4e9cf0a35c22041ca7d8935ff6694285401567ccf",
+  "summarizer_path": "summarize_clir_gate_tuning_confirmation.py",
+  "summarizer_sha256": "efc476c2062958580093f347493b8eb5892eaef8a585ac6c112d4285a1f50dc2",
+  "output_path": "run_artifacts/prior_gate_tuning_v1/confirmation/summary.json",
+  "primary_contrast": "locked_candidate_minus_ch_at_K16",
+  "benefit_rule": "positive_mean_at_least_two_positive_seeds_and_fixed_seed_query_bootstrap_95_ci_lower_above_zero",
+  "harm_rule": "negative_mean_and_at_least_two_negative_seeds",
+  "confirmation_outcomes_opened": true,
+  "no_second_weight_selection_allowed": true,
+  "claim_boundary": "summarize the already completed one-time train-source confirmation; do not select another weight afterward"
+}

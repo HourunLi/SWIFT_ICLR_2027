@@ -1,0 +1,133 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-stage-a-authorization",
+  "status": "AUTHORIZED_PRIOR_GATE_TUNING_V1_STAGE_A",
+  "authorized_at_utc": "2026-09-01",
+  "authorization_source": {
+    "kind": "explicit_user_instruction_in_active_codex_thread",
+    "instruction": "ok，可以",
+    "scope": "execute the pre-registered fresh Prior-vs-Gate attribution and tune only the selected axis"
+  },
+  "evidence_tier": "prospective_train_source_tuning_with_sealed_confirmation",
+  "minimum_parent_commit": "47bb1cdd98f7554521fe97e8b64cb0109b2de94a",
+  "frozen_inputs": {
+    "protocol": {
+      "path": "configs/prior_gate_tuning_v1/protocol.json",
+      "file_sha256": "89b98a4571570287c63fbda8e0478d87ff98063943804e023ed21dace544afbb"
+    },
+    "feature_completion": {
+      "path": "run_artifacts/prior_gate_tuning_v1/features_v1/final/completion.json",
+      "file_sha256": "34c9dd05687fd365b38c48fb988622318cf7e2f7aac7d9ba2c53a888dfc21de4"
+    },
+    "tuning_features": {
+      "path": "run_artifacts/prior_gate_tuning_v1/features_v1/final/tuning_features.jsonl",
+      "file_sha256": "94be8c01a2067242ac0095f7db15c8bf6704cb7fc18e6eddbafa88b4d0c377fd",
+      "row_count": 12800,
+      "query_count": 800
+    },
+    "train_manifest": {
+      "path": "run_artifacts/three_module_expansion_v1/data/train_factorial.jsonl",
+      "file_sha256": "d5c5129629f610e9353a58fe7df7a3cb09b0e324ed399073ef3e76ec14e1feba",
+      "row_count": 5370,
+      "query_count": 1493
+    },
+    "parent_training_completion": {
+      "path": "run_artifacts/three_module_expansion_v1/training/completion_report.json",
+      "file_sha256": "2d7eb7f55d2cc92fd81ef1236c35d0a22c2a6ad9b09a03545a655c5e1d846f92"
+    },
+    "direct_config": {
+      "path": "configs/prior_gate_tuning_v1/ch_direct_prior_gate0.json",
+      "file_sha256": "4deff8b9c9818880a59a56e11040503ead2b7ed893e6a44050078d3ffbf2cd63"
+    }
+  },
+  "reused_checkpoints": {
+    "ch/seed-42": {
+      "path": "run_artifacts/three_module_expansion_v1/training/ch/seed-42/checkpoint.pt",
+      "file_sha256": "87266c10f56ff3bd5698382299f9651ce0d39a38f69d36294c3de2b319bc218c"
+    },
+    "ch/seed-43": {
+      "path": "run_artifacts/three_module_expansion_v1/training/ch/seed-43/checkpoint.pt",
+      "file_sha256": "bc2200c37a6f4e5d51b73e636489f8382bdc3f23fd6cff91088159f7771143c5"
+    },
+    "ch/seed-44": {
+      "path": "run_artifacts/three_module_expansion_v1/training/ch/seed-44/checkpoint.pt",
+      "file_sha256": "222607a331634ad7df1d11b79fbcac84d34f14804ba981d3aa8c87270e20dee1"
+    },
+    "full/seed-42": {
+      "path": "run_artifacts/three_module_expansion_v1/training/full/seed-42/checkpoint.pt",
+      "file_sha256": "5281d731b53e744b2b20eb7532a00519e559380e8f052dd90345ebaf2c66ef2c"
+    },
+    "full/seed-43": {
+      "path": "run_artifacts/three_module_expansion_v1/training/full/seed-43/checkpoint.pt",
+      "file_sha256": "96390c55793eb3942e842ebbe3c1a119eef28ee13b1ad6f336167263d281a830"
+    },
+    "full/seed-44": {
+      "path": "run_artifacts/three_module_expansion_v1/training/full/seed-44/checkpoint.pt",
+      "file_sha256": "4b4c06c404a3f66b1b4faa51eaace3e974e7b25b220782a9a9fbb91738816baa"
+    }
+  },
+  "implementation": {
+    "stage_a_orchestrator": {
+      "path": "prepare_clir_gate_tuning_stage_a.py",
+      "file_sha256": "ac4428cbeeb25413b38e28455500dbcd2d07235324b799c556e2a32efa71696a"
+    },
+    "training_entrypoint": {
+      "path": "train_clir.py",
+      "file_sha256": "7fb4536f0e2fbf61d38111dcb611b87f91566367fef5468a00c80341249a1c7c"
+    },
+    "reward_model_and_losses": {
+      "path": "src/consistency_localized_reward.py",
+      "file_sha256": "d85f3dba528beed7d6f7d44233ebc70cb21029215ad4be0c41207fedf03a1be8"
+    },
+    "data_loading_and_collation": {
+      "path": "src/clir_data.py",
+      "file_sha256": "ddb154716f5be1e68b8b6175b4e4d11608ca03367db8675d2b2f1654774550a0"
+    },
+    "feature_encoder": {
+      "path": "src/clir_features.py",
+      "file_sha256": "d04809d48d0e3c0dc766b1fba69e19df07d5fdb5bd13836f7b6e929267ca9b30"
+    }
+  },
+  "training": {
+    "seeds": [42, 43, 44],
+    "new_runs": 3,
+    "epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "train_rows": 5370,
+    "train_queries": 1493,
+    "supervision_per_epoch": {
+      "rows": 5370,
+      "correctness_rows": 5370,
+      "consistency_rows": 800,
+      "consistency_positive_pairs": 400,
+      "consistency_negative_pairs": 159600,
+      "onset_rows": 400,
+      "path_hallucination_rows": 400,
+      "token_advantage_rows": 0,
+      "progress_rows": 0,
+      "key_prior_tokens": 77605,
+      "complete_prior_tokens": 77605,
+      "paired_prior_rows": 250,
+      "reconstruction_rows": 0
+    },
+    "only_new_cell": "C1_H0_direct_KeyComplete_1_Gate_0",
+    "fixed_epoch_no_checkpoint_selection": true,
+    "confirmation_outcomes_opened": false
+  },
+  "runtime": {
+    "preflight_report": "run_artifacts/prior_gate_tuning_v1/stage_a/preflight.json",
+    "direct_training_root": "run_artifacts/prior_gate_tuning_v1/stage_a/training/direct_gate0",
+    "completion_report": "run_artifacts/prior_gate_tuning_v1/stage_a/training/completion_report.json",
+    "require_clean_committed_code": true,
+    "large_artifacts_remain_git_ignored": true
+  },
+  "claim_boundary": {
+    "allowed": "train three direct-P/Gate=0 diagnostics and assemble the nine-checkpoint Stage-A set",
+    "forbidden": [
+      "opening or scoring sealed confirmation",
+      "changing the pre-registered axis rule",
+      "training both tuning axes",
+      "protected-test or human-Gold claims"
+    ]
+  }
+}

@@ -967,6 +967,25 @@ P0 在 K=16 每个 seed 改了约 `77%--83%` 的候选选择，但三 seed 合�
 不是新 protected test；原 v12/v13 仍失败。mutual、固定 `.25` gate 和 Full 仍未因本轮自动
 解锁，若继续必须另冻下一阶段，不能在这 51 条 dev 或 892 题上再挑 epoch、权重或子集。
 
+### Dual Prior v12-posthoc：固定 `.25` Gate 学到对齐，但排名门失败
+
+随后按独立冻结的单因素协议比较已有 P0（Gate 关）与 PG0（只把
+`gate_prior_weight` 从 `0` 改为 `.25`）。PG0 使用相同的 4,170 条训练行、250 条 direct
+Prior 监督、三个 seed 和三个 epoch；没有开启 Consistency、H0/H1、mutual 或 Full。
+
+在 51 条 Prior dev 上，Gate 到 fused Key/Complete 分布的平方 L2 从 `.03114` 降到
+`.02584`，2/3 seed 改善；Key/Complete AP 下降分别只有 `.01071/.00018`，Gate 的归一化
+熵 `.87191`、有效 token 比例 `.41419`。因此“Gate 学会跟随双先验”、Prior 保护和防塌缩
+三道机制门都通过。
+
+但复用的 892×16 探索性排名没有通过主门：BoN@8 从 `84.60%` 到 `85.05%`
+（`+0.45` point，三 seed 同正但区间跨 0），BoN@16 从 `85.54%` 到 `85.01%`
+（`-0.52` point，三 seed 全负；fixed-seed query interval `[-1.20,+.11]` points）。
+K=16 时 PG0 每 seed 改变 `30%--57%` 的候选，说明 Gate 确实直接影响最终 score；只是净方向
+略差。冻结裁决是：**机制对齐成立，固定 `.25` Gate 的 standalone ranking benefit 不成立，
+并按预注册规则在当前探索性 screen 被拒绝。** 用户要求三模块阶段仍保留 main-style `.25`
+路径，所以后续只把它作为固定方法身份测试交互，不在这批 51/892 数据上重新调权重。
+
 ## Toy smoke test
 
 Toy 数据只验证代码路径，不能证明方法有效：
@@ -1020,7 +1039,8 @@ pytest -q
   复测；均值分离与 score-gap 结构改善，但正对 cosine 下降、cosine AUROC seed 方向
   混合，且没有新的 Best-of-N population。Hallucination 标签仍有限。Prior v12 原门仍失败；
   另立的 post-hoc exact 子集新增 202 train +51 dev，证明 direct Key/Complete 可学，但复用
-  ranking 上 BoN@16 无增益、BoN@8 三 seed 一致回退，不能替代新的确认性数据。
+  ranking 上 gate-off BoN@16 无增益、BoN@8 三 seed 一致回退；固定 `.25` Gate 虽学到
+  Prior 对齐，却在 BoN@16 三 seed 全负，也不能替代新的确认性数据。
 - clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代缺失的数据 provenance 上游与 protected-test protocol。
 - clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired
   summarizer；v6.1 新增了单独的 held-out consistency relation evaluator，但尚未重建

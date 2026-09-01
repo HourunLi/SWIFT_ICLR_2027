@@ -1,0 +1,93 @@
+{
+  "schema_version": "clir-prior-v12-posthoc-fixed-025-gate-completion-v1",
+  "status": "COMPLETE_PRIOR_V12_POSTHOC_FIXED_025_GATE_EXPLORATORY_SCREEN",
+  "evidence_tier": "posthoc_exploratory_silver_no_human_verification",
+  "terminal_statuses_preserved": {
+    "prior_v12": "STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE",
+    "prior_v13": "FAIL_PRIOR_V13_SCHEMA"
+  },
+  "frozen_inputs": {
+    "protocol_sha256": "0d0d7b908240307e9f6231711a305fba2f866651a889bdf4e5fbc6463639ff23",
+    "ranking_authorization_sha256": "ec64a7ad519a2e44527f1195f95945dd96ba6eaa8e024c91d93eb6ae9f8c0457",
+    "ranking_manifest_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7"
+  },
+  "local_artifacts": {
+    "training_preflight_sha256": "f9f313618c21e5c2edd6d8373f2744e9f4be39fce9288deb258455bfb46aab61",
+    "training_completion_sha256": "416fb7fb1bd8adee635beaffe4301ab7b8f110bd08313efe2973daac0c32e659",
+    "dev_gate_summary_sha256": "ca09b9a9ef04d923e4c1814501731b77fbe857bb32dddb2b4eba6200b133b117",
+    "ranking_summary_sha256": "4e33d52959c575247ea6d064677e40d672ee5abec3cfb0cc4136eade9fa9c4f9"
+  },
+  "experiment": {
+    "cells": [
+      "p0_direct_prior_gate_off_reused",
+      "pg0_direct_prior_fixed_025_gate_on"
+    ],
+    "only_changed_factor": "gate_prior_weight_0_to_0.25",
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "train_rows": 4170,
+    "paired_prior_train_rows": 250,
+    "prior_dev_rows": 51,
+    "ranking_queries": 892,
+    "ranking_candidates_per_query": 16
+  },
+  "mechanism": {
+    "p0_mean_gate_to_fused_prior_squared_l2": 0.03113940024590181,
+    "pg0_mean_gate_to_fused_prior_squared_l2": 0.02583576565961432,
+    "pg0_minus_p0_squared_l2": -0.00530363458628749,
+    "improved_seed_count": 2,
+    "key_ap_drop": 0.010710710266530366,
+    "complete_ap_drop": 0.00018369366296833167,
+    "pg0_normalized_gate_entropy": 0.8719090303197673,
+    "pg0_effective_token_fraction": 0.4141878963253156,
+    "gate_alignment_learned": true,
+    "prior_protection_pass": true,
+    "gate_collapse_guard_pass": true
+  },
+  "ranking": {
+    "p0_mean_accuracy": {
+      "1": 0.827354260089686,
+      "2": 0.8512705530642751,
+      "4": 0.8576233183856502,
+      "8": 0.8460388639760836,
+      "16": 0.8553811659192826
+    },
+    "pg0_mean_accuracy": {
+      "1": 0.827354260089686,
+      "2": 0.8490284005979073,
+      "4": 0.8572496263079223,
+      "8": 0.8505231689088192,
+      "16": 0.8501494768310911
+    },
+    "pg0_minus_p0": {
+      "1": 0.0,
+      "2": -0.002242152466367713,
+      "4": -0.0003736920777279522,
+      "8": 0.004484304932735426,
+      "16": -0.00523168908819133
+    },
+    "bon16_delta_by_seed": {
+      "42": -0.0033632286995515697,
+      "43": -0.007847533632286996,
+      "44": -0.004484304932735426
+    },
+    "bon16_fixed_seed_query_95_ci": [-0.011958146487294468, 0.0011210762331838565],
+    "bon16_hierarchical_seed_query_95_ci": [-0.014200298953662182, 0.004484304932735426],
+    "within_query_pairwise_p0": 0.6593746801760311,
+    "within_query_pairwise_pg0": 0.6590676491658991,
+    "bon16_changed_candidate_fraction_by_seed": {
+      "42": 0.5717488789237668,
+      "43": 0.3038116591928251,
+      "44": 0.39349775784753366
+    }
+  },
+  "decision": {
+    "mechanism_alignment": "supported_on_the_posthoc_exact_silver_dev",
+    "exploratory_fixed_025_ranking_benefit": false,
+    "fixed_025_standalone_gate_screen": "rejected_by_negative_bon16_mean_and_three_negative_seeds",
+    "method_identity_for_user_requested_three_module_stage": "retain_the_unchanged_fixed_025_main_style_route_without_tuning_on_these_populations",
+    "three_module_full_requires_separate_frozen_protocol": true,
+    "no_more_tuning_on_same_dev_or_ranking_population": true
+  },
+  "claim_boundary": "reused exploratory ranking only; not Gold, v12/v13 pass, fresh confirmatory, protected test, tuned gate efficacy, or three-module Full evidence"
+}

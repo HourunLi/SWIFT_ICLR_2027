@@ -1,8 +1,9 @@
 # Prior v12-posthoc fixed-.25 Gate replication
 
-Status: protocol preparation. No PG0 training or new scoring output may be
-inspected until the machine-readable protocol, config, evaluator, and tests are
-committed with a clean worktree.
+Status: completed post-hoc exploratory screen. The protocol/config/evaluator
+were committed before training, and the ranking authorization was committed
+after the mechanism guards passed but before any PG0 ranking score was
+produced.
 
 ## Question
 
@@ -86,3 +87,41 @@ This experiment cannot turn the original v12/v13 failures into passes and
 cannot make the Silver labels Gold or human-verified. It tests direct Prior plus
 fixed Gate only. The user's requested three-module combination is a later,
 separately frozen stage after this result; it is not silently included here.
+
+## Completed result
+
+All three PG0 seeds completed three epochs with finite, loadable checkpoints.
+On the 51-row Prior dev set, the mean full-trajectory Gate-to-fused-Prior
+squared L2 fell from `.03114` to `.02584`; two of three seed deltas were lower.
+Key AP dropped only `.01071`, Complete AP dropped `.00018`, normalized Gate
+entropy was `.87191`, and effective-token fraction was `.41419`. Thus the
+predeclared alignment, Prior-protection, and anti-collapse guards all passed:
+the Gate learned to look more like the fused Key/Complete map without erasing
+the two Prior heads or collapsing onto a tiny token set.
+
+That mechanism result did not become stable ranking benefit on the reused
+892-query ×16-candidate population:
+
+| K | P0 Gate-off | PG0 Gate=.25 | PG0−P0 |
+|---:|---:|---:|---:|
+| 1 | `82.74%` | `82.74%` | `0.00` point |
+| 2 | `85.13%` | `84.90%` | `-0.22` point |
+| 4 | `85.76%` | `85.72%` | `-0.04` point |
+| 8 | `84.60%` | `85.05%` | `+0.45` point |
+| 16 | `85.54%` | `85.01%` | `-0.52` point |
+
+At K=8 all three seed deltas were positive, but both frozen intervals crossed
+zero. At the primary K=16 all three deltas were negative
+(`-.34/-.78/-.45` points); the fixed-seed query interval was
+`[-1.20,+.11]` points and the seed+query interval was `[-1.42,+.45]` points.
+Within-query correct-vs-wrong pairwise accuracy was essentially unchanged
+(`.65937 -> .65907`).
+
+The Gate was not inert: at K=16 it changed the selected candidate for
+`57.2%/30.4%/39.3%` of queries by seed. It simply changed slightly more
+correct selections into wrong ones than the reverse. The frozen decision is
+therefore: **mechanism alignment learned, but fixed `.25` standalone Gate
+rejected on this exploratory ranking screen.** Per the user's method-identity
+constraint, the unchanged `.25` route may still be carried into the separately
+frozen three-module interaction experiment; this is not a claim that `.25`
+passed, and it must not be retuned on these 51/892 inspected populations.

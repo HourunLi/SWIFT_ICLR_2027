@@ -10,6 +10,7 @@ from summarize_clir_prior_gate import _prior_run_metrics, load_ranking_authoriza
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_ROOT = ROOT / "configs/data_expansion_prior_v12/posthoc_v1"
 PROTOCOL = CONFIG_ROOT / "gate_v1/protocol.json"
+COMPLETION = CONFIG_ROOT / "gate_v1/completion.json"
 
 
 def test_fixed_gate_configs_differ_only_in_gate_weight() -> None:
@@ -55,6 +56,26 @@ def test_gate_ranking_authorization_freezes_primary_and_defers_full() -> None:
     assert authorization["metrics"]["bootstrap_replicates"] == 10_000
     assert authorization["decision_and_claim_rules"][
         "three_module_full_requires_a_separate_post_gate_protocol"
+    ] is True
+
+
+def test_gate_completion_separates_mechanism_from_ranking_decision() -> None:
+    completion = json.loads(COMPLETION.read_text())
+    assert completion["status"] == (
+        "COMPLETE_PRIOR_V12_POSTHOC_FIXED_025_GATE_EXPLORATORY_SCREEN"
+    )
+    assert completion["mechanism"]["gate_alignment_learned"] is True
+    assert completion["mechanism"]["prior_protection_pass"] is True
+    assert completion["mechanism"]["gate_collapse_guard_pass"] is True
+    assert completion["ranking"]["pg0_minus_p0"]["8"] > 0.0
+    assert completion["ranking"]["pg0_minus_p0"]["16"] < 0.0
+    assert all(
+        delta < 0.0
+        for delta in completion["ranking"]["bon16_delta_by_seed"].values()
+    )
+    assert completion["decision"]["exploratory_fixed_025_ranking_benefit"] is False
+    assert completion["decision"][
+        "three_module_full_requires_separate_frozen_protocol"
     ] is True
 
 

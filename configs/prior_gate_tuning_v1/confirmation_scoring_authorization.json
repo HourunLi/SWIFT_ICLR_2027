@@ -1,0 +1,67 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-confirmation-scoring-authorization",
+  "status": "AUTHORIZED_PRIOR_GATE_TUNING_V1_CONFIRMATION_SCORING",
+  "authorized_at_utc": "2026-09-01",
+  "authorization_source": {
+    "kind": "explicit_user_instruction_in_active_codex_thread",
+    "instruction": "ok，可以",
+    "scope": "open and score the sealed confirmation exactly once after the axis, weight, and checkpoint set are hash locked"
+  },
+  "evidence_tier": "fresh_query_and_cluster_disjoint_train_source_confirmation",
+  "weight_lock_path": "configs/prior_gate_tuning_v1/confirmation_lock.json",
+  "weight_lock_sha256": "3fbd59a96ba3b337439e452bed3fc2bce27fd3e9da41e767931a0733f52f1273",
+  "weight_selection_path": "run_artifacts/prior_gate_tuning_v1/weight_grid/selection.json",
+  "weight_selection_sha256": "3d77386212b08e59daacf48b84e9a8dba8b87534210c2a33304dee013e233fc9",
+  "training_completion_path": "configs/prior_gate_tuning_v1/confirmation_lock.json",
+  "training_completion_sha256": "3fbd59a96ba3b337439e452bed3fc2bce27fd3e9da41e767931a0733f52f1273",
+  "training_completion_status": "LOCKED_PRIOR_GATE_TUNING_V1_CONFIRMATION_12_CHECKPOINTS",
+  "ranking_input_path": "run_artifacts/prior_gate_tuning_v1/features_v1/final/confirmation_features.sealed.jsonl",
+  "ranking_input_sha256": "71a1dbe1cd3f9ff66e658397ea82bac56908042d02ad8931dbd1fce864cce681",
+  "ranking_rows": 12800,
+  "ranking_queries": 800,
+  "candidates_per_query": 16,
+  "cells": [
+    "locked_candidate",
+    "ch",
+    "u0",
+    "full_025"
+  ],
+  "seeds": [42, 43, 44],
+  "run_count": 12,
+  "k": [1, 2, 4, 8, 16],
+  "bootstrap_replicates": 10000,
+  "bootstrap_seed": 20260903,
+  "scorer_path": "score_clir_checkpoint_set.py",
+  "scorer_sha256": "968d573d748cbf41cec6ae49987d5a91bc1403e0b78b15ca1f57ff7a44ceeac9",
+  "runtime": {
+    "num_shards": 8,
+    "batch_size": 2,
+    "num_workers": 0,
+    "pin_memory": false,
+    "amp_dtype": "bfloat16",
+    "shard_output_root": "run_artifacts/prior_gate_tuning_v1/confirmation/scoring/shards",
+    "merged_output_root": "run_artifacts/prior_gate_tuning_v1/confirmation/scoring/merged",
+    "one_worker_per_l20z": true,
+    "each_trajectory_row_assigned_to_exactly_one_worker": true,
+    "shared_condition_features_may_be_reread_across_workers": true,
+    "all_twelve_checkpoint_aliases_reused_on_each_worker": true
+  },
+  "primary_contrast": "locked_candidate_minus_ch_at_K16",
+  "secondary_contrasts": [
+    "locked_candidate_minus_u0_at_K16",
+    "locked_candidate_minus_full_025_at_K16"
+  ],
+  "benefit_rule": "positive_mean_at_least_two_positive_seeds_and_fixed_seed_query_bootstrap_95_ci_lower_above_zero",
+  "harm_rule": "negative_mean_and_at_least_two_negative_seeds",
+  "confirmation_scoring_allowed": true,
+  "one_time_opening": true,
+  "no_second_weight_selection_after_confirmation": true,
+  "claim_boundary": {
+    "allowed": "judge the already locked candidate on one fresh train-source confirmation population",
+    "forbidden": [
+      "changing the selected direct or Gate weight after seeing confirmation",
+      "calling this a protected-test or external-generalization result",
+      "calling numeric checker labels human Gold"
+    ]
+  }
+}

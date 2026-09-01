@@ -110,6 +110,15 @@ def test_factorial_scorer_accepts_only_exact_stage_a_3x3_grid(
         "cells": ["ch", "direct_gate0", "full_025"],
         "seeds": [42, 43, 44],
         "run_count": 9,
+        "runtime": {
+            "num_shards": 1,
+            "batch_size": 1,
+            "num_workers": 0,
+            "pin_memory": False,
+            "amp_dtype": "bfloat16",
+            "shard_output_root": str(tmp_path / "shards"),
+            "merged_output_root": str(tmp_path / "merged"),
+        },
     }
     authorization_path.write_text(json.dumps(authorization), encoding="utf-8")
     _, _, completion, digest, _, _ = _load_bound_contract(

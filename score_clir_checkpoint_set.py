@@ -155,6 +155,19 @@ def command_worker(args: argparse.Namespace) -> None:
         input_path=input_path,
     )
     output_root = Path(args.output_root).resolve()
+    runtime = authorization["runtime"]
+    expected_root = _project_path(runtime["shard_output_root"])
+    if output_root != expected_root:
+        raise ValueError("checkpoint-set shard output root drift")
+    if (
+        args.num_shards != int(runtime["num_shards"])
+        or args.batch_size != int(runtime["batch_size"])
+        or args.num_workers != int(runtime["num_workers"])
+        or bool(args.pin_memory) != bool(runtime["pin_memory"])
+        or args.amp_dtype != runtime["amp_dtype"]
+        or args.feature_root is not None
+    ):
+        raise ValueError("checkpoint-set worker runtime contract drift")
     shard_name = _shard_name(args.shard_index, args.num_shards)
     manifest_path = output_root / "shards" / f"{shard_name}.manifest.json"
     targets = [
@@ -267,6 +280,13 @@ def command_merge(args: argparse.Namespace) -> None:
     )
     shard_root = Path(args.shard_root).resolve()
     output_root = Path(args.output_root).resolve()
+    runtime = authorization["runtime"]
+    if (
+        args.num_shards != int(runtime["num_shards"])
+        or shard_root != _project_path(runtime["shard_output_root"])
+        or output_root != _project_path(runtime["merged_output_root"])
+    ):
+        raise ValueError("checkpoint-set merge runtime contract drift")
     target_report = output_root / "merge_report.json"
     if target_report.exists() and not args.overwrite:
         raise FileExistsError(f"score merge report exists: {target_report}")

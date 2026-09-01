@@ -15,9 +15,9 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史可训练 48 条；v8--v12 均已按冻结门失败；v13 的 48 条全新机械化烟测盲包已就绪 | 目前仍只能训练历史 48 条；v13 只验证新定义，烟测标签也不直接训练 | v12 的 blocker 是 Complete 边界而非数量；v13 改为 AI 审核局部角色/依赖，程序回溯生成 Complete，尚待双标 |
+| Dual Prior | 历史可训练 48 条；v8--v13 均已按冻结门失败 | 目前仍只能训练历史 48 条；v13 smoke 不可训练 | v12 的 blocker 是 Complete 边界；v13 改用机械回溯，但 B 有 1 条隐藏控制项违反不可用行的空结构 schema，冻结 evaluator 在计算自然样本指标前即终止 |
 
-失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8/v9/v10/v11/v12 分别以各自冻结失败状态终止；v12 的最终状态是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`。这些标签都不能事后挑子集、裁决、重标或降门训练。
+失败批次不能混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8--v13 分别以各自冻结失败状态终止；v12 是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，v13 是 `FAIL_PRIOR_V13_SCHEMA`。这些标签都不能事后挑子集、裁决、重标或降门训练。
 
 ## 2026-08-23 clean integration 审计与训练试跑
 
@@ -892,7 +892,7 @@ schema/ID/package evaluator、16-control/80-repeat 门、八格固定配额和�
 说明主要 blocker 是长链 Complete 边界仍不稳定，而不是候选规模不足。协议要求终止：不发布
 这 500 条、不事后挑 687 条或其他容易子集、不重标、不抽 feature、不训练。
 
-### Dual Prior v13：机械局部审核烟测已就绪
+### Dual Prior v13：机械局部审核烟测因 schema 终止
 
 v12 的只读回放先验证了一个重要负结果：只把 unit 碎片合成较大的 block，A 的 Complete
 重复一致仍为 `51/80`，B 也只从 `51/80` 变成 `53/80`，所以问题不是简单的切分偏一格。
@@ -908,10 +908,17 @@ GSM8K/MATH × numeric match/mismatch × medium/long 八格各 6 条。A/B 各有
 
 盲包状态为 `PASS_PRIOR_V13_FRESH_BLIND_PACKAGES_READY`，独立复算状态为
 `PASS_PRIOR_V13_PACKAGE_INDEPENDENT_RECOMPUTE`；package report/verification SHA-256 分别为
-`8de2a666…1422` / `abfaad27…fdd`，生成时 label 数为 0。下一步只需让 GPT-5.6-sol xhigh 与
-Claude Opus 5 high 在独立上下文完成各自 4 个 shard，再运行冻结 evaluator。全部门通过才另立
-v14 扩量；v13 的 48 条烟测标签本身不进训练。若失败，就停止继续改提示词，再单独讨论是否把
-v12 严格共识子集立成明确的 post-hoc 探索版本；绝不能把它写成 v12 原协议通过。
+`8de2a666…1422` / `abfaad27…fdd`。GPT-5.6-sol xhigh 与 Claude Opus 5 high 随后各完成
+4 个 shard：A/B 各 72 行，八个文件均为合法 JSON，行数、唯一 ID 和对应 package 全部匹配。
+
+冻结 evaluator 仍在 schema 门终止为 `FAIL_PRIOR_V13_SCHEMA`。唯一错误是 B 的隐藏控制项
+`prior-v13-control-b-07`：它正确给出 `eligibility=no_auditable_reasoning`，但仍输出了一个
+`answer_wrapper` block role；不可用行按冻结契约必须把所有结构字段清空。因为 evaluator 在
+schema 失败后不会计算 controls、repeats 或 48 条自然样本的机制指标，本轮没有可报告的
+Complete 稳定性结果。报告 SHA-256 为 `179d1006…577f`，且 `trainable_labels_published=false`。
+协议预先禁止失败后的格式/标签修补、重标和自适应救援，因此不能删掉该 role 后重跑，也不能
+启动 v14、抽 feature 或训练 v13。若仍要使用 v12 严格共识子集，只能另立明确的 post-hoc
+探索版本，并保留 v12/v13 的失败结论。
 
 ## Toy smoke test
 

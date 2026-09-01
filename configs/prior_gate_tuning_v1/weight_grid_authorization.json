@@ -1,0 +1,128 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-direct-weight-grid-authorization",
+  "status": "AUTHORIZED_PRIOR_GATE_TUNING_V1_DIRECT_WEIGHT_GRID",
+  "authorized_at_utc": "2026-09-01",
+  "authorization_source": {
+    "kind": "pre_registered_axis_rule_applied_to_fresh_stage_a_result",
+    "selected_axis": "direct_prior",
+    "direct_effect_mean_at_k16": -0.005000000000000042,
+    "gate_effect_mean_at_k16": 0.0050000000000000044,
+    "other_axis_training_authorized": false
+  },
+  "evidence_tier": "prospective_train_source_weight_tuning_not_confirmation",
+  "minimum_parent_commit": "8c7224d3c9519d05cc722d9f8e7bef0c795e8619",
+  "frozen_inputs": {
+    "protocol": {
+      "path": "configs/prior_gate_tuning_v1/protocol.json",
+      "file_sha256": "89b98a4571570287c63fbda8e0478d87ff98063943804e023ed21dace544afbb"
+    },
+    "attribution": {
+      "path": "run_artifacts/prior_gate_tuning_v1/stage_a/attribution.json",
+      "file_sha256": "bc015bb6f59189e22e1295d95805c5325cb0cf18b5c8b655893e8e36a8eedcc3"
+    },
+    "stage_a_completion": {
+      "path": "run_artifacts/prior_gate_tuning_v1/stage_a/training/completion_report.json",
+      "file_sha256": "3b0a1c9fd1202f13f2059081624d1e7015012f95f5de5580e4bbdf3b249d6335"
+    },
+    "train_manifest": {
+      "path": "run_artifacts/three_module_expansion_v1/data/train_factorial.jsonl",
+      "file_sha256": "d5c5129629f610e9353a58fe7df7a3cb09b0e324ed399073ef3e76ec14e1feba",
+      "row_count": 5370,
+      "query_count": 1493
+    },
+    "configs": {
+      "direct_025": {
+        "path": "configs/prior_gate_tuning_v1/ch_direct025_gate025.json",
+        "file_sha256": "e7c2e3648b6a97bbf55f9ef79c6982f8d3ea954f20088378d1f8a729abbb9c57"
+      },
+      "direct_050": {
+        "path": "configs/prior_gate_tuning_v1/ch_direct050_gate025.json",
+        "file_sha256": "0fcd7ffdc6f0377e582f12d03260ac26bea94e54df9da2530bfd4d381bb6f2b6"
+      },
+      "direct_100": {
+        "path": "configs/three_module_expansion_v1/full_consistency_h0_prior_gate.json",
+        "file_sha256": "edc1212191b15f69cc9af7a88912c95f7172ab8b10e5a36e5d9acc28207496fb"
+      }
+    }
+  },
+  "reused_endpoint_checkpoints": {
+    "direct_100/seed-42": {
+      "path": "run_artifacts/three_module_expansion_v1/training/full/seed-42/checkpoint.pt",
+      "file_sha256": "5281d731b53e744b2b20eb7532a00519e559380e8f052dd90345ebaf2c66ef2c"
+    },
+    "direct_100/seed-43": {
+      "path": "run_artifacts/three_module_expansion_v1/training/full/seed-43/checkpoint.pt",
+      "file_sha256": "96390c55793eb3942e842ebbe3c1a119eef28ee13b1ad6f336167263d281a830"
+    },
+    "direct_100/seed-44": {
+      "path": "run_artifacts/three_module_expansion_v1/training/full/seed-44/checkpoint.pt",
+      "file_sha256": "4b4c06c404a3f66b1b4faa51eaace3e974e7b25b220782a9a9fbb91738816baa"
+    }
+  },
+  "implementation": {
+    "weight_grid_orchestrator": {
+      "path": "prepare_clir_gate_tuning_weight_grid.py",
+      "file_sha256": "cb1c25035a0429e6d38335a8d8439f2d84e92dcd7508a24a25b180955970b23e"
+    },
+    "training_entrypoint": {
+      "path": "train_clir.py",
+      "file_sha256": "7fb4536f0e2fbf61d38111dcb611b87f91566367fef5468a00c80341249a1c7c"
+    },
+    "reward_model_and_losses": {
+      "path": "src/consistency_localized_reward.py",
+      "file_sha256": "d85f3dba528beed7d6f7d44233ebc70cb21029215ad4be0c41207fedf03a1be8"
+    },
+    "data_loading_and_collation": {
+      "path": "src/clir_data.py",
+      "file_sha256": "ddb154716f5be1e68b8b6175b4e4d11608ca03367db8675d2b2f1654774550a0"
+    },
+    "feature_encoder": {
+      "path": "src/clir_features.py",
+      "file_sha256": "d04809d48d0e3c0dc766b1fba69e19df07d5fdb5bd13836f7b6e929267ca9b30"
+    }
+  },
+  "training": {
+    "seeds": [42, 43, 44],
+    "new_cells": ["direct_025", "direct_050"],
+    "new_runs": 6,
+    "epochs": 3,
+    "train_rows": 5370,
+    "train_queries": 1493,
+    "supervision_per_epoch": {
+      "rows": 5370,
+      "correctness_rows": 5370,
+      "consistency_rows": 800,
+      "consistency_positive_pairs": 400,
+      "consistency_negative_pairs": 159600,
+      "onset_rows": 400,
+      "path_hallucination_rows": 400,
+      "token_advantage_rows": 0,
+      "progress_rows": 0,
+      "key_prior_tokens": 77605,
+      "complete_prior_tokens": 77605,
+      "paired_prior_rows": 250,
+      "reconstruction_rows": 0
+    },
+    "direct_weight_grid": [0.25, 0.5, 1.0],
+    "gate_prior_weight_fixed": 0.25,
+    "consistency_weight_fixed": 1.0,
+    "hallucination_weight_fixed": 1.0,
+    "fixed_epoch_no_checkpoint_selection": true
+  },
+  "runtime": {
+    "preflight_report": "run_artifacts/prior_gate_tuning_v1/weight_grid/preflight.json",
+    "training_root": "run_artifacts/prior_gate_tuning_v1/weight_grid/training",
+    "completion_report": "run_artifacts/prior_gate_tuning_v1/weight_grid/training/completion_report.json",
+    "large_artifacts_remain_git_ignored": true
+  },
+  "confirmation_outcomes_opened": false,
+  "claim_boundary": {
+    "allowed": "train only direct weights 0.25 and 0.5, reuse direct 1.0, then select by mean K16 tuning accuracy",
+    "forbidden": [
+      "training the Gate axis",
+      "opening confirmation",
+      "changing Consistency or H0 weights",
+      "post-selection enlargement of the direct-weight grid"
+    ]
+  }
+}

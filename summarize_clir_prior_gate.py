@@ -112,8 +112,15 @@ def _validate_rows(
             raise ValueError(f"checkpoint drift at row {index} in {scored_path}")
         if not math.isfinite(float(row["clir_score"])):
             raise FloatingPointError(f"non-finite score at row {index}")
-        if expected_extra == SCALAR_SCORE_FIELDS and row["clir_scoring_mode"] != "scalar_only":
-            raise ValueError(f"non-scalar ranking row at {index}")
+        if "clir_scoring_mode" in row:
+            expected_mode = (
+                "scalar_only" if expected_extra == SCALAR_SCORE_FIELDS else "full"
+            )
+            if row["clir_scoring_mode"] != expected_mode:
+                raise ValueError(
+                    f"unexpected scoring mode at row {index}: "
+                    f"{row['clir_scoring_mode']} != {expected_mode}"
+                )
     return rows
 
 
@@ -224,7 +231,14 @@ def summarize_dev(protocol_path: Path, output_json: Path | None) -> dict[str, An
             else:
                 scored_path = output_root / f"evaluation/dev_scored/pg0_seed-{seed}.jsonl"
                 checkpoint = pg0_hashes[str(seed)]
-            rows = _validate_rows(scored_path, reference, FULL_SCORE_FIELDS, checkpoint)
+            expected_fields = (
+                FULL_SCORE_FIELDS
+                if cell == "p0"
+                else FULL_SCORE_FIELDS | {"clir_scoring_mode"}
+            )
+            rows = _validate_rows(
+                scored_path, reference, expected_fields, checkpoint
+            )
             metrics = _prior_run_metrics(rows)
             loaded[(cell, int(seed))] = metrics
             run_records.append(

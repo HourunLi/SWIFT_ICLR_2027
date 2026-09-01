@@ -37,6 +37,11 @@ unit `[token_start, token_end)`：被选 unit 覆盖的 token target 为 1，其
 只做 matched `R0 vs P0`：两格共享完全相同的 3,968 条历史 correctness 数据和 202 条
 新 Prior train 行，结构、初始化、采样、epoch 与学习率一致。
 
+这里的 3,968 行沿用项目原训练清单，其中已有 48 条早期 Key/Complete 标签。换句话说，
+R0 仍只使用全部 4,170 行的 correctness；P0 使用“旧 48 + 新 202 = 250 条”Prior
+监督。这是把扩量数据接到原模块数据上的口径，不是只用新 202 条替换旧数据。精确监督量
+已另行冻结在 `posthoc_v1/training_authorization.json`。
+
 - R0：只开最终 correctness loss；
 - P0：在 R0 上只增加 direct Key BCE 和 direct Complete BCE；
 - mutual distillation、gate coupling、Consistency、H0/H1、MIL、pseudo-tail 全部关闭。

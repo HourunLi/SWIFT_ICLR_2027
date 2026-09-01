@@ -180,3 +180,23 @@ def test_parser_defaults_to_posthoc_v1_protocol() -> None:
     args = build_parser().parse_args(["prepare"])
     assert args.protocol.endswith("configs/data_expansion_prior_v12/posthoc_v1/protocol.json")
     assert args.output_root.endswith("run_artifacts/data_expansion_prior_v12/posthoc_v1")
+
+
+def test_training_authorization_freezes_legacy_plus_new_prior_supervision() -> None:
+    root = Path(__file__).resolve().parents[1]
+    path = (
+        root
+        / "configs/data_expansion_prior_v12/posthoc_v1/training_authorization.json"
+    )
+    authorization = json.loads(path.read_text())
+    assert authorization["status"] == (
+        "AUTHORIZED_POSTHOC_EXPLORATORY_R0_P0_THREE_SEED_TRAINING"
+    )
+    supervision = authorization["supervision_contract"]
+    assert supervision["legacy_prior_rows"] == 48
+    assert supervision["new_v12_posthoc_prior_rows"] == 202
+    assert supervision["total_prior_rows_seen_by_p0"] == 250
+    assert supervision["legacy_prior_target_tokens"] == 14307
+    assert supervision["new_prior_target_tokens"] == 63298
+    assert supervision["total_prior_target_tokens"] == 77605
+    assert authorization["next_gate"]["mutual_gate_or_full_unlocked"] is False

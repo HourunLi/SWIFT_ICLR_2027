@@ -1,0 +1,89 @@
+{
+  "schema_version": "clir-prior-v12-posthoc-r0-p0-training-authorization-v1",
+  "status": "AUTHORIZED_POSTHOC_EXPLORATORY_R0_P0_THREE_SEED_TRAINING",
+  "authorized_at_utc": "2026-09-01T00:00:00Z",
+  "authorization_source": {
+    "instruction": "V12吧",
+    "scope": "the separately named v12 post-hoc route, selected-only features, and the first matched direct-Prior learnability comparison"
+  },
+  "evidence_boundary": {
+    "original_v12_status": "STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE",
+    "failure_is_preserved": true,
+    "tier": "posthoc_exploratory_silver_no_human_verification",
+    "gold_or_confirmatory": false
+  },
+  "minimum_code_commit": "e8878061ca65ca43d4be8c35e6d489d4a4ab772a",
+  "frozen_inputs": {
+    "protocol": {
+      "path": "configs/data_expansion_prior_v12/posthoc_v1/protocol.json",
+      "file_sha256": "2b8bde705e146528a27751662729646226ee32acbcd4b90990c1d693283ac1c4"
+    },
+    "feature_and_data_finalization": {
+      "path": "run_artifacts/data_expansion_prior_v12/posthoc_v1/finalization_report.json",
+      "file_sha256": "2f2aed6dca7f86691463f8973356983ceb2d2d0b06c690eb053f4a876f548cd8"
+    },
+    "training_preflight": {
+      "path": "run_artifacts/data_expansion_prior_v12/posthoc_v1/training_preflight/preflight.json",
+      "file_sha256": "005a2e9565231c5318627ce5f70b6e0cca24a7717f3fd95e77d4b03fe2df31df"
+    },
+    "shared_train": {
+      "path": "run_artifacts/data_expansion_prior_v12/posthoc_v1/data/train_r0_p0.jsonl",
+      "file_sha256": "3e1bb293562f9682b03fe3003c03b3b66a61fee5d2c1600bb8078b7ba7d1e518",
+      "sidecar_file_sha256": "fda910692fd8a7bcb66a64d9b7ab9165fe144b0ee647143ccb163414629655fa",
+      "row_count": 4170
+    },
+    "prior_dev": {
+      "path": "run_artifacts/data_expansion_prior_v12/posthoc_v1/data/prior_dev.jsonl",
+      "file_sha256": "0047c7c4672933a8f4cd71ab48a49e1cfdeb4ca8afb2fa8d9e2f0bfd2751895f",
+      "sidecar_file_sha256": "3ae49c7c6c0f26d346a75262179dff181472b7fe8fadbd15f85177caf6c2afc2",
+      "row_count": 51
+    },
+    "ranking_evaluation": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/ranking_evaluation.jsonl",
+      "file_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7",
+      "row_count": 14272,
+      "query_count": 892
+    }
+  },
+  "cells": {
+    "r0": {
+      "config": "configs/data_expansion_prior_v12/posthoc_v1/r0_correctness_only.json",
+      "file_sha256": "8de1b4720f319a08447a17e5b11fd0081c25f31c6b635cbc877ba58f96e74f89",
+      "prior_weight": 0.0
+    },
+    "p0": {
+      "config": "configs/data_expansion_prior_v12/posthoc_v1/p0_direct_prior.json",
+      "file_sha256": "f330de67dfe35636d14c0287a299cb1f24b9ca19fbc3921bfd8631333aed919b",
+      "prior_weight": 1.0
+    }
+  },
+  "supervision_contract": {
+    "shared_rows": 4170,
+    "correctness_rows": 4170,
+    "legacy_prior_rows": 48,
+    "new_v12_posthoc_prior_rows": 202,
+    "total_prior_rows_seen_by_p0": 250,
+    "legacy_prior_target_tokens": 14307,
+    "new_prior_target_tokens": 63298,
+    "total_prior_target_tokens": 77605,
+    "r0_ignores_all_250_present_prior_targets": true,
+    "p0_uses_direct_key_and_complete_on_all_250_rows": true,
+    "consistency_onset_h1_mil_pseudo_tail_mutual_gate_and_reconstruction": "disabled"
+  },
+  "training": {
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "same_manifest_initialization_sampler_optimizer_and_budget": true,
+    "only_cell_difference": "prior_weight_0_vs_1",
+    "six_runs_required": true,
+    "adaptive_epoch_or_weight_change": false
+  },
+  "next_gate": {
+    "first": "all_six_checkpoints_load_finite_and_bind_the_same_data",
+    "second": "prior_dev_key_complete_learnability_and_correctness_safety",
+    "third": "exploratory_frozen_ranking_comparison",
+    "mutual_gate_or_full_unlocked": false
+  }
+}

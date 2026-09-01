@@ -6,6 +6,8 @@ from prepare_clir_three_module import (
     load_training_authorization,
     verify_factorial_configs,
 )
+from evaluate_clir_three_module_factorial import factorial_effects, h_metrics
+from score_clir_factorial import _add_global_selections
 from src.clir_three_module import build_unified_data
 
 
@@ -158,3 +160,66 @@ def test_unified_merge_enriches_shared_prior_and_removes_cross_task_dev() -> Non
     assert [row["id"] for row in result["prior_dev"]] == ["pdev-keep"]
     assert result["report"]["removed_h_dev_queries"] == ["q-prior-new"]
     assert result["report"]["removed_prior_dev_queries"] == ["q-h-positive"]
+
+
+def test_factorial_effects_use_frozen_averaged_contrasts() -> None:
+    cells = {
+        "u0": 0.0,
+        "c": 2.0,
+        "h": 3.0,
+        "p": 5.0,
+        "ch": 2.0 + 3.0 + 7.0,
+        "cp": 2.0 + 5.0 + 11.0,
+        "hp": 3.0 + 5.0 + 13.0,
+        "full": 2.0 + 3.0 + 5.0 + 7.0 + 11.0 + 13.0 + 17.0,
+    }
+    effects = factorial_effects(cells)
+    assert effects["C_main"] == 2.0 + 7.0 / 2 + 11.0 / 2 + 17.0 / 4
+    assert effects["H_main"] == 3.0 + 7.0 / 2 + 13.0 / 2 + 17.0 / 4
+    assert effects["P_main"] == 5.0 + 11.0 / 2 + 13.0 / 2 + 17.0 / 4
+    assert effects["C_x_H"] == 7.0 + 17.0 / 2
+    assert effects["C_x_P"] == 11.0 + 17.0 / 2
+    assert effects["H_x_P"] == 13.0 + 17.0 / 2
+    assert effects["C_x_H_x_P"] == 17.0
+
+
+def test_h_metrics_accept_query_disjoint_balance_after_leakage_removal() -> None:
+    rows = [
+        {
+            "query_id": "q-positive",
+            "source": "gsm8k",
+            "output_token_ids": [1, 2, 3],
+            "hallucination_onset": 1,
+            "path_hallucinated": 1,
+            "clir_checkpoint_sha256": "checkpoint",
+            "clir_hallucination_prob": [0.1, 0.8, 0.9],
+            "clir_path_hallucination_prob": 0.95,
+            "clir_pseudo_onset": 1,
+        },
+        {
+            "query_id": "q-clean",
+            "source": "gsm8k",
+            "output_token_ids": [4, 5],
+            "hallucination_onset": -1,
+            "path_hallucinated": 0,
+            "clir_checkpoint_sha256": "checkpoint",
+            "clir_hallucination_prob": [0.1, 0.2],
+            "clir_path_hallucination_prob": 0.25,
+            "clir_pseudo_onset": -1,
+        },
+    ]
+    report = h_metrics(rows)
+    assert report["class_counts"] == {0: 1, 1: 1}
+    assert report["onset"]["positive_exact_start_rate"] == 1.0
+    assert report["onset"]["clean_no_onset_rate"] == 1.0
+
+
+def test_factorial_global_selection_is_query_wide_and_stable_on_ties() -> None:
+    rows = [
+        {"query_id": "q0", "clir_score": 0.2},
+        {"query_id": "q1", "clir_score": 0.9},
+        {"query_id": "q0", "clir_score": 0.2},
+        {"query_id": "q1", "clir_score": 0.1},
+    ]
+    _add_global_selections(rows)
+    assert [row["clir_selected_best_of_n"] for row in rows] == [True, True, False, False]

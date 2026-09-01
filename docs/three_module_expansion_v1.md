@@ -1,7 +1,10 @@
 # Three-module expanded factorial v1
 
-Status: unified data materialized and independently verified; the exact
-24-run training authorization is frozen, pending full-width GPU preflight.
+Status: unified data materialized and independently verified; full-width GPU
+preflight passed; all 24 authorized runs completed three epochs and every
+checkpoint plus optimizer state passed finite-state validation. Mechanism
+evaluation is in progress. Ranking remains locked until the mechanism report
+is complete and a separate hash-bound authorization is published.
 
 ## What is being combined
 
@@ -92,12 +95,20 @@ Materialization alone did not authorize training. The published manifests now
 contain exactly 5,370 train rows, 198 clean H-dev rows, and 49 clean Prior-dev
 rows, and an independent recomputation passed. Their exact file, ordered-row,
 and sidecar hashes are bound in
-`configs/three_module_expansion_v1/training_authorization.json`. The remaining
-gate before the 24 GPU runs is one clean-commit, full-width preflight across all
-eight cells. It uses separate representative batches for two Consistency
-relations, two positive plus two clean H0 examples, and four paired Prior
-examples; every enabled objective must produce finite loss and gradients in its
-intended head.
+`configs/three_module_expansion_v1/training_authorization.json`. The clean-commit,
+full-width preflight covered all eight cells using separate representative
+batches for Consistency, positive/clean H0, and Prior. All enabled objectives
+produced finite losses and gradients in their intended heads. The subsequent
+8 cells × 3 seeds completed as authorized, and the validation report records
+`PASS_THREE_MODULE_COMPLETE_2X2X2_24_RUN_TRAINING`.
+
+Mechanism and ranking scoring use row sharding rather than checkpoint sharding.
+Each worker owns a disjoint set of source rows, reads each large hidden-state
+payload once, and applies all 24 small reward checkpoints to that in-memory
+batch. Eight shard manifests are hash checked before merge; merge restores the
+exact source order and verifies complete row coverage, source identity, finite
+scores, and the checkpoint hash for every output. This avoids rereading the
+roughly 1 TB ranking payload 24 times without changing any model computation.
 
 No result may be called Gold, human-verified, fresh confirmation, protected-test
 evidence, or a repair of the original v7/v12/v13 failures. No inspected dev or

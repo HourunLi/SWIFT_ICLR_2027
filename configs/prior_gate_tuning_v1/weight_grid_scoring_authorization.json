@@ -1,0 +1,66 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-weight-grid-scoring-authorization",
+  "status": "AUTHORIZED_PRIOR_GATE_TUNING_V1_WEIGHT_GRID_SCORING",
+  "authorized_at_utc": "2026-09-01",
+  "authorization_source": {
+    "kind": "explicit_user_instruction_in_active_codex_thread",
+    "instruction": "ok，可以",
+    "scope": "score the pre-registered direct-Prior weights 0.25, 0.5, and 1.0 on the open tuning split only"
+  },
+  "evidence_tier": "prospective_train_source_weight_tuning_not_confirmation",
+  "training_completion_path": "run_artifacts/prior_gate_tuning_v1/weight_grid/training/completion_report.json",
+  "training_completion_sha256": "045384d2d4716497277caf0b97e4c4b919790d03acf0a830e13d1985cddfce2b",
+  "training_completion_status": "PASS_PRIOR_GATE_TUNING_V1_WEIGHT_GRID_9_CHECKPOINTS",
+  "ranking_input_path": "run_artifacts/prior_gate_tuning_v1/features_v1/final/tuning_features.jsonl",
+  "ranking_input_sha256": "94be8c01a2067242ac0095f7db15c8bf6704cb7fc18e6eddbafa88b4d0c377fd",
+  "ranking_rows": 12800,
+  "ranking_queries": 800,
+  "candidates_per_query": 16,
+  "cells": [
+    "direct_025",
+    "direct_050",
+    "direct_100"
+  ],
+  "seeds": [42, 43, 44],
+  "run_count": 9,
+  "k": [1, 2, 4, 8, 16],
+  "bootstrap_replicates": 10000,
+  "bootstrap_seed": 20260902,
+  "scorer_path": "score_clir_checkpoint_set.py",
+  "scorer_sha256": "069cd534130ef324569b8e732813a3b69e6f2fad30613b4f3829d66ae45fac06",
+  "runtime": {
+    "num_shards": 8,
+    "batch_size": 2,
+    "num_workers": 0,
+    "pin_memory": false,
+    "amp_dtype": "bfloat16",
+    "shard_output_root": "run_artifacts/prior_gate_tuning_v1/weight_grid/scoring/shards",
+    "merged_output_root": "run_artifacts/prior_gate_tuning_v1/weight_grid/scoring/merged",
+    "one_worker_per_l20z": true,
+    "each_trajectory_row_assigned_to_exactly_one_worker": true,
+    "shared_condition_features_may_be_reread_across_workers": true,
+    "all_nine_checkpoints_reused_on_each_worker": true
+  },
+  "selection_rule": {
+    "metric": "mean_across_three_seeds_Best_of_N_accuracy_at_K16",
+    "maximize": true,
+    "exact_tie_break": "larger_direct_weight",
+    "gate_prior_weight_fixed": 0.25
+  },
+  "frozen_parent_audit": {
+    "weight_grid_training_authorization_sha256": "9eee6183dd5f12c6aed1adb84449d81e8a20fa6acc08a3ff36d62cbe3f3bf9cf",
+    "weight_grid_preflight_sha256": "9c8627596cd86e0c57e6f6536ffc18f345d34f138a1a5f233c34f89fdf8d6041",
+    "stage_a_attribution_sha256": "bc015bb6f59189e22e1295d95805c5325cb0cf18b5c8b655893e8e36a8eedcc3"
+  },
+  "confirmation_scoring_allowed": false,
+  "confirmation_outcomes_opened": false,
+  "claim_boundary": {
+    "allowed": "select exactly one pre-registered direct-Prior weight from fresh open tuning data",
+    "forbidden": [
+      "opening confirmation outcomes",
+      "calling this a confirmation or protected-test result",
+      "changing the fixed 0.25 Gate weight",
+      "choosing a weight from training loss"
+    ]
+  }
+}

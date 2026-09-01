@@ -1,0 +1,198 @@
+{
+  "schema_version": "clir-prior-v12-posthoc-exact-experiment-protocol-v1",
+  "status": "AUTHORIZED_PRIOR_V12_POSTHOC_EXACT_DIRECT_LEARNABILITY",
+  "frozen_at_utc": "2026-09-01T00:00:00Z",
+  "authorization_source": {
+    "kind": "explicit_user_instruction_in_active_codex_thread",
+    "instruction": "V12吧",
+    "meaning": "choose the separately named v12 post-hoc exact-consensus route after v13 termination; preserve both original terminal results"
+  },
+  "frozen_parent_commit": "e35a40f42067d8cd64da41cc2336fb9b77ebb071",
+  "original_evidence_status": {
+    "prior_v12_status": "STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE",
+    "prior_v12_failure_is_preserved": true,
+    "prior_v13_status": "FAIL_PRIOR_V13_SCHEMA",
+    "prior_v13_failure_is_preserved": true,
+    "evidence_tier": "posthoc_exploratory_silver_no_human_verification",
+    "may_be_called_gold_confirmatory_or_v12_pass": false
+  },
+  "frozen_inputs": {
+    "v12_protocol": {
+      "path": "configs/data_expansion_prior_v12/protocol.json",
+      "file_sha256": "04f8915cdd8da27aac2f9c31bea9777c3dc82cca50f8b7e9b048bd878978b9ea"
+    },
+    "v12_terminal_report": {
+      "path": "run_artifacts/data_expansion_prior_v12/pre_annotation/evaluation/raw_gate_report.json",
+      "file_sha256": "0dce22ba0f3e60483a66de0e882d9084a8f3aba908e7c85a046fde2b9817d0a1"
+    },
+    "v12_terminal_verification": {
+      "path": "run_artifacts/data_expansion_prior_v12/pre_annotation/evaluation/independent_verification.json",
+      "file_sha256": "cf68ba49fcda0aad8c742e02a3b3a867d94ba39ad3038528b94c1ab7a4d7f20a"
+    },
+    "v13_terminal_report": {
+      "path": "run_artifacts/data_expansion_prior_v13/pre_annotation/evaluation/raw_gate_report.json",
+      "file_sha256": "179d10060bbe192b6e0411f0d57523b2a3212abd00881917a7551b1b6add577f"
+    },
+    "natural_proposals": {
+      "path": "run_artifacts/data_expansion_prior_v12/pre_annotation/proposals/prior_natural_800.jsonl",
+      "file_sha256": "334c7dbf4773a32009fbf73cb9083dbaaaa2e9dbac0f7d01fc83107193b65bdc",
+      "row_count": 800
+    },
+    "private_package_index": {
+      "path": "run_artifacts/data_expansion_prior_v12/pre_annotation/packages/PRIVATE_package_index.jsonl",
+      "file_sha256": "1ec3d2cb61fba49a8b3a2746a3f7fc2a2df91b994821b3e97d86955c9ad0d20e",
+      "row_count": 1792
+    },
+    "materialized_rollouts": {
+      "path": "run_artifacts/data_expansion_prior_v12/pre_annotation/materialized/all_rows.jsonl",
+      "file_sha256": "3a6c5a8874cbe55c2ea8e14f86a5c1725cdfea8269dfba56d859fc75aab0058e",
+      "row_count": 16000,
+      "ordered_rows_sha256": "4cea978c9b03f190bcf5fdc6e0012ddf2536bb9e7f8794b1f309608213a1a4b4"
+    },
+    "historical_correctness_train": {
+      "path": "run_artifacts/dual_prior_original_scale_v2/data_v2/train3968_mixed.jsonl",
+      "file_sha256": "3c1ac6068343328ef23d85e380985be641c564ce29d4492e6e95b1526d97f310",
+      "row_count": 3968
+    },
+    "exploratory_ranking_evaluation": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/ranking_evaluation.jsonl",
+      "file_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7",
+      "sidecar_file_sha256": "6ae741af6643002aa66721c2761cb83874175431e665458baf795c920025dbb4",
+      "row_count": 14272,
+      "query_count": 892
+    },
+    "ranking_feature_finalization": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/finalization_report.json",
+      "file_sha256": "092c99a57aeae16c9cb61336714b7270fd3cdc9b47877d67336a9bcce8625b54"
+    }
+  },
+  "annotation_bundle_contract": {
+    "package_and_label_shard_count_per_annotator": 16,
+    "rows_per_shard": 56,
+    "all_package_and_label_hashes_are_taken_from_v12_terminal_report_bindings": true,
+    "annotators": {
+      "a": "user_reported_gpt_5_6_sol_xhigh",
+      "b": "user_reported_claude_opus_5_high"
+    }
+  },
+  "posthoc_selection": {
+    "label_name": "silver_posthoc_dual_ai_exact_prior_v12_repeat_fail_excluded_no_human_verification",
+    "rule": [
+      "both_usable_and_nonlow",
+      "exact_same_singleton_key",
+      "exact_same_nonempty_complete_set",
+      "exclude_natural_parent_if_either_available_self_repeat_has_target_signature_drift",
+      "retain_every_remaining_row_in_prefrozen_selection_priority_order"
+    ],
+    "no_fixed_posthoc_quota": true,
+    "selection_uses_clir_scores_training_results_or_confidence_ranking": false,
+    "expected": {
+      "selected_rows": 253,
+      "selected_train_rows": 202,
+      "selected_dev_rows": 51,
+      "selected_ordered_proposal_ids_sha256": "18103bb5b276e6468cae8ad45800086e5cd72cdebc71b586e96f9037fe6c0515",
+      "selected_strata": {
+        "gsm8k|numeric_match|dev": 24,
+        "gsm8k|numeric_match|train": 93,
+        "gsm8k|numeric_mismatch|dev": 2,
+        "gsm8k|numeric_mismatch|train": 13,
+        "math|numeric_match|dev": 17,
+        "math|numeric_match|train": 77,
+        "math|numeric_mismatch|dev": 8,
+        "math|numeric_mismatch|train": 19
+      }
+    }
+  },
+  "target_contract": {
+    "unit_spans": "saved_output_token_ids_left_closed_right_open",
+    "key_positive": "tokens_in_exact_consensus_key_unit",
+    "complete_positive": "tokens_in_exact_consensus_complete_units",
+    "negative": "all_other_saved_output_tokens",
+    "key_and_complete_masks": "one_on_every_saved_output_token",
+    "attention_normalization": "full_valid_trajectory_never_positive_or_material_subset",
+    "decode_or_retokenize_allowed": false
+  },
+  "feature_contract": {
+    "scope": "253_selected_prior_rows_only",
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "input_axis_truth": "saved_prompt_token_ids_plus_saved_output_token_ids",
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "num_feature_layers": 33,
+    "per_layer_dim": 3072,
+    "feature_dim": 101376,
+    "bytes_per_feature_token": 202752,
+    "expected": {
+      "trajectory_count": 253,
+      "query_count": 253,
+      "condition_count": 253,
+      "output_token_count": 79237,
+      "prompt_token_count": 25369,
+      "total_feature_token_count": 104606,
+      "raw_feature_bytes": 21209075712
+    }
+  },
+  "execution_configs": {
+    "R0": {
+      "path": "configs/data_expansion_prior_v12/posthoc_v1/r0_correctness_only.json",
+      "file_sha256": "8de1b4720f319a08447a17e5b11fd0081c25f31c6b635cbc877ba58f96e74f89",
+      "prior_weight": 0.0
+    },
+    "P0": {
+      "path": "configs/data_expansion_prior_v12/posthoc_v1/p0_direct_prior.json",
+      "file_sha256": "f330de67dfe35636d14c0287a299cb1f24b9ca19fbc3921bfd8631333aed919b",
+      "prior_weight": 1.0
+    }
+  },
+  "training_contract": {
+    "first_stage_cells": ["R0", "P0"],
+    "shared_matched_train_manifest": true,
+    "historical_correctness_rows": 3968,
+    "new_prior_train_rows": 202,
+    "total_train_rows": 4170,
+    "prior_dev_rows": 51,
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "only_cell_difference": "prior_weight_0_vs_1",
+    "p0_direct_key_and_complete_only": true,
+    "mutual_gate_consistency_h0_h1_mil_pseudo_tail_disabled": true,
+    "next_stage_requires_p0_dev_learnability_without_material_correctness_regression": true,
+    "no_weight_or_epoch_tuning_on_same_dev": true
+  },
+  "evaluation_contract": {
+    "mechanism_primary": [
+      "prior_dev_key_token_AUROC_AP_BCE",
+      "prior_dev_complete_token_AUROC_AP_BCE"
+    ],
+    "correctness_safety": "prior_dev_and_frozen_ranking_correctness",
+    "ranking_population": "existing_query_and_cluster_disjoint_v7_4_fully_labeled_population",
+    "ranking_reuse_is_exploratory_not_fresh_confirmatory": true
+  },
+  "runtime_contract": {
+    "output_root": "run_artifacts/data_expansion_prior_v12/posthoc_v1",
+    "model_cache": "run_artifacts/model_cache",
+    "require_clean_committed_implementation_before_plan_or_features": true,
+    "features_manifests_checkpoints_and_reports_remain_git_ignored": true
+  },
+  "claim_boundary": {
+    "allowed": "posthoc_exploratory_exact_dual_ai_silver_prior_learnability_and_ranking_diagnostics",
+    "not_allowed": [
+      "v12_or_v13_passed",
+      "Gold_human_verified_or_objectively_accurate_labels",
+      "population_representative_prior_stability",
+      "confirmatory_or_protected_test_claim",
+      "gate_mutual_or_full_integration_claim_before_separate_unlock"
+    ]
+  },
+  "authorized_scope": {
+    "deterministic_selection_and_independent_recompute": true,
+    "selected_only_feature_extraction": true,
+    "matched_R0_P0_direct_learnability_training": true,
+    "frozen_prior_dev_and_existing_ranking_evaluation": true,
+    "new_rollout_annotation_or_label_change": false,
+    "mutual_gate_or_full_training": false
+  }
+}

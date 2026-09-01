@@ -1,0 +1,58 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-rollout-authorization",
+  "status": "AUTHORIZED_RAW_ROLLOUT_ONLY",
+  "authorized_at_utc": "2026-09-01T09:48:00Z",
+  "user_authorization": "ok，可以",
+  "authorized_scope": {
+    "raw_rollout": true,
+    "raw_shard_verification_and_merge": true,
+    "numeric_checker_or_eligibility_selection": false,
+    "feature_extraction": false,
+    "new_training": false,
+    "tuning_scoring": false,
+    "confirmation_scoring": false,
+    "query_quota_threshold_or_generator_change": false,
+    "adaptive_additional_sampling": false
+  },
+  "frozen_parent": {
+    "pre_rollout_code_commit": "f7f634f3c1ef3b80a4cba858b40f834a09d8ad6f",
+    "protocol_file_sha256": "89b98a4571570287c63fbda8e0478d87ff98063943804e023ed21dace544afbb",
+    "manifest_registry_file_sha256": "8278d8d9ea7b6b91a8f2b2903e79d7dc2e783863ac79045e8890e1736aa0d390",
+    "freeze_report_file_sha256": "734858d028598b600c071f8410d2d6bf115e53e8ec7af006ae55c60abd95dc8f",
+    "independent_verification_file_sha256": "fb7e8aba0c9ba61cff5228c8e8146b996cdc406a91c9d1bb8514f62aecd03c33",
+    "tuning_queries_file_sha256": "ac28815f7e9ba4b47fd215b54e38e2e1569da0bc32252bd5d9a59a115e8d13fa",
+    "confirmation_queries_file_sha256": "dcb009bb0885beeaedc25cb6006846ce6a204ee6732c9c73128d569b03223fdc",
+    "rollout_shards_file_sha256": "afaca4a4ad1e476dcb2a16b8e054cf87fd70df19532e71e2e6ac6c04c793a143",
+    "pre_rollout_status": "PASS_GATE_TUNING_V1_PRE_ROLLOUT_FREEZE",
+    "independent_verification_status": "PASS_GATE_TUNING_V1_PRE_ROLLOUT_INDEPENDENT_RECOMPUTE",
+    "tuning_queries": 1300,
+    "confirmation_queries": 1300,
+    "rollout_shards": 52,
+    "raw_candidate_rows": 41600,
+    "confirmation_sealed": true
+  },
+  "runtime_contract": {
+    "authorized_code_parent_commit": "62c5ed2d4be8081ce18934d41cf9166af8f5e16d",
+    "python_environment": "/prodcpfs/user/panzhixin/NeuralUCB-master/.venv",
+    "first_calibration_shard": "weight_tuning-000",
+    "continue_after_calibration_if_all_runtime_checks_pass": true,
+    "maximum_concurrent_shards": 8,
+    "cuda_devices_per_shard": 1,
+    "tensor_parallel_size": 1,
+    "dtype": "bfloat16",
+    "max_num_seqs": 32,
+    "gpu_memory_utilization": 0.9,
+    "minimum_free_gpu_bytes": 40000000000,
+    "cache_dir": "run_artifacts/model_cache",
+    "output_root": "run_artifacts/prior_gate_tuning_v1",
+    "existing_complete_shard_policy": "verify_and_skip",
+    "existing_incomplete_shard_policy": "stop_without_overwrite",
+    "merge_requires_all_52_verified_shards": true
+  },
+  "post_rollout_boundary": {
+    "raw_generation_does_not_open_confirmation_correctness": true,
+    "raw_generation_does_not_authorize_numeric_checker": true,
+    "raw_generation_does_not_authorize_feature_extraction_or_training": true,
+    "next_gate": "verify_and_merge_all_raw_shards_then_separate_checker_only_authorization"
+  }
+}

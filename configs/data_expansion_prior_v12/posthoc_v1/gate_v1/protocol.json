@@ -1,0 +1,154 @@
+{
+  "schema_version": "clir-prior-v12-posthoc-gate-v1",
+  "status": "AUTHORIZED_FIXED_025_P0_PG0_REPLICATION",
+  "frozen_at_utc": "2026-09-01T00:00:00Z",
+  "authorization_source": {
+    "kind": "explicit_user_instruction_in_active_codex_thread",
+    "instruction": "ok，先做gate，然后后面再做三方法结合",
+    "scope": "first run the fixed-.25 P0-vs-PG0 Gate stage; freeze the three-method combination only after this result"
+  },
+  "evidence_tier": "posthoc_exploratory_silver_no_human_verification",
+  "terminal_statuses_preserved": {
+    "prior_v12": "STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE",
+    "prior_v13": "FAIL_PRIOR_V13_SCHEMA"
+  },
+  "implementation": {
+    "minimum_parent_commit": "05901f9b81affe27fe97bffc6bab8accb121ed4b",
+    "family": "unchanged_origin_main_shared_gradient_prior_to_reward_gate_squared_l2",
+    "gate_attention": "normalize(sigmoid(gate_logits))",
+    "fused_prior": "normalize(0.5_key_prior_plus_0.5_complete_prior).detach()",
+    "runtime_score_path": "the_same_gate_weights_token_values_in_the_scalar_score",
+    "changed_factor_only": "gate_prior_weight_0_to_0.25"
+  },
+  "frozen_inputs": {
+    "parent_posthoc_completion": {
+      "path": "configs/data_expansion_prior_v12/posthoc_v1/completion.json",
+      "file_sha256": "e062e6b41bfde41f7098dc0c527bb5a4d06362d4d10bd9908d747e2572848a7f"
+    },
+    "feature_and_data_finalization": {
+      "path": "run_artifacts/data_expansion_prior_v12/posthoc_v1/finalization_report.json",
+      "file_sha256": "2f2aed6dca7f86691463f8973356983ceb2d2d0b06c690eb053f4a876f548cd8"
+    },
+    "shared_train": {
+      "path": "run_artifacts/data_expansion_prior_v12/posthoc_v1/data/train_r0_p0.jsonl",
+      "file_sha256": "3e1bb293562f9682b03fe3003c03b3b66a61fee5d2c1600bb8078b7ba7d1e518",
+      "row_count": 4170
+    },
+    "prior_dev": {
+      "path": "run_artifacts/data_expansion_prior_v12/posthoc_v1/data/prior_dev.jsonl",
+      "file_sha256": "0047c7c4672933a8f4cd71ab48a49e1cfdeb4ca8afb2fa8d9e2f0bfd2751895f",
+      "row_count": 51
+    },
+    "ranking_manifest": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/ranking_evaluation.jsonl",
+      "file_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7",
+      "row_count": 14272,
+      "query_count": 892,
+      "candidates_per_query": 16
+    },
+    "parent_p0_training_completion": {
+      "path": "run_artifacts/data_expansion_prior_v12/posthoc_v1/training/completion_report.json",
+      "file_sha256": "b22f303ec497f16827be7652576b92f2c060d66b535bfd10e81df83c702ac7a2"
+    },
+    "parent_p0_dev_mechanism": {
+      "path": "run_artifacts/data_expansion_prior_v12/posthoc_v1/evaluation/dev_mechanism_report.json",
+      "file_sha256": "ee879efed2532aa50c10b6d1f2197d3d950000b6d7ab2ad6dc195c7165f6e20c"
+    }
+  },
+  "cells": {
+    "p0": {
+      "config": "configs/data_expansion_prior_v12/posthoc_v1/p0_direct_prior.json",
+      "file_sha256": "f330de67dfe35636d14c0287a299cb1f24b9ca19fbc3921bfd8631333aed919b",
+      "gate_prior_weight": 0.0,
+      "reused_completed_anchor": true,
+      "checkpoint_sha256_by_seed": {
+        "42": "d84dd7a9d4fb00ded660a2c8073812a6ea02209288c852b8b1325fe26249522f",
+        "43": "eabe911f6c36fa57012c71a3a45b4c87f3e12dd954d69f9a96abf43854995b16",
+        "44": "2df1d3c17bbb402034ca7e6bd700a68d1dce487e85c8ad77669427fd6ed1f7bf"
+      },
+      "dev_scored_by_seed": {
+        "42": "run_artifacts/data_expansion_prior_v12/posthoc_v1/evaluation/dev_scored/p0_seed-42.jsonl",
+        "43": "run_artifacts/data_expansion_prior_v12/posthoc_v1/evaluation/dev_scored/p0_seed-43.jsonl",
+        "44": "run_artifacts/data_expansion_prior_v12/posthoc_v1/evaluation/dev_scored/p0_seed-44.jsonl"
+      },
+      "dev_scored_sha256_by_seed": {
+        "42": "c6079cbea55a90ba1addb1d3f46e6d4a4a80bc2aa6e9c47ac9f97dd8e1409bd5",
+        "43": "485c47576a87a39f8d7715b7fb0a015067cc164f3441d730170c6b0a2272d533",
+        "44": "43c73476054b6b83101e4f5bf7e4a3360617e2ef545b4bc8a73c60bd136e7a28"
+      },
+      "ranking_scored_by_seed": {
+        "42": "run_artifacts/data_expansion_prior_v12/posthoc_v1/evaluation/ranking_scored/p0_seed-42.jsonl",
+        "43": "run_artifacts/data_expansion_prior_v12/posthoc_v1/evaluation/ranking_scored/p0_seed-43.jsonl",
+        "44": "run_artifacts/data_expansion_prior_v12/posthoc_v1/evaluation/ranking_scored/p0_seed-44.jsonl"
+      },
+      "ranking_scored_sha256_by_seed": {
+        "42": "1f00f00b6dbe4af25b2b783b31b19d45c96bd6117b48890aba2a3f23d3d691a6",
+        "43": "88e719620fb4eda1008531e683f236042de993fe7ead4473c03d284c83d84695",
+        "44": "7a33dde855eb53d010492330a0f7601b754a8458b1358db2ae316ebb5d8818a3"
+      }
+    },
+    "pg0": {
+      "config": "configs/data_expansion_prior_v12/posthoc_v1/gate_v1/pg0_fixed_025.json",
+      "file_sha256": "9071eff631c5c98cab98e7b7ac6203733d6fff4effbd36a71054e78d6e1e2598",
+      "gate_prior_weight": 0.25,
+      "train_from_scratch": true
+    }
+  },
+  "training": {
+    "train_rows": 4170,
+    "dev_rows": 51,
+    "correctness_rows": 4170,
+    "legacy_prior_rows": 48,
+    "new_prior_rows": 202,
+    "prior_rows": 250,
+    "prior_target_tokens": 77605,
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "same_manifest_initialization_sampler_optimizer_and_budget": true,
+    "reuse_p0_and_train_only_three_pg0_runs": true,
+    "no_adaptive_epoch_weight_or_subset_change": true
+  },
+  "evaluation": {
+    "mechanism_population": "the_same_51_query_disjoint_posthoc_exact_prior_dev_rows",
+    "ranking_population": "the_same_reused_892_query_x16_v7_4_exploratory_population",
+    "ranking_is_fresh_confirmatory_or_protected_test": false,
+    "primary_ranking_metric": "paired_query_level_pg0_minus_p0_Best_of_N_accuracy_at_K_16",
+    "secondary_k": [1, 2, 4, 8],
+    "bootstrap_replicates": 10000,
+    "bootstrap_seed": 20260901,
+    "selection_change_audit_at_k16_is_predeclared": true
+  },
+  "decision_rules": {
+    "maximum_key_ap_drop_from_p0": 0.05,
+    "maximum_complete_ap_drop_from_p0": 0.05,
+    "minimum_mean_normalized_gate_entropy": 0.5,
+    "minimum_mean_effective_token_fraction": 0.2,
+    "alignment_learned": "mean_gate_l2_lower_and_at_least_two_of_three_seed_deltas_negative",
+    "exploratory_ranking_benefit": "bon16_mean_positive_at_least_two_positive_seeds_and_fixed_seed_query_ci_lower_above_zero",
+    "reject_current_gate": "bon16_mean_negative_and_at_least_two_negative_seeds",
+    "report_all_frozen_k_and_both_intervals": true,
+    "no_post_result_tuning": true
+  },
+  "runtime": {
+    "output_root": "run_artifacts/data_expansion_prior_v12/posthoc_v1/gate_v1",
+    "large_artifacts_remain_git_ignored": true,
+    "require_clean_committed_protocol_and_code_before_preflight": true
+  },
+  "next_stage": {
+    "three_method_combination_user_authorized_in_principle": true,
+    "must_be_separately_frozen_after_gate_result": true,
+    "must_not_change_the_gate_weight_based_on_this_reused_population": true
+  },
+  "claim_boundary": {
+    "allowed": "posthoc exploratory fixed-.25 Gate mechanism and reused-ranking diagnostics",
+    "not_allowed": [
+      "v12_or_v13_passed",
+      "Gold_human_verified_or_objectively_accurate_labels",
+      "fresh_confirmatory_or_protected_test_claim",
+      "tuned_gate_weight_claim",
+      "three_module_combination_evidence_before_the_next_frozen_stage"
+    ]
+  }
+}

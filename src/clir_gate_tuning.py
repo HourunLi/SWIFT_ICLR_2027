@@ -31,6 +31,106 @@ class YieldGateError(ValueError):
     """Raised when a pre-frozen raw population cannot meet a final quota."""
 
 
+def build_selected_feature_inventory(
+    tuning_rows: Sequence[Mapping[str, Any]],
+    confirmation_rows: Sequence[Mapping[str, Any]],
+    *,
+    candidate_count: int,
+    worker_count: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Strip outcomes and freeze a query-atomic selected-only GPU inventory."""
+
+    from src.clir_scale_features import assign_workers, selected_statistics
+
+    role_rows = {
+        TUNING_ROLE: [dict(row) for row in tuning_rows],
+        CONFIRMATION_ROLE: [dict(row) for row in confirmation_rows],
+    }
+    query_sets: dict[str, set[str]] = {}
+    trajectory_ids: set[str] = set()
+    inventory: list[dict[str, Any]] = []
+    role_statistics: dict[str, Any] = {}
+    for role in ROLE_ORDER:
+        rows = role_rows[role]
+        population = validate_rollout_population(rows, candidate_count=candidate_count)
+        query_ids = {str(row["query_id"]) for row in rows}
+        query_sets[role] = query_ids
+        expected_sealed = role == CONFIRMATION_ROLE
+        by_query: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            if row.get("role") != role:
+                raise ValueError(f"{row.get('id')}: feature role drift")
+            if bool(row.get("sealed_until_weight_lock")) != expected_sealed:
+                raise ValueError(f"{row.get('id')}: feature sealing marker drift")
+            trajectory_id = str(row["id"])
+            if trajectory_id in trajectory_ids:
+                raise ValueError(f"duplicate selected trajectory: {trajectory_id}")
+            trajectory_ids.add(trajectory_id)
+            by_query[str(row["query_id"])].append(row)
+        role_inventory: list[dict[str, Any]] = []
+        for query_id in sorted(query_ids):
+            query_rows = sorted(
+                by_query[query_id], key=lambda row: int(row["candidate_index"])
+            )
+            if [int(row["candidate_index"]) for row in query_rows] != list(
+                range(candidate_count)
+            ):
+                raise ValueError(f"{query_id}: selected feature candidate axis drift")
+            prompts = {
+                tuple(int(value) for value in row["prompt_token_ids"])
+                for row in query_rows
+            }
+            if len(prompts) != 1:
+                raise ValueError(f"{query_id}: selected feature prompt axis drift")
+            for row in query_rows:
+                prompt_ids = [int(value) for value in row["prompt_token_ids"]]
+                output_ids = [int(value) for value in row["output_token_ids"]]
+                if not prompt_ids or not output_ids:
+                    raise ValueError(f"{row['id']}: selected feature token axis empty")
+                item = {
+                    "schema_version": "clir-gate-tuning-v1-feature-inventory-row",
+                    "inventory_index": len(inventory) + len(role_inventory),
+                    "id": str(row["id"]),
+                    "trajectory_id": str(row["id"]),
+                    "query_id": query_id,
+                    "candidate_index": int(row["candidate_index"]),
+                    "role": role,
+                    "evaluation_split": str(row["evaluation_split"]),
+                    "sealed_until_weight_lock": expected_sealed,
+                    "source": str(row["source"]),
+                    "cluster_id": str(row["cluster_id"]),
+                    "prompt_token_ids": prompt_ids,
+                    "output_token_ids": output_ids,
+                    "prompt_token_count": len(prompt_ids),
+                    "output_token_count": len(output_ids),
+                    "condition_feature_owner": int(row["candidate_index"]) == 0,
+                }
+                role_inventory.append(item)
+        inventory.extend(role_inventory)
+        role_stats = selected_statistics(role_inventory)
+        role_statistics[role] = {
+            **population,
+            **role_stats,
+            "source_counts": _counts(
+                [by_query[query_id][0] for query_id in sorted(query_ids)], "source"
+            ),
+        }
+    if query_sets[TUNING_ROLE] & query_sets[CONFIRMATION_ROLE]:
+        raise ValueError("tuning and confirmation feature queries overlap")
+    assigned, worker_statistics = assign_workers(inventory, worker_count)
+    total_statistics = selected_statistics(assigned)
+    return assigned, {
+        "roles": role_statistics,
+        "total": total_statistics,
+        "worker_count": worker_count,
+        "worker_statistics": worker_statistics,
+        "query_overlap": 0,
+        "trajectory_count": len(trajectory_ids),
+        "confirmation_correctness_copied_into_inventory": False,
+        "clir_scores_copied_into_inventory": False,
+    }
+
+
 def materialize_numeric_checker_rows(
     raw_rows: Sequence[Mapping[str, Any]], *, checker_version: str
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:

@@ -12,6 +12,7 @@ from src.clir_gate_tuning import (
     YieldGateError,
     build_query_manifests,
     build_rollout_shards,
+    build_selected_feature_inventory,
     choose_tuning_axis,
     materialize_numeric_checker_rows,
     select_checker_eligible_rows,
@@ -191,6 +192,49 @@ def test_numeric_checker_materialization_excludes_parse_failures() -> None:
             candidate_count=2,
             checker_version="clir_numeric_multisource_v3",
         )
+
+
+def test_feature_inventory_strips_outcomes_and_keeps_queries_atomic() -> None:
+    def rows(role: str) -> list[dict]:
+        sealed = role == CONFIRMATION_ROLE
+        split = "confirmation" if sealed else "tuning"
+        output = []
+        for query_index in range(2):
+            query_id = f"gsm8k:train:{role}-{query_index}"
+            for candidate_index in range(2):
+                output.append(
+                    {
+                        "id": f"{query_id}:cand:{candidate_index:03d}",
+                        "query_id": query_id,
+                        "candidate_index": candidate_index,
+                        "role": role,
+                        "evaluation_split": split,
+                        "sealed_until_weight_lock": sealed,
+                        "source": "gsm8k",
+                        "cluster_id": f"cluster-{role}-{query_index}",
+                        "prompt_token_ids": [1, 2],
+                        "output_token_ids": [3 + candidate_index],
+                        "response": f"candidate {candidate_index}",
+                        "correctness": candidate_index % 2,
+                        "checker_status": "numeric_match",
+                    }
+                )
+        return output
+
+    inventory, report = build_selected_feature_inventory(
+        rows(TUNING_ROLE),
+        rows(CONFIRMATION_ROLE),
+        candidate_count=2,
+        worker_count=2,
+    )
+    assert len(inventory) == 8
+    assert all("correctness" not in row for row in inventory)
+    assert all("checker_status" not in row for row in inventory)
+    assert report["confirmation_correctness_copied_into_inventory"] is False
+    by_query: dict[str, set[int]] = {}
+    for row in inventory:
+        by_query.setdefault(row["query_id"], set()).add(row["worker_index"])
+    assert all(len(workers) == 1 for workers in by_query.values())
 
 
 def test_attribution_opens_only_the_more_negative_axis() -> None:

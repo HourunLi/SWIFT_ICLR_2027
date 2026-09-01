@@ -252,6 +252,7 @@ def _paths(output_root: Path) -> dict[str, Path]:
         "tuning_selected": output_root / "tuning_selected.jsonl",
         "confirmation_selected": output_root / "confirmation_selected.sealed.jsonl",
         "completion": output_root / "completion.json",
+        "verification": output_root / "independent_verification.json",
     }
 
 
@@ -526,7 +527,22 @@ def command_verify(args: argparse.Namespace) -> None:
         "confirmation_outcome_distribution_disclosed": False,
         "clir_scoring_run": False,
     }
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if paths["verification"].exists():
+        raise FileExistsError(
+            f"checker verification already exists: {paths['verification']}"
+        )
+    atomic_write_json(paths["verification"], report)
+    print(
+        json.dumps(
+            {
+                **report,
+                "verification_path": str(paths["verification"]),
+                "verification_file_sha256": file_sha256(paths["verification"]),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

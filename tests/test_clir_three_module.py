@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -22,6 +23,9 @@ from summarize_clir_three_module_ranking import factorial_vectors, selection_vec
 ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL = ROOT / "configs/three_module_expansion_v1/protocol.json"
 AUTHORIZATION = ROOT / "configs/three_module_expansion_v1/training_authorization.json"
+RANKING_AUTHORIZATION = (
+    ROOT / "configs/three_module_expansion_v1/ranking_evaluation_authorization.json"
+)
 
 
 def _row(row_id: str, query_id: str, **extra: object) -> dict:
@@ -79,6 +83,20 @@ def test_three_module_training_authorization_binds_complete_grid() -> None:
     ]
     assert authorization["training"]["runs"] == 24
     assert authorization["cells"]["full"]["factors"] == [1, 1, 1]
+
+
+def test_three_module_ranking_authorization_binds_frozen_code_and_grid() -> None:
+    authorization = json.loads(RANKING_AUTHORIZATION.read_text())
+    assert authorization["status"] == "AUTHORIZED_THREE_MODULE_FACTORIAL_RANKING_V1"
+    assert authorization["cells"] == ["u0", "c", "h", "p", "ch", "cp", "hp", "full"]
+    assert authorization["seeds"] == [42, 43, 44]
+    assert authorization["k"] == [1, 2, 4, 8, 16]
+    for path_key, hash_key in (
+        ("scorer_path", "scorer_sha256"),
+        ("summarizer_path", "summarizer_sha256"),
+    ):
+        observed = hashlib.sha256((ROOT / authorization[path_key]).read_bytes()).hexdigest()
+        assert observed == authorization[hash_key]
 
 
 def test_unified_merge_enriches_shared_prior_and_removes_cross_task_dev() -> None:

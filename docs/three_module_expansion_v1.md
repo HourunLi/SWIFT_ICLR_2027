@@ -2,9 +2,9 @@
 
 Status: unified data materialized and independently verified; full-width GPU
 preflight passed; all 24 authorized runs completed three epochs and every
-checkpoint plus optimizer state passed finite-state validation. Mechanism
-evaluation is in progress. Ranking remains locked until the mechanism report
-is complete and a separate hash-bound authorization is published.
+checkpoint plus optimizer state passed finite-state validation. The separate
+mechanism evaluation passed its execution contract, and the hash-bound ranking
+authorization is now frozen. Ranking results are not yet available.
 
 ## What is being combined
 
@@ -109,6 +109,32 @@ batch. Eight shard manifests are hash checked before merge; merge restores the
 exact source order and verifies complete row coverage, source identity, finite
 scores, and the checkpoint hash for every output. This avoids rereading the
 roughly 1 TB ranking payload 24 times without changing any model computation.
+
+## Mechanism result before ranking
+
+The query-disjoint Silver mechanism evaluation used all 24 checkpoints. The
+factorial main effects show that Consistency improves held-out positive versus
+hard-negative relation separation, H0 improves tail-token AP and BCE, and the
+P factor improves both Key and Complete token AP/BCE. H0 path discrimination is
+clear, but first-onset placement at the fixed `.5` threshold remains imprecise:
+the mean Full within-5-token rate is about `3.3%`. H0 should therefore be
+described as learning the bad-tail signal, not as reliably identifying the
+exact first bad token.
+
+The raw absolute Gate-to-Prior L2 is larger for P-on cells because direct Prior
+training changes the fused Prior from almost uniform to concentrated; comparing
+that value against P-off's two nearly uniform untrained maps is not a meaningful
+alignment baseline. A separately recorded, mechanical scale-aware diagnostic
+compares the learned Gate with uniform attention against the same learned fused
+Prior. The learned Gate is closer in every P-on cell and seed (`12/12`). This
+does not alter the original raw L2 result and is marked posthoc/no-retuning.
+
+`configs/three_module_expansion_v1/ranking_evaluation_authorization.json` binds
+the 24 validated checkpoints through the training completion report, the
+mechanism report, the reused 892×16 ranking manifest, scorer and summarizer
+source hashes, eight row shards, BF16, K=`1/2/4/8/16`, stable ties, and 10,000
+paired bootstrap replicates. No ranking output may be used to change a weight,
+epoch, cell, seed, or data subset.
 
 No result may be called Gold, human-verified, fresh confirmation, protected-test
 evidence, or a repair of the original v7/v12/v13 failures. No inspected dev or

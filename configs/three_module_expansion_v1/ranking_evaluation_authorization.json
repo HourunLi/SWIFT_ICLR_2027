@@ -1,0 +1,76 @@
+{
+  "schema_version": "clir-three-module-factorial-ranking-authorization-v1",
+  "status": "AUTHORIZED_THREE_MODULE_FACTORIAL_RANKING_V1",
+  "authorized_at_utc": "2026-09-01T08:47:58Z",
+  "evidence_tier": "posthoc_exploratory_silver_no_human_verification",
+  "frozen_before_ranking_scored_outputs": true,
+  "evaluation_code_commit": "41c7a84680df516a502838a0a6454bce40154073",
+  "protocol_path": "configs/three_module_expansion_v1/protocol.json",
+  "protocol_sha256": "0b11aefcf18df185212460e94d950427cef4e1caafa5593934639998ddfd2a6b",
+  "training_completion_path": "run_artifacts/three_module_expansion_v1/training/completion_report.json",
+  "training_completion_sha256": "2d7eb7f55d2cc92fd81ef1236c35d0a22c2a6ad9b09a03545a655c5e1d846f92",
+  "mechanism_report_path": "run_artifacts/three_module_expansion_v1/evaluation/mechanism_summary_v2.json",
+  "mechanism_report_sha256": "f7b9b6d5a5b3282d96165a11e7544c2694446961bf5120aae8cbb7fef49982e2",
+  "mechanism_status_required": "PASS_THREE_MODULE_MECHANISM_EVALUATION",
+  "ranking_input_path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/ranking_evaluation.jsonl",
+  "ranking_input_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7",
+  "ranking_rows": 14272,
+  "ranking_queries": 892,
+  "candidates_per_query": 16,
+  "scorer_path": "score_clir_factorial.py",
+  "scorer_sha256": "4d12487d231c549171d3f469c44455c56b98214bc45fb01e52134ffd4893d5bb",
+  "summarizer_path": "summarize_clir_three_module_ranking.py",
+  "summarizer_sha256": "f35eeca9255881d20647155ad35bd2098ad66925fc6bb56b5492fabe220fa769",
+  "cells": [
+    "u0",
+    "c",
+    "h",
+    "p",
+    "ch",
+    "cp",
+    "hp",
+    "full"
+  ],
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "k": [
+    1,
+    2,
+    4,
+    8,
+    16
+  ],
+  "bootstrap_replicates": 10000,
+  "bootstrap_seed": 2701,
+  "primary": "Full_minus_U0_paired_query_Best_of_N_accuracy_at_K16",
+  "benefit_candidate_rule": "mean_positive_and_at_least_two_positive_seed_effects_and_fixed_seed_paired_query_95_CI_lower_above_zero",
+  "harm_screen_rule": "mean_negative_and_at_least_two_negative_seed_effects",
+  "secondary": [
+    "all_main_effects",
+    "all_two_way_interactions",
+    "three_way_interaction",
+    "Full_against_every_single_and_pair_cell",
+    "within_query_correct_vs_wrong_pairwise_accuracy",
+    "Full_vs_U0_selection_changes_at_K16"
+  ],
+  "scoring": {
+    "mode": "scalar_only",
+    "amp_dtype": "bfloat16",
+    "row_shards": 8,
+    "batch_size": 2,
+    "stable_ties": "lowest_frozen_candidate_index",
+    "worker_contract": "each_source_row_is_read_by_exactly_one_worker_and_reused_across_all_24_checkpoints",
+    "merge_contract": "restore_exact_source_order_and_require_complete_0_to_14271_row_coverage_for_every_checkpoint"
+  },
+  "claim_and_failure_rules": {
+    "no_retuning_on_mechanism_or_ranking_outputs": true,
+    "no_cell_seed_epoch_or_weight_selection": true,
+    "mechanism_learnability_is_not_ranking_efficacy": true,
+    "all_results_remain_exploratory": true,
+    "not_Gold_human_verified_fresh_confirmatory_or_protected_test": true,
+    "terminal_v7_v12_v13_failures_remain_unchanged": true
+  }
+}

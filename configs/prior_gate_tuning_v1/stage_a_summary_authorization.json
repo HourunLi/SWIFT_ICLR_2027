@@ -1,0 +1,26 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-stage-a-summary-authorization",
+  "status": "AUTHORIZED_PRIOR_GATE_TUNING_V1_STAGE_A_SUMMARY",
+  "authorized_at_utc": "2026-09-01",
+  "authorization_source": {
+    "kind": "fail_closed_summary_recovery_before_any_result_was_materialized",
+    "reason": "compact scalar score rows intentionally omit source; recover source only from the frozen gsm8k:/math: query_id namespace",
+    "scoring_rerun_required": false
+  },
+  "scoring_authorization_path": "configs/prior_gate_tuning_v1/stage_a_scoring_authorization.json",
+  "scoring_authorization_sha256": "a61b673d53d182362d8843d66c857792abd2c4cc5a7e6aff9b1f8f095c770989",
+  "merge_report_path": "run_artifacts/prior_gate_tuning_v1/stage_a/scoring/merged/merge_report.json",
+  "merge_report_sha256": "4219c6d909f14d315701a0d704dff524026508ea0a0dbccabe78d60bc104c505",
+  "summarizer_path": "summarize_clir_gate_tuning_stage_a.py",
+  "summarizer_sha256": "3f831c36937ffc4a12960db7379c9659b36ac582b21df7d10fc51fb7e5f181ed",
+  "output_path": "run_artifacts/prior_gate_tuning_v1/stage_a/attribution.json",
+  "source_recovery_contract": {
+    "gsm8k_prefix": "gsm8k:",
+    "math_prefix": "math:",
+    "other_prefixes_allowed": false,
+    "ranking_or_axis_values_used_to_recover_source": false
+  },
+  "confirmation_scoring_allowed": false,
+  "confirmation_outcomes_opened": false,
+  "claim_boundary": "summarize only the already authorized open tuning split; do not score or inspect confirmation"
+}

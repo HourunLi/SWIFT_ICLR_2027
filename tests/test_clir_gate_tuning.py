@@ -4,6 +4,7 @@ from collections import Counter
 
 import pytest
 
+from run_clir_gate_tuning_rollout import _derive_query_seed, _validate_rows
 from src.clir_gate_tuning import (
     CONFIRMATION_ROLE,
     PROTOCOL_SCHEMA,
@@ -156,3 +157,90 @@ def test_attribution_skips_tuning_if_both_increments_are_nonnegative() -> None:
     direct = {"42": 0.85, "43": 0.86, "44": 0.87}
     full = {"42": 0.86, "43": 0.87, "44": 0.88}
     assert choose_tuning_axis(ch, direct, full)["selected_tuning_axis"] == "none"
+
+
+def test_rollout_validation_binds_frozen_axis_fields_and_provenance() -> None:
+    protocol = {
+        "generation": {
+            "seed_namespace": "test-rollout-seed",
+            "base_seed": 9,
+            "model_revision": "model-revision",
+            "tokenizer_revision": "tokenizer-revision",
+            "backend_version": "vllm-version",
+        }
+    }
+    query = {
+        "query_id": "gsm8k:train:00001",
+        "role": TUNING_ROLE,
+        "evaluation_split": "tuning",
+        "sealed_until_weight_lock": False,
+        "cluster_id": "cluster-1",
+        "source": "gsm8k",
+        "question": "What is one plus one?",
+        "reference_answer": "2",
+        "prompt_token_ids": [1, 2],
+    }
+    provenance = {
+        "protocol_file_sha256": "protocol",
+        "pre_rollout_registry_file_sha256": "registry",
+        "authorization_file_sha256": "authorization",
+        "model_revision": "model-revision",
+        "tokenizer_revision": "tokenizer-revision",
+        "vllm_version": "vllm-version",
+        "code_commit": "commit",
+    }
+    rows = [
+        {
+            "id": f"{query['query_id']}:cand:{index:03d}",
+            "query_id": query["query_id"],
+            "candidate_index": index,
+            "role": query["role"],
+            "evaluation_split": query["evaluation_split"],
+            "sealed_until_weight_lock": query["sealed_until_weight_lock"],
+            "cluster_id": query["cluster_id"],
+            "source": query["source"],
+            "question": query["question"],
+            "reference_answer": query["reference_answer"],
+            "prompt_token_ids": query["prompt_token_ids"],
+            "output_token_ids": [3 + index],
+            "response": str(index),
+            "finish_reason": "stop",
+            "decode_matches_backend_text": True,
+            "provenance": provenance,
+        }
+        for index in range(2)
+    ]
+    shard = {
+        "shard_id": "weight_tuning-000",
+        "role": TUNING_ROLE,
+        "query_ids": [query["query_id"]],
+        "candidate_count": 2,
+        "expected_candidate_rows": 2,
+    }
+    report = _validate_rows(
+        rows,
+        shard=shard,
+        query_by_id={query["query_id"]: query},
+        protocol=protocol,
+        protocol_sha256="protocol",
+        authorization_sha256="authorization",
+        registry_sha256="registry",
+    )
+    assert report["queries"] == 1
+    assert report["rows"] == 2
+    assert report["candidate_axis_matches_freeze"] is True
+    assert _derive_query_seed(protocol, query["query_id"]) == _derive_query_seed(
+        protocol, query["query_id"]
+    )
+    tampered = [dict(row) for row in rows]
+    tampered[0]["cluster_id"] = "other-cluster"
+    with pytest.raises(ValueError, match="cluster_id"):
+        _validate_rows(
+            tampered,
+            shard=shard,
+            query_by_id={query["query_id"]: query},
+            protocol=protocol,
+            protocol_sha256="protocol",
+            authorization_sha256="authorization",
+            registry_sha256="registry",
+        )

@@ -16,6 +16,7 @@ from evaluate_clir_three_module_factorial import (
 from evaluate_clir_mechanisms import average_precision
 from score_clir_factorial import _add_global_selections
 from src.clir_three_module import build_unified_data
+from summarize_clir_three_module_ranking import factorial_vectors, selection_vector
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -271,3 +272,42 @@ def test_gate_scale_aware_diagnostic_uses_same_learned_prior() -> None:
     assert report["gate"]["uniform_to_same_fused_prior_squared_l2_mean"] > 0
     assert report["gate"]["learned_gate_advantage_over_uniform_l2_mean"] > 0
     assert report["gate"]["learned_gate_beats_uniform_rows"] == 1
+
+
+def test_ranking_factorial_vectors_preserve_query_and_seed_pairing() -> None:
+    base = {
+        "u0": 0.0,
+        "c": 2.0,
+        "h": 3.0,
+        "p": 5.0,
+        "ch": 12.0,
+        "cp": 18.0,
+        "hp": 21.0,
+        "full": 58.0,
+    }
+    arrays = {
+        cell: np.full((3, 4), value, dtype=np.float64)
+        for cell, value in base.items()
+    }
+    effects = factorial_vectors(arrays)
+    assert np.all(effects["C_x_H_x_P"] == 17.0)
+    assert np.all(effects["C_main"] == 15.25)
+    assert np.all(effects["Full_minus_U0"] == 58.0)
+
+
+def test_ranking_selection_uses_frozen_prefix_and_stable_ties() -> None:
+    rows = []
+    for query_id in ("q1", "q0"):
+        for candidate_index in range(16):
+            rows.append(
+                {
+                    "query_id": query_id,
+                    "candidate_index": candidate_index,
+                    "correctness": int(candidate_index == 0),
+                    "clir_score": 1.0 if candidate_index in {0, 1} else 0.0,
+                }
+            )
+    queries, labels, indices = selection_vector(rows, 2)
+    assert queries == ["q0", "q1"]
+    assert labels.tolist() == [1.0, 1.0]
+    assert indices.tolist() == [0, 0]

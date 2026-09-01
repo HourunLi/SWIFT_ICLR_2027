@@ -521,6 +521,15 @@ def command_merge(args: argparse.Namespace) -> None:
     source_rows = read_jsonl(input_path)
     input_sha256 = _validate_source(input_path, args.expected_input_sha256)
     completion, completion_sha256 = _load_completion(completion_path, mode=args.mode)
+    ranking_authorization_sha256 = None
+    if args.mode == "scalar":
+        ranking_authorization_sha256 = _validate_ranking_authorization(
+            Path(args.ranking_authorization).resolve()
+            if args.ranking_authorization
+            else None,
+            completion_sha256=completion_sha256,
+            input_sha256=input_sha256,
+        )
     shard_root = Path(args.shard_root).resolve()
     output_root = Path(args.output_root).resolve()
     target_report = output_root / "merge_report.json"
@@ -541,6 +550,12 @@ def command_merge(args: argparse.Namespace) -> None:
             or int(manifest.get("num_shards", -1)) != args.num_shards
         ):
             raise ValueError(f"stale or invalid shard manifest: {manifest_path}")
+        if (
+            args.mode == "scalar"
+            and manifest.get("ranking_authorization_sha256")
+            != ranking_authorization_sha256
+        ):
+            raise ValueError("ranking shard authorization drift")
         if manifest.get("scorer_sha256") != file_sha256(__file__):
             raise ValueError("shards were produced by a different scorer implementation")
         manifests.append((manifest_path, manifest))
@@ -589,6 +604,7 @@ def command_merge(args: argparse.Namespace) -> None:
         "input_jsonl_sha256": input_sha256,
         "input_rows": len(source_rows),
         "completion_report_sha256": completion_sha256,
+        "ranking_authorization_sha256": ranking_authorization_sha256,
         "scorer_sha256": file_sha256(__file__),
         "num_shards": args.num_shards,
         "shard_manifest_sha256": {
@@ -631,6 +647,7 @@ def build_parser() -> argparse.ArgumentParser:
     merge.add_argument("--output-root", required=True)
     merge.add_argument("--mode", choices=MODES, required=True)
     merge.add_argument("--expected-input-sha256", default=None)
+    merge.add_argument("--ranking-authorization", default=None)
     merge.add_argument("--num-shards", type=int, required=True)
     merge.add_argument("--overwrite", action="store_true")
     return parser

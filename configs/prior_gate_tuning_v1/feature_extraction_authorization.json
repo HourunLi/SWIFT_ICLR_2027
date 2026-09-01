@@ -1,0 +1,118 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-feature-authorization",
+  "status": "AUTHORIZED_SELECTED_ONLY_FEATURE_EXTRACTION",
+  "authorized_at_utc": "2026-09-01T10:25:36Z",
+  "user_authorization": "ok，可以；按照之前的计划做",
+  "authorized_scope": {
+    "selected_inventory_materialization": true,
+    "full_width_preflight": true,
+    "selected_only_feature_extraction": true,
+    "independent_payload_verification": true,
+    "publish_split_feature_manifests": true,
+    "unselected_rollout_feature_extraction": false,
+    "new_rollout_or_checker_change": false,
+    "training": false,
+    "tuning_scoring": false,
+    "confirmation_scoring": false,
+    "confirmation_outcome_disclosure": false
+  },
+  "frozen_parent": {
+    "authorized_code_parent_commit": "ea9209f7d03ac69e6c052b10e428225a3f700681",
+    "files": {
+      "protocol": {
+        "path": "configs/prior_gate_tuning_v1/protocol.json",
+        "file_sha256": "89b98a4571570287c63fbda8e0478d87ff98063943804e023ed21dace544afbb"
+      },
+      "checker_authorization": {
+        "path": "configs/prior_gate_tuning_v1/checker_authorization.json",
+        "file_sha256": "e4b5327781a544327d271bb74f6cb28271ade538f284c5264a63362ff9ab6021"
+      },
+      "checker_completion": {
+        "path": "run_artifacts/prior_gate_tuning_v1/checker/completion.json",
+        "file_sha256": "1cc9716a05716b3c3fd19cd7adda86952fb15a3b17ee7f02b296c261c32bfb02"
+      },
+      "checker_independent_verification": {
+        "path": "run_artifacts/prior_gate_tuning_v1/checker/independent_verification.json",
+        "file_sha256": "22b427c4fc3e7f83c2e380bfd84e0b142af8bbae073d68cbee7f42205403b7e5"
+      },
+      "tuning_selected": {
+        "path": "run_artifacts/prior_gate_tuning_v1/checker/tuning_selected.jsonl",
+        "row_count": 12800,
+        "ordered_rows_sha256": "b43f94a6ab32cf833c0cb45fc617733aaee063d771ebe0a29940c7c66e6d6ae0",
+        "file_sha256": "9c7964c21c848d8f3dd1bd6189c89b3da9d55c6d2d358adb24c996af85ebb293",
+        "sidecar_file_sha256": "f16398178c1c290c94025c51c80ec96838da0eb1b8c369637abe5d4a0ec1737a"
+      },
+      "confirmation_selected": {
+        "path": "run_artifacts/prior_gate_tuning_v1/checker/confirmation_selected.sealed.jsonl",
+        "row_count": 12800,
+        "ordered_rows_sha256": "9b6bf10d0a8b151f0ff0c0e727bc16e13aadecf72e286de49eb7c61874f426f0",
+        "file_sha256": "4e0ba1b6e21328a3cdaf36907f4e8e98fc612d041da12db980a398b8ebf02880",
+        "sidecar_file_sha256": "ed2db2262d1205821cc59784c8ccaad10e4520526c1fd6ee505ec79325b18c54"
+      }
+    }
+  },
+  "expected_inventory": {
+    "trajectory_count": 25600,
+    "query_count": 1600,
+    "condition_count": 1600,
+    "output_token_count": 6785455,
+    "prompt_token_count": 159064,
+    "total_feature_token_count": 6944519,
+    "raw_feature_bytes": 1408015116288,
+    "by_role": {
+      "weight_tuning": {
+        "trajectory_count": 12800,
+        "query_count": 800,
+        "output_token_count": 3411908,
+        "prompt_token_count": 79393,
+        "raw_feature_bytes": 707868260352
+      },
+      "sealed_confirmation": {
+        "trajectory_count": 12800,
+        "query_count": 800,
+        "output_token_count": 3373547,
+        "prompt_token_count": 79671,
+        "raw_feature_bytes": 700146855936
+      }
+    }
+  },
+  "feature_contract": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "input_axis_truth": "saved_prompt_token_ids_plus_saved_output_token_ids",
+    "decode_or_retokenize_allowed": false,
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "num_feature_layers": 33,
+    "per_layer_dim": 3072,
+    "feature_dim": 101376,
+    "bytes_per_feature_token": 202752,
+    "query_atomic_worker_assignment": true,
+    "condition_saved_once_per_query": true
+  },
+  "runtime_contract": {
+    "python_environment": "/prodcpfs/user/panzhixin/NeuralUCB-master/.venv",
+    "output_root": "run_artifacts/prior_gate_tuning_v1/features_v1",
+    "cache_dir": "run_artifacts/model_cache",
+    "worker_count": 8,
+    "candidate_count": 16,
+    "cuda_devices_per_worker": 1,
+    "existing_query_marker_policy": "validate_and_resume",
+    "existing_unmarked_payload_policy": "validate_shape_dtype_finiteness_before_reuse",
+    "require_clean_committed_plan_code": true
+  },
+  "sealing_contract": {
+    "gpu_inventory_contains_correctness_or_checker_status": false,
+    "gpu_inventory_contains_clir_scores": false,
+    "confirmation_feature_manifest_name_contains_sealed": true,
+    "confirmation_correctness_distribution_must_not_be_printed": true,
+    "confirmation_scores_must_not_be_computed": true,
+    "confirmation_may_be_opened_once_only_after_axis_and_weight_hash_lock": true
+  },
+  "post_feature_boundary": {
+    "training_requires_separate_hash_bound_authorization": true,
+    "tuning_scoring_requires_separate_hash_bound_authorization": true,
+    "confirmation_scoring_remains_forbidden": true,
+    "next_gate": "prepare_and_independently_verify_label_free_inventory_then_full_width_preflight_then_eight_workers"
+  }
+}

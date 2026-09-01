@@ -58,14 +58,35 @@ def average_precision(
     positives = int(labels_array.sum())
     if positives == 0:
         return None
+    if len(labels_array) != len(scores_array):
+        raise ValueError("average-precision labels and scores must be aligned")
+    if not np.isin(labels_array, [0, 1]).all() or not np.isfinite(
+        scores_array
+    ).all():
+        raise ValueError("average-precision inputs must be finite and binary")
+
+    # Sort once, then evaluate precision at the end of each tied score group.
+    # This is algebraically identical to selecting `scores >= threshold` for
+    # every unique positive threshold, but avoids an O(n^2) boolean scan on
+    # expanded token-level mechanism populations.
+    order = np.argsort(-scores_array, kind="mergesort")
+    ordered_scores = scores_array[order]
+    ordered_labels = labels_array[order]
     total = 0.0
-    for threshold in np.unique(scores_array[labels_array == 1]):
-        selected = scores_array >= threshold
-        positives_at_threshold = int((labels_array[selected] == 1).sum())
-        tied_positive_count = int(
-            ((scores_array == threshold) & (labels_array == 1)).sum()
-        )
-        total += tied_positive_count * positives_at_threshold / int(selected.sum())
+    cumulative_positives = 0
+    start = 0
+    while start < len(ordered_scores):
+        stop = start + 1
+        while (
+            stop < len(ordered_scores)
+            and ordered_scores[stop] == ordered_scores[start]
+        ):
+            stop += 1
+        tied_positive_count = int(ordered_labels[start:stop].sum())
+        cumulative_positives += tied_positive_count
+        if tied_positive_count:
+            total += tied_positive_count * cumulative_positives / stop
+        start = stop
     return total / positives
 
 

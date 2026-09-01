@@ -1,12 +1,15 @@
 import json
 from pathlib import Path
 
+import numpy as np
+
 from prepare_clir_three_module import (
     build_parser,
     load_training_authorization,
     verify_factorial_configs,
 )
 from evaluate_clir_three_module_factorial import factorial_effects, h_metrics
+from evaluate_clir_mechanisms import average_precision
 from score_clir_factorial import _add_global_selections
 from src.clir_three_module import build_unified_data
 
@@ -223,3 +226,20 @@ def test_factorial_global_selection_is_query_wide_and_stable_on_ties() -> None:
     ]
     _add_global_selections(rows)
     assert [row["clir_selected_best_of_n"] for row in rows] == [True, True, False, False]
+
+
+def test_fast_tie_aware_average_precision_matches_threshold_definition() -> None:
+    rng = np.random.default_rng(17)
+    labels = rng.integers(0, 2, size=500).tolist()
+    scores = rng.integers(0, 9, size=500).astype(float).tolist()
+    targets = np.asarray(labels)
+    values = np.asarray(scores)
+    expected = 0.0
+    positives = int(targets.sum())
+    for threshold in np.unique(values[targets == 1]):
+        selected = values >= threshold
+        tied_positives = int(((values == threshold) & (targets == 1)).sum())
+        selected_positives = int(targets[selected].sum())
+        expected += tied_positives * selected_positives / int(selected.sum())
+    expected /= positives
+    assert average_precision(labels, scores) == expected

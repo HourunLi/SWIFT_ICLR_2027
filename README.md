@@ -986,15 +986,28 @@ K=16 时 PG0 每 seed 改变 `30%--57%` 的候选，说明 Gate 确实直接影�
 并按预注册规则在当前探索性 screen 被拒绝。** 用户要求三模块阶段仍保留 main-style `.25`
 路径，所以后续只把它作为固定方法身份测试交互，不在这批 51/892 数据上重新调权重。
 
-### 三模块扩量组合 v1：已冻结数据合并与八格设计
+### 三模块扩量组合 v1：24 组已完成，Full 结果不确定
 
-[`three_module_expansion_v1`](configs/three_module_expansion_v1) 的统一数据已机械合并并独立
-复核通过，说明见 [`docs/three_module_expansion_v1.md`](docs/three_module_expansion_v1.md)。
-5,370-row 训练清单、198-row H dev、49-row Prior dev 及完整 `2×2×2` 八格已由单独的
-[`training_authorization.json`](configs/three_module_expansion_v1/training_authorization.json)
-按 hash 冻结；下一道门是八格 full-width GPU preflight，通过后固定跑三 seed、三 epoch，
-共 24 次。H1、mutual、MIL、pseudo-tail、progress 和 reconstruction 全关，892×16 ranking
-仍只算复用的探索性评估。
+[`three_module_expansion_v1`](configs/three_module_expansion_v1) 已完成统一数据、八格
+`2×2×2`、三 seed、三 epoch 的全部 24 次训练。5,370-row 训练清单、198-row H dev、
+49-row Prior dev、所有 checkpoint/optimizer、机制评分和 892×16 排序评分均通过完整性检查。
+完整数字见 [`docs/three_module_expansion_v1.md`](docs/three_module_expansion_v1.md)，冻结结果见
+[`completion.json`](configs/three_module_expansion_v1/completion.json)。
+
+机制层面，三个目标都学到了：C 能把同义不同写法与 hard negative 拉开；H0 的 token AP
+从 U0 `.465` 提到 H `.838`，但 Full 在首错位置 ±5 token 内只约 `3.3%`，所以它更像“坏尾部
+风险检测”而不是精确首错定位；P 的 Key/Complete AP 从 `.072/.370` 提到
+`.595/.928`。固定 `.25` Gate 在全部 P-on cell/seed 中都比 uniform attention 更接近同一个
+learned prior（`12/12`），但这是 scale-aware 的事后机制诊断，不等于排序收益。
+
+复用 892-query 探索性 ranking 的 BoN@16 为：U0 `84.16%`、C `85.80%`、H `85.54%`、
+P `85.72%`、CH **`86.14%`**、CP `85.20%`、HP `84.04%`、Full `84.68%`。Full−U0
+为 `+0.52` point，但 fixed-seed query 95% interval=`[-0.71,+1.76]` points，未通过收益门，
+也未触发整体伤害门。最清楚的冲突是 H×P：`-1.96` points，三 seed 全负，fixed 与
+hierarchical interval 都低于 0；Full 也稳定低于 CH `1.46` points。准确结论是：模块本身
+都能学到各自 Silver target，单模块 point estimate 都高于 U0，但当前 P/Gate 与 H 的组合
+会抵消收益；Full 尚未证明有效。不能继续在这批 dev/ranking 上调参数，下一步需要新的
+query/template-cluster-disjoint ranking population 做确认。
 
 ## Toy smoke test
 
@@ -1042,12 +1055,13 @@ pytest -q
   不能称为 Gold 或人工验证。
 - 默认仍使用预抽取全层 feature，真实数据的磁盘开销很大；没有集成 batch-local online extraction。
 - 当前 objective 是 pointwise correctness BCE 加可用 auxiliary supervision，尚无 pairwise/listwise reward objective。
-- clean integration 已完成历史小数据的三 seed matched matrix，以及扩充 Consistency
-  relation 的独立三 seed C0/C1 机制复测；仍没有新的 protected ranking test，且历史 full
-  没有优于 correctness-only。
+- clean integration 已完成历史小数据矩阵、扩充后的三模块完整 `2×2×2` 三-seed 矩阵，
+  以及 C/H/P/Gate 的机制复测；仍没有新的 protected ranking test。扩量 Full 在复用
+  892-query ranking 上只比 U0 高 `0.52` point 且区间跨 0，不能称为有效提升。
 - Consistency 已有400个训练正对和150+150 held-out 正负关系的三 seed C0/C1
   复测；均值分离与 score-gap 结构改善，但正对 cosine 下降、cosine AUROC seed 方向
-  混合，且没有新的 Best-of-N population。Hallucination 标签仍有限。Prior v12 原门仍失败；
+  混合。Hallucination/Prior 使用的是无人工复核的事后 Silver 子集；H0 的 tail/path
+  判别明显改善，但精确 onset 仍差。Prior v12 原门和 v13 schema 门仍保持失败；
   另立的 post-hoc exact 子集新增 202 train +51 dev，证明 direct Key/Complete 可学，但复用
   ranking 上 gate-off BoN@16 无增益、BoN@8 三 seed 一致回退；固定 `.25` Gate 虽学到
   Prior 对齐，却在 BoN@16 三 seed 全负，也不能替代新的确认性数据。

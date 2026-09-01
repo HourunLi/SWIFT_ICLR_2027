@@ -1,10 +1,10 @@
 # Three-module expanded factorial v1
 
-Status: unified data materialized and independently verified; full-width GPU
-preflight passed; all 24 authorized runs completed three epochs and every
-checkpoint plus optimizer state passed finite-state validation. The separate
-mechanism evaluation passed its execution contract, and the hash-bound ranking
-authorization is now frozen. Ranking results are not yet available.
+Status: complete. Unified data and full-width preflight passed; all 24
+authorized runs completed three epochs; every checkpoint and optimizer state
+passed finite-state validation; all mechanism and ranking shards merged with
+exact row/checkpoint/hash checks. The tracked terminal record is
+`configs/three_module_expansion_v1/completion.json`.
 
 ## What is being combined
 
@@ -135,6 +135,64 @@ mechanism report, the reused 892×16 ranking manifest, scorer and summarizer
 source hashes, eight row shards, BF16, K=`1/2/4/8/16`, stable ties, and 10,000
 paired bootstrap replicates. No ranking output may be used to change a weight,
 epoch, cell, seed, or data subset.
+
+## Final ranking result
+
+The primary result is **exploratory and inconclusive**. Full improved the mean
+BoN@16 over U0 by `0.00523` (about `0.52` percentage point), with seed effects
+`+0.00112`, `+0.01457`, and `0.00000`. The frozen paired-query 95% interval was
+`[-0.00710,+0.01756]`; the seed-and-query interval was
+`[-0.01158,+0.02242]`. Because the first interval crosses zero, Full did not
+pass the benefit rule. Its mean was not negative, so it did not trigger the
+harm rule either.
+
+| Cell | BoN@16 | Difference from U0 |
+|---|---:|---:|
+| U0 | `84.16%` | — |
+| C | `85.80%` | `+1.64` points |
+| H | `85.54%` | `+1.38` points |
+| P | `85.72%` | `+1.57` points |
+| CH | **`86.14%`** | **`+1.98` points** |
+| CP | `85.20%` | `+1.05` points |
+| HP | `84.04%` | `-0.11` point |
+| Full | `84.68%` | `+0.52` point |
+
+These cell differences are useful descriptions, not separately preregistered
+confirmatory tests. CH had the best point estimate and pairwise accuracy
+(`.6711`), while Full's pairwise accuracy was `.6510` versus U0 `.6177`.
+
+The clearest interaction is H×P: mean `-0.01962`, negative in all three seeds,
+with fixed-seed/query interval `[-0.02971,-0.00972]` and hierarchical interval
+`[-0.03288,-0.00635]`. C×P was also negative in all seeds (`-0.01065`), but its
+hierarchical interval crossed zero. Full was `-0.01457` below CH, negative in
+all seeds with both intervals below zero. In plain language, each single-module
+cell looked better than U0 in the point estimates, but adding the Prior+Gate
+factor to H—and to a lesser degree C—cancelled much of that gain.
+
+Full changed the selected K=16 candidate for `807/892`, `801/892`, and
+`773/892` queries across the three seeds. The correct/wrong flips nearly
+cancelled: wrong-to-correct versus correct-to-wrong was `43/42`, `48/35`, and
+`34/34`. Thus the modules and Gate substantially alter the final score; the
+problem is not that they are disconnected, but that the changes do not yet
+produce a stable net accuracy gain.
+
+## Final interpretation
+
+- C learns useful held-out relation separation.
+- H0 learns bad-tail/path risk, but Full locates onset within five tokens only
+  about `3.3%` of the time; call it tail-risk learning, not precise onset
+  localization.
+- Direct Key/Complete targets are strongly learnable. The scale-aware Gate
+  diagnostic beats uniform attention for every P-on cell and seed (`12/12`),
+  but this remains a posthoc no-retuning diagnostic and is not standalone
+  ranking efficacy.
+- Full is neither a demonstrated win nor a demonstrated overall harm on this
+  reused population. CH is the best descriptive cell, and H×P is the main
+  conflict to investigate on genuinely fresh data.
+
+The next scientific step is a prospectively frozen, query/template-cluster-
+disjoint ranking population. This completed 892-query result must not be used
+to tune module weights, epochs, subsets, thresholds, or the fixed `.25` Gate.
 
 No result may be called Gold, human-verified, fresh confirmation, protected-test
 evidence, or a repair of the original v7/v12/v13 failures. No inspected dev or

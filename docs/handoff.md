@@ -1058,6 +1058,42 @@ Gate 权重。tracked completion 在
 `configs/data_expansion_prior_v12/posthoc_v1/gate_v1/completion.json`；ignored dev/ranking
 summary SHA-256 分别为 `ca09b9a9…b117` / `4e33d529…c4f9`。
 
+### 三模块扩量 v1：完整八格已完成，Full 未通过收益门
+
+统一 5,370-row train、198-row H dev、49-row Prior dev 已通过独立复核；完整
+`C×H×P` 八格使用 seeds 42/43/44、3 epochs，共 24 个 run/72 个 cell-epoch，所有
+checkpoint 与 optimizer state 均可加载且有限。这里 H 只表示 H0 onset BCE；P 同时包含
+direct Key/Complete 和固定 `.25` 的 main-style Gate。H1、mutual、MIL、pseudo-tail、
+progress、reconstruction 均关闭。
+
+query-disjoint Silver 机制集确认三个 target 都能学：C 的 positive-minus-hard-negative
+representation separation 主效应 `+.18110`；H token AP 从 U0 `.46482` 到 H `.83822`，
+path AUROC `.83764`，但 Full 的 onset ±5-token 命中率仅 `.03333`；P 的 Key/Complete AP
+从 U0 `.07211/.37005` 到 P `.59514/.92824`。raw Gate L2 会被 P-off 近 uniform prior 的
+量纲混淆；保留原值的同时，另报不改参数的 scale-aware 诊断：对同一个 learned fused prior，
+learned Gate 在所有 P-on cell/seed 均优于 uniform（`12/12`）。这只证明内部对齐，不证明排序。
+
+复用 892×16 ranking 的 K=16 cell mean：
+
+| U0 | C | H | P | CH | CP | HP | Full |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| `.84155` | `.85800` | `.85538` | `.85725` | **`.86136`** | `.85202` | `.84043` | `.84679` |
+
+主对比 Full−U0=`+.00523`，逐 seed `+.00112/+.01457/.00000`；fixed-seed query 95%
+interval=`[-.00710,+.01756]`，hierarchical interval=`[-.01158,+.02242]`。因此冻结裁决为
+`EXPLORATORY_INCONCLUSIVE`：Full 没通过收益门，也没触发整体伤害门。Full 每 seed 改了
+`807/801/773` 个 query 的候选（约 87%--90%），但错→对与对→错基本抵消，说明模块确实
+进入最终 score，只是没有稳定净收益。
+
+最清楚的冲突是 H×P=`-.01962`，三 seed 全负，fixed interval
+`[-.02971,-.00972]`、hierarchical interval `[-.03288,-.00635]`；Full−CH=`-.01457`，
+两个 interval 也都低于 0。C×P 同样三 seed 全负，但 hierarchical interval 跨 0。CH 是
+当前最好的描述性 cell，不过这些单 cell 差值没有各自预注册成确认性检验，不能挑 CH 当作
+已经证明的 winner。tracked completion 是
+`configs/three_module_expansion_v1/completion.json`；ignored mechanism/ranking summary hash
+为 `f7b9b6d…982e2` / `eea7b3a…20ef`。不允许继续在同一 dev/ranking 上调 weight、epoch、
+subset、threshold 或 `.25` Gate。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
@@ -1067,10 +1103,11 @@ summary SHA-256 分别为 `ca09b9a9…b117` / `4e33d529…c4f9`。
 - extraction 虽原子发布单个 tensor 和最终 manifest，`--overwrite` 中途失败仍可在旧 manifest 下留下部分新 feature；正式运行应使用新目录而不是就地覆盖。
 - 只支持预抽取 feature 训练，全层 payload 存储昂贵；online extraction 尚未进入 clean trainer。
 - 当前模型用 pointwise correctness BCE，没有 pairwise/listwise ranking objective。
-- clean 已在历史 3968-row 数据上完成 7-cell 主矩阵和 CH0 二因子补测、三 seed matched evaluation；它没有扩大独立机制样本，也没有使 `best_current` 成为 efficacy winner。
+- clean 已完成历史 7-cell/CH0 以及扩量三模块完整八格三-seed matched evaluation；这没有
+  使 `best_current` 成为 efficacy winner，也没有提供新的 protected ranking test。
 - consistency 已有400个训练正对、150个 held-out 正对和150个 held-out hard negative 的
-  三 seed C0/C1 复测；均值 separation 与 score-gap 结构改善，但正对 cosine 下降、AUROC
-  seed 方向混合，且尚无新的 ranking population。
+  三 seed 机制复测；均值 separation 与 score-gap 结构改善，但正对 cosine 下降、AUROC
+  seed 方向混合。三模块排序仍复用同一 892-query exploratory population，不是新 population。
 - 历史 H 证据来自很少的 Silver trajectory；v7 双 AI 的盲重复稳定性未过原门。v7.4 的
   600 条是用户授权的事后严格共识探索子集，不是原协议成功，也没有人工准确率保证。
   新结果支持 tail/path 风险可学和正向排序点信号，但 exact onset 为 0、±5 只有 4%，
@@ -1078,9 +1115,9 @@ summary SHA-256 分别为 `ca09b9a9…b117` / `4e33d529…c4f9`。
 - dual prior 的原协议可训练账本仍只有历史 48 条，v8--v13 都保持 frozen failure；但用户
   另行授权的 v12-posthoc exact 路线现在新增 202 train +51 dev。它证明 direct target 可学，
   不证明标签总体稳定或客观准确；复用 ranking 上 BoN@16 无增益、BoN@8 三 seed 一致回退。
-  固定 `.25` Gate 在同一路线上学到 Prior 对齐，但 K=16 三 seed 全负，standalone 排名门失败；
-  mutual 增量与 Full 仍未建立。v13 仍因 B 的一个不可用控制项保留非空 block role 而在 schema
-  门终止，没有自然样本机制指标。
+  固定 `.25` Gate 在 standalone 路线上学到 Prior 对齐，但 K=16 三 seed 全负。扩量 Full
+  已执行，却只比 U0 高 `.52` point 且区间跨 0；H×P 是当前最稳定的负交互。mutual 仍未建立。
+  v13 仍因 B 的一个不可用控制项保留非空 block role 而在 schema 门终止，没有自然样本机制指标。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -1105,21 +1142,16 @@ summary SHA-256 分别为 `ca09b9a9…b117` / `4e33d529…c4f9`。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；
    它通过 Gate/Prior 对齐门，却在 K=16 三 seed 全负。不得在这 51 条 Prior dev 或 892 题复用
    ranking 上再调 direct weight、Gate 权重、epoch 或 subset。
-6. 用户已授权后续三模块组合；materialization 协议已冻结在
-   `configs/three_module_expansion_v1/protocol.json`，完整说明在
-   `docs/three_module_expansion_v1.md`。它固定统一 5,370-row manifest 和 C/H/P 的 `2×2×2`
-   八格；Full 是 Consistency + H0 + direct Prior + 原版 `.25` main-style Gate。H1、mutual、
-   MIL、pseudo-tail、progress、reconstruction 全关。统一数据已发布并独立复核通过：train
-   5,370、H dev 198、Prior dev 49；exact hash 已写入单独的
-   `configs/three_module_expansion_v1/training_authorization.json`。现在只差八格 full-width GPU
-   preflight，通过后才允许启动固定 24 个训练；同一 892 题只能给探索性诊断，正式 Gate/Full
-   结论仍需要新的 query/cluster-disjoint ranking population。
+6. 三模块扩量 v1 已完成 24 个训练、三类机制评估和 892-query ranking；保存全部 authorization、
+   checkpoint、shard、merge、summary 和 completion hash，不覆盖、不重跑、不在同一数据上调参。
+   下一道科学门是先冻结一批新的 query/template-cluster-disjoint ranking population，再复跑
+   最小必要的 U0/CH/Full（若目标是完整归因则复跑八格）。在新数据前，CH 只能叫当前最好
+   point estimate，H×P 只能叫这轮最稳定的探索性冲突。
 
-当前裁决是：Consistency 有部分 held-out relation 机制证据；v7.4 证明严格 H 子集能学到
-tail/path 风险，并给出 H0 最好的 ranking 点估计，但增益区间跨 0、精确 onset 失败；
-C+H0 没有超过 H0，负交互点估计仍不确定。v12-posthoc 则证明扩量后的 direct Prior target
-可学，但没有提高 BoN@16，且 BoN@8 出现三 seed 一致回退；固定 `.25` Gate 学到内部对齐，
-却没有通过 K=16 排名门。H1、mutual 与 Full 没有因本轮获得新证据。原 v7/v12/v13 都不能
-写成通过。
+当前裁决是：C、H0、direct Prior/Gate 都建立了各自 Silver 机制可学习性；H0 更像 tail/path
+风险头而不是精确首错定位器。完整组合并没有把这些机制收益相加：CH 的 point estimate 最好，
+H×P 为稳定负交互，Full 相对 U0 的 `+.52` point 区间跨 0。H1 与 mutual 没有因本轮获得新
+证据，原 v7/v12/v13 也仍不能写成通过。正式 Gate/Full 结论必须来自新的 query/cluster-
+disjoint ranking population。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

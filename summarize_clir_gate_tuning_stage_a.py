@@ -25,7 +25,7 @@ from summarize_clir_three_module_ranking import (
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_AUTHORIZATION = (
-    PROJECT_ROOT / "configs/prior_gate_tuning_v1/stage_a_scoring_authorization.json"
+    PROJECT_ROOT / "configs/prior_gate_tuning_v1/stage_a_summary_authorization.json"
 )
 DEFAULT_MERGE = (
     PROJECT_ROOT
@@ -34,7 +34,8 @@ DEFAULT_MERGE = (
 DEFAULT_OUTPUT = (
     PROJECT_ROOT / "run_artifacts/prior_gate_tuning_v1/stage_a/attribution.json"
 )
-AUTHORIZATION_STATUS = "AUTHORIZED_PRIOR_GATE_TUNING_V1_STAGE_A_SCORING"
+AUTHORIZATION_STATUS = "AUTHORIZED_PRIOR_GATE_TUNING_V1_STAGE_A_SUMMARY"
+SCORING_AUTHORIZATION_STATUS = "AUTHORIZED_PRIOR_GATE_TUNING_V1_STAGE_A_SCORING"
 STAGE_A_COMPLETION_STATUS = "PASS_PRIOR_GATE_TUNING_V1_STAGE_A_9_CHECKPOINTS"
 CELLS = ("ch", "direct_gate0", "full_025")
 SEEDS = (42, 43, 44)
@@ -57,12 +58,9 @@ def _load_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _load_authorization(path: Path) -> dict[str, Any]:
-    payload = _load_json(path)
-    if payload.get("status") != AUTHORIZATION_STATUS:
-        raise ValueError("Prior/Gate Stage-A scoring is not authorized")
-    if payload.get("summarizer_sha256") != file_sha256(__file__):
-        raise ValueError("Stage-A authorization binds another summarizer")
+def _validate_scoring_authorization(payload: Mapping[str, Any]) -> None:
+    if payload.get("status") != SCORING_AUTHORIZATION_STATUS:
+        raise ValueError("Prior/Gate Stage-A scoring did not pass authorization")
     if payload.get("cells") != list(CELLS) or payload.get("seeds") != list(SEEDS):
         raise ValueError("Stage-A cell/seed grid drift")
     if payload.get("k") != list(K_VALUES):
@@ -70,8 +68,23 @@ def _load_authorization(path: Path) -> dict[str, Any]:
     if int(payload.get("bootstrap_replicates", -1)) != 10_000:
         raise ValueError("Stage-A bootstrap budget drift")
     if payload.get("confirmation_scoring_allowed") is not False:
-        raise ValueError("Stage-A authorization must keep confirmation sealed")
-    return payload
+        raise ValueError("Stage-A scoring must keep confirmation sealed")
+
+
+def _load_authorization(
+    path: Path,
+) -> tuple[dict[str, Any], dict[str, Any], Path]:
+    payload = _load_json(path)
+    if payload.get("status") != AUTHORIZATION_STATUS:
+        raise ValueError("Prior/Gate Stage-A summarization is not authorized")
+    if payload.get("summarizer_sha256") != file_sha256(__file__):
+        raise ValueError("Stage-A authorization binds another summarizer")
+    scoring_path = _project_path(payload["scoring_authorization_path"])
+    if file_sha256(scoring_path) != payload["scoring_authorization_sha256"]:
+        raise ValueError("Stage-A scoring authorization hash drift")
+    scoring = _load_json(scoring_path)
+    _validate_scoring_authorization(scoring)
+    return payload, scoring, scoring_path
 
 
 def _source_accuracy(
@@ -80,7 +93,9 @@ def _source_accuracy(
     source_by_query: dict[str, str] = {}
     for row in rows:
         query_id = str(row["query_id"])
-        source = str(row["source"])
+        source = str(row.get("source") or query_id.split(":", 1)[0])
+        if source not in {"gsm8k", "math"}:
+            raise ValueError(f"cannot recover source namespace for {query_id}")
         if query_id in source_by_query and source_by_query[query_id] != source:
             raise ValueError("query spans multiple sources")
         source_by_query[query_id] = source
@@ -210,12 +225,24 @@ def summarize(
 def command_summarize(args: argparse.Namespace) -> None:
     authorization_path = Path(args.authorization).resolve()
     merge_path = Path(args.merge_report).resolve()
-    authorization = _load_authorization(authorization_path)
-    completion_path = _project_path(authorization["training_completion_path"])
-    input_path = _project_path(authorization["ranking_input_path"])
-    if file_sha256(completion_path) != authorization["training_completion_sha256"]:
+    authorization, scoring_authorization, scoring_authorization_path = (
+        _load_authorization(authorization_path)
+    )
+    expected_merge = _project_path(authorization["merge_report_path"])
+    if merge_path != expected_merge or file_sha256(merge_path) != authorization[
+        "merge_report_sha256"
+    ]:
+        raise ValueError("Stage-A merge report hash drift")
+    completion_path = _project_path(
+        scoring_authorization["training_completion_path"]
+    )
+    input_path = _project_path(scoring_authorization["ranking_input_path"])
+    if (
+        file_sha256(completion_path)
+        != scoring_authorization["training_completion_sha256"]
+    ):
         raise ValueError("Stage-A training completion hash drift")
-    if file_sha256(input_path) != authorization["ranking_input_sha256"]:
+    if file_sha256(input_path) != scoring_authorization["ranking_input_sha256"]:
         raise ValueError("Stage-A tuning population hash drift")
     completion = _load_json(completion_path)
     if completion.get("status") != STAGE_A_COMPLETION_STATUS:
@@ -226,11 +253,13 @@ def command_summarize(args: argparse.Namespace) -> None:
     merge = _load_json(merge_path)
     if (
         merge.get("status") != MERGE_STATUS
-        or merge.get("input_jsonl_sha256") != authorization["ranking_input_sha256"]
+        or merge.get("input_jsonl_sha256")
+        != scoring_authorization["ranking_input_sha256"]
         or merge.get("completion_report_sha256")
-        != authorization["training_completion_sha256"]
-        or merge.get("authorization_file_sha256") != file_sha256(authorization_path)
-        or merge.get("scorer_sha256") != authorization["scorer_sha256"]
+        != scoring_authorization["training_completion_sha256"]
+        or merge.get("authorization_file_sha256")
+        != file_sha256(scoring_authorization_path)
+        or merge.get("scorer_sha256") != scoring_authorization["scorer_sha256"]
         or len(merge.get("outputs", {})) != 9
     ):
         raise ValueError("Stage-A score merge is stale or unauthorized")
@@ -261,16 +290,19 @@ def command_summarize(args: argparse.Namespace) -> None:
 
     report = summarize(
         scored,
-        bootstrap_replicates=int(authorization["bootstrap_replicates"]),
-        bootstrap_seed=int(authorization["bootstrap_seed"]),
+        bootstrap_replicates=int(scoring_authorization["bootstrap_replicates"]),
+        bootstrap_seed=int(scoring_authorization["bootstrap_seed"]),
     )
     report.update(
         {
             "authorization_file_sha256": file_sha256(authorization_path),
-            "training_completion_sha256": authorization[
+            "scoring_authorization_file_sha256": file_sha256(
+                scoring_authorization_path
+            ),
+            "training_completion_sha256": scoring_authorization[
                 "training_completion_sha256"
             ],
-            "ranking_input_sha256": authorization["ranking_input_sha256"],
+            "ranking_input_sha256": scoring_authorization["ranking_input_sha256"],
             "score_merge_sha256": file_sha256(merge_path),
             "runs": input_files,
         }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from prepare_clir_gate_tuning_stage_a import (
@@ -12,9 +13,26 @@ from prepare_clir_gate_tuning_stage_a import (
 )
 from score_clir import file_sha256
 from score_clir_checkpoint_set import _load_bound_contract
+from summarize_clir_gate_tuning_stage_a import _source_accuracy
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_stage_a_summary_recovers_source_from_compact_query_id() -> None:
+    rows = [
+        {"query_id": "gsm8k:train:00001"},
+        {"query_id": "math:train:algebra:00001"},
+    ]
+    result = _source_accuracy(
+        rows,
+        [row["query_id"] for row in rows],
+        np.asarray([1.0, 0.0]),
+    )
+    assert result == {
+        "gsm8k": {"queries": 1, "accuracy": 1.0},
+        "math": {"queries": 1, "accuracy": 0.0},
+    }
 
 
 def test_direct_gate0_config_is_the_frozen_stage_a_diagnostic() -> None:

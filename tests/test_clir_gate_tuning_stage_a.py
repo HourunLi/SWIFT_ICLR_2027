@@ -11,9 +11,11 @@ from prepare_clir_gate_tuning_stage_a import (
     _assert_direct_preflight,
     _validate_direct_config,
 )
+from prepare_clir_gate_tuning_weight_grid import _validate_weight_config
 from score_clir import file_sha256
 from score_clir_checkpoint_set import _load_bound_contract
 from summarize_clir_gate_tuning_stage_a import _source_accuracy
+from summarize_clir_gate_tuning_weight_grid import choose_weight
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +37,17 @@ def test_stage_a_summary_recovers_source_from_compact_query_id() -> None:
     }
 
 
+def test_direct_grid_uses_larger_weight_only_for_exact_mean_tie() -> None:
+    decision = choose_weight(
+        {"direct_025": 0.95, "direct_050": 0.96, "direct_100": 0.96}
+    )
+    assert decision["selected_cell"] == "direct_100"
+    decision = choose_weight(
+        {"direct_025": 0.97, "direct_050": 0.96, "direct_100": 0.96}
+    )
+    assert decision["selected_direct_weight"] == 0.25
+
+
 def test_direct_gate0_config_is_the_frozen_stage_a_diagnostic() -> None:
     config, training = _validate_direct_config(
         ROOT / "configs/prior_gate_tuning_v1/ch_direct_prior_gate0.json"
@@ -45,6 +58,24 @@ def test_direct_gate0_config_is_the_frozen_stage_a_diagnostic() -> None:
     assert config.key_prior_weight == 1.0
     assert config.complete_prior_weight == 1.0
     assert config.gate_prior_weight == 0.0
+    assert training["epochs"] == 3
+
+
+@pytest.mark.parametrize(
+    ("name", "weight"),
+    (("ch_direct025_gate025.json", 0.25), ("ch_direct050_gate025.json", 0.5)),
+)
+def test_direct_weight_grid_changes_only_the_selected_axis(
+    name: str, weight: float
+) -> None:
+    config, training = _validate_weight_config(
+        ROOT / "configs/prior_gate_tuning_v1" / name, weight
+    )
+    assert config.key_prior_weight == weight
+    assert config.complete_prior_weight == weight
+    assert config.gate_prior_weight == 0.25
+    assert config.consistency_weight == 1.0
+    assert config.hallucination_weight == 1.0
     assert training["epochs"] == 3
 
 

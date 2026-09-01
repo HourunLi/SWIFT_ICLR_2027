@@ -1,6 +1,7 @@
 # Three-module expanded factorial v1
 
-Status: materialization protocol frozen; training is not yet authorized.
+Status: unified data materialized and independently verified; the exact
+24-run training authorization is frozen, pending full-width GPU preflight.
 
 ## What is being combined
 
@@ -87,9 +88,17 @@ Full against every single/pair cell and the frozen factorial interactions.
 K=1/2/4/8/16, within-query pairwise accuracy, stable ties, selection changes,
 and 10,000 paired bootstrap replicates remain fixed.
 
-Materialization alone does not authorize training. After the unified manifests
-are published and independently verified, their exact hashes must be placed in
-a separate training authorization and a clean full-width preflight must pass.
+Materialization alone did not authorize training. The published manifests now
+contain exactly 5,370 train rows, 198 clean H-dev rows, and 49 clean Prior-dev
+rows, and an independent recomputation passed. Their exact file, ordered-row,
+and sidecar hashes are bound in
+`configs/three_module_expansion_v1/training_authorization.json`. The remaining
+gate before the 24 GPU runs is one clean-commit, full-width preflight across all
+eight cells. It uses separate representative batches for two Consistency
+relations, two positive plus two clean H0 examples, and four paired Prior
+examples; every enabled objective must produce finite loss and gradients in its
+intended head.
+
 No result may be called Gold, human-verified, fresh confirmation, protected-test
 evidence, or a repair of the original v7/v12/v13 failures. No inspected dev or
 ranking result may be used to change epochs, weights, subsets, or cells.

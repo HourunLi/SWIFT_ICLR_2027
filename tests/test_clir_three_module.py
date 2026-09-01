@@ -1,12 +1,17 @@
 import json
 from pathlib import Path
 
-from prepare_clir_three_module import build_parser, verify_factorial_configs
+from prepare_clir_three_module import (
+    build_parser,
+    load_training_authorization,
+    verify_factorial_configs,
+)
 from src.clir_three_module import build_unified_data
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL = ROOT / "configs/three_module_expansion_v1/protocol.json"
+AUTHORIZATION = ROOT / "configs/three_module_expansion_v1/training_authorization.json"
 
 
 def _row(row_id: str, query_id: str, **extra: object) -> dict:
@@ -39,10 +44,31 @@ def test_three_module_configs_form_complete_factorial() -> None:
     assert observed["full"]["factors"] == [1, 1, 1]
 
 
-def test_three_module_parser_stops_at_materialization_stage() -> None:
+def test_three_module_parser_exposes_frozen_training_gates() -> None:
     args = build_parser().parse_args(["materialize"])
     assert args.command == "materialize"
     assert args.protocol.endswith("configs/three_module_expansion_v1/protocol.json")
+    preflight = build_parser().parse_args(["preflight", "--device", "cpu"])
+    assert preflight.command == "preflight"
+    assert preflight.authorization.endswith(
+        "configs/three_module_expansion_v1/training_authorization.json"
+    )
+
+
+def test_three_module_training_authorization_binds_complete_grid() -> None:
+    authorization = load_training_authorization(AUTHORIZATION)
+    assert authorization["cell_order"] == [
+        "u0",
+        "c",
+        "h",
+        "p",
+        "ch",
+        "cp",
+        "hp",
+        "full",
+    ]
+    assert authorization["training"]["runs"] == 24
+    assert authorization["cells"]["full"]["factors"] == [1, 1, 1]
 
 
 def test_unified_merge_enriches_shared_prior_and_removes_cross_task_dev() -> None:

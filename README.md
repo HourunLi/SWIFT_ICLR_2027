@@ -988,12 +988,13 @@ K=16 时 PG0 每 seed 改变 `30%--57%` 的候选，说明 Gate 确实直接影�
 
 ### 三模块扩量组合 v1：已冻结数据合并与八格设计
 
-[`three_module_expansion_v1`](configs/three_module_expansion_v1) 已冻结 materialization-only
-协议，说明见 [`docs/three_module_expansion_v1.md`](docs/three_module_expansion_v1.md)。它用
-同一份 5,370-row 训练清单跑 C/H0/Prior+`.25` Gate 的完整 `2×2×2` 八格、三 seed、三
-epoch。当前只允许机械合并与独立复核；在 exact manifest hash、单独 training authorization
-和 full-width preflight 完成前不得训练。H1、mutual、MIL、pseudo-tail、progress 和
-reconstruction 全关，892×16 ranking 仍只算复用的探索性评估。
+[`three_module_expansion_v1`](configs/three_module_expansion_v1) 的统一数据已机械合并并独立
+复核通过，说明见 [`docs/three_module_expansion_v1.md`](docs/three_module_expansion_v1.md)。
+5,370-row 训练清单、198-row H dev、49-row Prior dev 及完整 `2×2×2` 八格已由单独的
+[`training_authorization.json`](configs/three_module_expansion_v1/training_authorization.json)
+按 hash 冻结；下一道门是八格 full-width GPU preflight，通过后固定跑三 seed、三 epoch，
+共 24 次。H1、mutual、MIL、pseudo-tail、progress 和 reconstruction 全关，892×16 ranking
+仍只算复用的探索性评估。
 
 ## Toy smoke test
 

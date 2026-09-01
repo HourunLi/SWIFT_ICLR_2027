@@ -1,0 +1,209 @@
+{
+  "schema_version": "clir-three-module-expansion-v1-training-authorization",
+  "status": "AUTHORIZED_POSTHOC_EXPLORATORY_COMPLETE_2X2X2_TRAINING",
+  "frozen_at_utc": "2026-09-01T07:20:00Z",
+  "authorization_source": {
+    "kind": "explicit_user_instruction_in_active_codex_thread",
+    "instruction": "ok，先做gate，然后后面再做三方法结合",
+    "scope": "after completing the fixed-.25 Gate stage, train the complete Consistency x H0 x Prior/Gate factorial"
+  },
+  "evidence_tier": "posthoc_exploratory_silver_no_human_verification",
+  "terminal_statuses_preserved": {
+    "hallucination_v7": "FAIL_H0_V7_RESERVE",
+    "prior_v12": "STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE",
+    "prior_v13": "FAIL_PRIOR_V13_SCHEMA"
+  },
+  "implementation": {
+    "minimum_parent_commit": "ea293387862427de39333aae5a47cf81924dfa01",
+    "factors": {
+      "C": "Consistency auxiliary supervision with compact/expanded relations",
+      "H": "H0 first-bad-token onset BCE only",
+      "P": "direct Key/Complete supervision plus the unchanged main-style Gate at weight 0.25"
+    },
+    "frozen_training_sources": {
+      "training_entrypoint": {
+        "path": "train_clir.py",
+        "file_sha256": "7fb4536f0e2fbf61d38111dcb611b87f91566367fef5468a00c80341249a1c7c"
+      },
+      "reward_model_and_losses": {
+        "path": "src/consistency_localized_reward.py",
+        "file_sha256": "d85f3dba528beed7d6f7d44233ebc70cb21029215ad4be0c41207fedf03a1be8"
+      },
+      "data_loading_and_collation": {
+        "path": "src/clir_data.py",
+        "file_sha256": "ddb154716f5be1e68b8b6175b4e4d11608ca03367db8675d2b2f1654774550a0"
+      },
+      "feature_encoder": {
+        "path": "src/clir_features.py",
+        "file_sha256": "d04809d48d0e3c0dc766b1fba69e19df07d5fdb5bd13836f7b6e929267ca9b30"
+      }
+    }
+  },
+  "frozen_inputs": {
+    "protocol": {
+      "path": "configs/three_module_expansion_v1/protocol.json",
+      "file_sha256": "0b11aefcf18df185212460e94d950427cef4e1caafa5593934639998ddfd2a6b"
+    },
+    "materialization_report": {
+      "path": "run_artifacts/three_module_expansion_v1/materialization_report.json",
+      "file_sha256": "7ee5bd64ad3b5530227a2e4ff094b30a7d01eada0d1162a78ad3d4fd0c3ddc67"
+    },
+    "materialization_verification": {
+      "path": "run_artifacts/three_module_expansion_v1/materialization_verification.json",
+      "file_sha256": "664f4bd495042f9f10d15cfc9b79f8ceab66ea43774ac7b6c447d44368fa03d6"
+    },
+    "train_manifest": {
+      "path": "run_artifacts/three_module_expansion_v1/data/train_factorial.jsonl",
+      "file_sha256": "d5c5129629f610e9353a58fe7df7a3cb09b0e324ed399073ef3e76ec14e1feba",
+      "ordered_rows_sha256": "1eecb047e7050adbeb75f4680227b0ae289442619250100fccf7a820489c5c61",
+      "row_count": 5370,
+      "sidecar_path": "run_artifacts/three_module_expansion_v1/data/train_factorial.jsonl.manifest.json",
+      "sidecar_file_sha256": "e293759b5919dd3ea4e877e8b102c55006f8fa58c8eaded244d2895f89ab1d1f"
+    },
+    "h_dev_manifest": {
+      "path": "run_artifacts/three_module_expansion_v1/data/h_dev_query_disjoint.jsonl",
+      "file_sha256": "e775685bd677dbd7a4e4e002a321c4ec933d6433e19d68c2da8850c3cf84869c",
+      "ordered_rows_sha256": "2e372d16167b6cc5af00993ecd2f18b97dcbd2d40d38ccb42220bc3fd309b771",
+      "row_count": 198,
+      "sidecar_path": "run_artifacts/three_module_expansion_v1/data/h_dev_query_disjoint.jsonl.manifest.json",
+      "sidecar_file_sha256": "b88a442c1ddeda203c447e6fb465e06924d15b4e9d334b57a097edfb8651f101"
+    },
+    "prior_dev_manifest": {
+      "path": "run_artifacts/three_module_expansion_v1/data/prior_dev_query_disjoint.jsonl",
+      "file_sha256": "1780180ac2cb1fdaf1f1e5b63cc39e0f3961abfa4f34d34d8a351e2cf03e6633",
+      "ordered_rows_sha256": "3ef9a216dbd2692761b30df5d67b10cd127c8aae18ff7d86cf61a86de9aa27a4",
+      "row_count": 49,
+      "sidecar_path": "run_artifacts/three_module_expansion_v1/data/prior_dev_query_disjoint.jsonl.manifest.json",
+      "sidecar_file_sha256": "869df55c9a0342cb75a60abb8fc01bb108633e20d2e5f71c66c31b8684b86637"
+    },
+    "consistency_heldout_positive_relations": {
+      "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/heldout_positive_relations.jsonl",
+      "file_sha256": "fc88a094e9daced8528349d6d199da1e6277bd5180bd3ad62f0c8b09d47e96d1",
+      "row_count": 150
+    },
+    "consistency_heldout_negative_relations": {
+      "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/heldout_hard_negative_relations.jsonl",
+      "file_sha256": "fad547c547fdf635b5f7b0973f624d2657365633cf2c48ffd42d136ccbd448f2",
+      "row_count": 150
+    },
+    "consistency_heldout_endpoints": {
+      "path": "run_artifacts/data_expansion_scale_v6/consistency_training_v6_1/data/heldout_endpoint_features.jsonl",
+      "file_sha256": "24750232069e7d612719852dfc126e27bb946eeabb50b3d1e962c0d5e66ecaba",
+      "row_count": 557
+    },
+    "ranking_manifest": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/ranking_evaluation.jsonl",
+      "file_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7",
+      "row_count": 14272,
+      "query_count": 892,
+      "candidates_per_query": 16
+    }
+  },
+  "cell_order": ["u0", "c", "h", "p", "ch", "cp", "hp", "full"],
+  "cells": {
+    "u0": {
+      "factors": [0, 0, 0],
+      "config": "configs/three_module_expansion_v1/u0_correctness_only.json",
+      "file_sha256": "8de1b4720f319a08447a17e5b11fd0081c25f31c6b635cbc877ba58f96e74f89"
+    },
+    "c": {
+      "factors": [1, 0, 0],
+      "config": "configs/three_module_expansion_v1/c_consistency.json",
+      "file_sha256": "b3943379c4f97e44aa5b3dbdce0ea38b884b9f201601d5c64975e7973dc4142a"
+    },
+    "h": {
+      "factors": [0, 1, 0],
+      "config": "configs/three_module_expansion_v1/h_h0_onset_bce.json",
+      "file_sha256": "fde388cb515e8a2015d17bc9de9694fdf60553dcba61ec5e265ff933b62265cf"
+    },
+    "p": {
+      "factors": [0, 0, 1],
+      "config": "configs/three_module_expansion_v1/p_prior_gate.json",
+      "file_sha256": "9071eff631c5c98cab98e7b7ac6203733d6fff4effbd36a71054e78d6e1e2598"
+    },
+    "ch": {
+      "factors": [1, 1, 0],
+      "config": "configs/three_module_expansion_v1/ch_consistency_h0.json",
+      "file_sha256": "d5f67aca2696c08a6331b26beb0840b4e197c146a4dbec57841290a06c741545"
+    },
+    "cp": {
+      "factors": [1, 0, 1],
+      "config": "configs/three_module_expansion_v1/cp_consistency_prior_gate.json",
+      "file_sha256": "51119dd70778a6d0dc4bff7e3338ec34e7252ebd8644c69a012ed5044e05d98f"
+    },
+    "hp": {
+      "factors": [0, 1, 1],
+      "config": "configs/three_module_expansion_v1/hp_h0_prior_gate.json",
+      "file_sha256": "df44734a3b342c459ae3f2fe56d76726097957c6665562f510aa9ee712cb5f23"
+    },
+    "full": {
+      "factors": [1, 1, 1],
+      "config": "configs/three_module_expansion_v1/full_consistency_h0_prior_gate.json",
+      "file_sha256": "edc1212191b15f69cc9af7a88912c95f7172ab8b10e5a36e5d9acc28207496fb"
+    }
+  },
+  "training": {
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "amp_dtype": "bfloat16",
+    "runs": 24,
+    "train_rows": 5370,
+    "train_queries": 1493,
+    "validation_during_optimization": false,
+    "supervision_per_epoch": {
+      "rows": 5370,
+      "correctness_rows": 5370,
+      "consistency_rows": 800,
+      "consistency_positive_pairs": 400,
+      "consistency_negative_pairs": 159600,
+      "onset_rows": 400,
+      "path_hallucination_rows": 400,
+      "token_advantage_rows": 0,
+      "progress_rows": 0,
+      "key_prior_tokens": 77605,
+      "complete_prior_tokens": 77605,
+      "paired_prior_rows": 250,
+      "reconstruction_rows": 0
+    },
+    "same_exact_ordered_train_manifest_for_all_cells_and_seeds": true,
+    "fixed_epoch_no_checkpoint_selection": true,
+    "no_adaptive_weight_subset_or_cell_change": true
+  },
+  "preflight": {
+    "representative_batches": [
+      "two complete Consistency relations",
+      "two positive plus two explicit-clean H0 rows",
+      "four paired Key/Complete Prior rows"
+    ],
+    "all_eight_cells_must_pass_on_one_clean_commit": true,
+    "require_finite_forward_losses_outputs_and_gradients": true,
+    "require_enabled_objective_specific_head_gradients": true
+  },
+  "evaluation_after_training": {
+    "first_gate": "mechanism evaluation on the three frozen query-disjoint module dev populations",
+    "second_gate": "a separately hash-bound score-and-rank authorization",
+    "primary_ranking_contrast": "Full minus U0 paired-query Best-of-N accuracy at K=16",
+    "ranking_population": "reused 892-query x 16-candidate exploratory population",
+    "bootstrap_replicates": 10000,
+    "no_retuning_on_inspected_dev_or_ranking_outputs": true
+  },
+  "runtime": {
+    "output_root": "run_artifacts/three_module_expansion_v1",
+    "preflight_report": "run_artifacts/three_module_expansion_v1/training_preflight/preflight.json",
+    "training_pattern": "run_artifacts/three_module_expansion_v1/training/{cell}/seed-{seed}/{checkpoint.pt,metrics.jsonl}",
+    "large_artifacts_remain_git_ignored": true,
+    "require_clean_committed_code_for_preflight_and_all_24_runs": true
+  },
+  "claim_boundary": {
+    "allowed": "posthoc exploratory Silver evidence about C, H0, fixed Prior/Gate, and their interactions",
+    "forbidden": [
+      "repairing the original v7, v12, or v13 failure",
+      "Gold, human-verified, or objectively accurate labels",
+      "fresh confirmatory or protected-test claims",
+      "H1, path-MIL, pseudo-onset-tail, or mutual-distillation conclusions",
+      "post-result gate-weight tuning"
+    ]
+  }
+}

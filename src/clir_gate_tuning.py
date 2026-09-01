@@ -12,7 +12,12 @@ from collections import Counter, defaultdict
 import math
 from typing import Any, Mapping, Sequence
 
-from src.clir_smoke import canonical_sha256, stable_priority
+from src.clir_smoke import (
+    canonical_sha256,
+    check_numeric_response,
+    stable_priority,
+    validate_rollout_population,
+)
 
 
 PROTOCOL_SCHEMA = "clir-prior-gate-tuning-v1"
@@ -24,6 +29,103 @@ GSM_LENGTH_QUANTILES = 4
 
 class YieldGateError(ValueError):
     """Raised when a pre-frozen raw population cannot meet a final quota."""
+
+
+def materialize_numeric_checker_rows(
+    raw_rows: Sequence[Mapping[str, Any]], *, checker_version: str
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Apply the frozen numeric checker without unitization or CLIR scoring.
+
+    A parser failure is deliberately *not* converted into an incorrect
+    candidate for this experiment.  It remains auditable in ``correctness``
+    but is excluded by the pre-registered all-16-binary eligibility rule.
+    """
+
+    processed: list[dict[str, Any]] = []
+    statuses: Counter[str] = Counter()
+    finish_reasons: Counter[str] = Counter()
+    for raw in raw_rows:
+        row = dict(raw)
+        row["raw_reference_answer"] = str(row["reference_answer"])
+        checker = check_numeric_response(
+            response=str(row["response"]),
+            raw_reference=row["raw_reference_answer"],
+            source=str(row["source"]),
+            finish_reason=row.get("finish_reason"),
+            checker_version=checker_version,
+        )
+        checker["eligible_for_gate_tuning_population"] = checker.get(
+            "checker_status"
+        ) in {"numeric_match", "numeric_mismatch"}
+        row.update(checker)
+        processed.append(row)
+        statuses[str(row["checker_status"])] += 1
+        finish_reasons[str(row.get("finish_reason"))] += 1
+    return processed, {
+        "rows": len(processed),
+        "queries": len({str(row["query_id"]) for row in processed}),
+        "checker_version": checker_version,
+        "checker_statuses": dict(sorted(statuses.items())),
+        "finish_reason_counts": dict(sorted(finish_reasons.items())),
+        "binary_rows": sum(
+            status in {"numeric_match", "numeric_mismatch"}
+            for status in (str(row["checker_status"]) for row in processed)
+        ),
+        "clir_scoring_run": False,
+        "unitization_run": False,
+        "ai_annotation_run": False,
+    }
+
+
+def validate_numeric_checker_rows(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    raw_rows: Sequence[Mapping[str, Any]],
+    candidate_count: int,
+    checker_version: str,
+) -> dict[str, Any]:
+    """Recompute and verify checker rows against the immutable rollout axis."""
+
+    if len(rows) != len(raw_rows):
+        raise ValueError("checker and raw rollout row counts differ")
+    population = validate_rollout_population(rows, candidate_count=candidate_count)
+    statuses: Counter[str] = Counter()
+    for raw, checked in zip(raw_rows, rows):
+        row_id = str(raw.get("id"))
+        for field, value in raw.items():
+            if field == "reference_answer":
+                continue
+            if checked.get(field) != value:
+                raise ValueError(f"{row_id}: checker materialization changed {field}")
+        if checked.get("raw_reference_answer") != str(raw.get("reference_answer")):
+            raise ValueError(f"{row_id}: raw reference answer was not preserved")
+        expected = check_numeric_response(
+            response=str(raw["response"]),
+            raw_reference=str(raw["reference_answer"]),
+            source=str(raw["source"]),
+            finish_reason=raw.get("finish_reason"),
+            checker_version=checker_version,
+        )
+        expected["eligible_for_gate_tuning_population"] = expected.get(
+            "checker_status"
+        ) in {"numeric_match", "numeric_mismatch"}
+        for field, value in expected.items():
+            if checked.get(field) != value:
+                raise ValueError(f"{row_id}: checker field drift: {field}")
+        status = str(checked["checker_status"])
+        statuses[status] += 1
+        if bool(checked["eligible_for_gate_tuning_population"]) != (
+            status in {"numeric_match", "numeric_mismatch"}
+        ):
+            raise ValueError(f"{row_id}: binary checker eligibility drift")
+    return {
+        **population,
+        "raw_identity_rows_verified": len(rows),
+        "checker_rows_recomputed": len(rows),
+        "checker_statuses": dict(sorted(statuses.items())),
+        "candidate_axis_verified": True,
+        "clir_scoring_run": False,
+    }
 
 
 def _counts(rows: Sequence[Mapping[str, Any]], field: str) -> dict[str, int]:

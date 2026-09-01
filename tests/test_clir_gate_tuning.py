@@ -13,7 +13,9 @@ from src.clir_gate_tuning import (
     build_query_manifests,
     build_rollout_shards,
     choose_tuning_axis,
+    materialize_numeric_checker_rows,
     select_checker_eligible_rows,
+    validate_numeric_checker_rows,
 )
 
 
@@ -141,6 +143,54 @@ def test_checker_yield_shortfall_is_terminal() -> None:
             row["correctness"] = -1
     with pytest.raises(YieldGateError):
         select_checker_eligible_rows(rows, queries, protocol)
+
+
+def test_numeric_checker_materialization_excludes_parse_failures() -> None:
+    raw = [
+        {
+            "id": f"gsm8k:train:00001:cand:{index:03d}",
+            "query_id": "gsm8k:train:00001",
+            "candidate_index": index,
+            "source": "gsm8k",
+            "reference_answer": "One plus one is two.\n#### 2",
+            "response": response,
+            "finish_reason": "stop",
+            "prompt_token_ids": [1, 2],
+            "output_token_ids": [3 + index],
+        }
+        for index, response in enumerate(
+            ("Therefore, \\boxed{2}.", "I cannot determine the answer.")
+        )
+    ]
+    checked, health = materialize_numeric_checker_rows(
+        raw, checker_version="clir_numeric_multisource_v3"
+    )
+    assert [row["checker_status"] for row in checked] == [
+        "numeric_match",
+        "parse_failed",
+    ]
+    assert [row["eligible_for_gate_tuning_population"] for row in checked] == [
+        True,
+        False,
+    ]
+    assert checked[0]["raw_reference_answer"] == raw[0]["reference_answer"]
+    assert health["binary_rows"] == 1
+    validation = validate_numeric_checker_rows(
+        checked,
+        raw_rows=raw,
+        candidate_count=2,
+        checker_version="clir_numeric_multisource_v3",
+    )
+    assert validation["checker_rows_recomputed"] == 2
+    tampered = [dict(row) for row in checked]
+    tampered[0]["correctness"] = 0
+    with pytest.raises(ValueError, match="correctness"):
+        validate_numeric_checker_rows(
+            tampered,
+            raw_rows=raw,
+            candidate_count=2,
+            checker_version="clir_numeric_multisource_v3",
+        )
 
 
 def test_attribution_opens_only_the_more_negative_axis() -> None:

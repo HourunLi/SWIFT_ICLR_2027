@@ -155,6 +155,9 @@ def _load_authorization(
     parent = authorization["frozen_parent"]
     expected_files = {
         "protocol_file_sha256": protocol_path,
+        "rollout_authorization_file_sha256": (
+            PROJECT_ROOT / "configs/prior_gate_tuning_v1/rollout_authorization.json"
+        ),
         "tuning_queries_file_sha256": pre_rollout_dir / "tuning_queries.jsonl",
         "confirmation_queries_file_sha256": (
             pre_rollout_dir / "confirmation_queries.jsonl"

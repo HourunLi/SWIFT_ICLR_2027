@@ -1,0 +1,63 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-checker-authorization",
+  "status": "AUTHORIZED_CHECKER_AND_FROZEN_SELECTION_ONLY",
+  "authorized_at_utc": "2026-09-01T10:14:28Z",
+  "user_authorization": "ok，可以",
+  "authorized_scope": {
+    "numeric_checker": true,
+    "checker_eligibility_selection": true,
+    "confirmation_checker_materialization_to_sealed_file": true,
+    "confirmation_outcome_distribution_disclosure": false,
+    "feature_extraction": false,
+    "new_training": false,
+    "tuning_scoring": false,
+    "confirmation_scoring": false,
+    "quota_or_checker_change": false,
+    "adaptive_additional_sampling": false
+  },
+  "frozen_parent": {
+    "protocol_file_sha256": "89b98a4571570287c63fbda8e0478d87ff98063943804e023ed21dace544afbb",
+    "rollout_authorization_file_sha256": "dc3f4f7fbad94578164cfcdf7a7280b1852703f91696cf8883c69c3af7c4d1f3",
+    "tuning_queries_file_sha256": "ac28815f7e9ba4b47fd215b54e38e2e1569da0bc32252bd5d9a59a115e8d13fa",
+    "confirmation_queries_file_sha256": "dcb009bb0885beeaedc25cb6006846ce6a204ee6732c9c73128d569b03223fdc",
+    "tuning_raw_file_sha256": "f8e951fb3768841d5f2287e57cc7e1ed5159501d9c64e7686578f3bb8c96acfd",
+    "tuning_raw_sidecar_file_sha256": "7622e960b2379e1b455d1b511173bae9d0a23a68e74258a9aaa19481a9ac4efb",
+    "confirmation_raw_file_sha256": "e62ed73e17b4d7eb4a734420e2be065c50e872a7383af13b530d729258a43954",
+    "confirmation_raw_sidecar_file_sha256": "c6e0bce63ad55280fd1f550e0959447779858033af0c1b03e318977f78d8ded2",
+    "tuning_raw_rows": 20800,
+    "confirmation_raw_rows": 20800,
+    "raw_queries_per_split": 1300,
+    "candidate_count": 16,
+    "rollout_verification_status": "PASS_ALL_GATE_TUNING_V1_ROLLOUT_SHARDS",
+    "rollout_verified_shards": 52,
+    "rollout_verified_rows": 41600
+  },
+  "runtime_contract": {
+    "authorized_code_parent_commit": "45f1c2410dd8a13cc96ba4771fdd582b5240cf04",
+    "python_environment": "/prodcpfs/user/panzhixin/NeuralUCB-master/.venv",
+    "output_root": "run_artifacts/prior_gate_tuning_v1/checker",
+    "existing_artifact_policy": "stop_without_overwrite",
+    "checker_version": "clir_numeric_multisource_v3",
+    "all_16_candidates_must_have_numeric_match_or_numeric_mismatch": true,
+    "final_source_quota_per_split": {
+      "gsm8k": 720,
+      "math": 80
+    },
+    "selection_order": "prefrozen_hash_order_within_split_and_source_only",
+    "yield_shortfall_policy": "terminal_for_v1"
+  },
+  "sealing_contract": {
+    "confirmation_remains_sealed": true,
+    "confirmation_checker_rows_may_be_materialized_only_to_sealed_files": true,
+    "confirmation_correctness_distribution_must_not_be_printed_or_reported": true,
+    "confirmation_clir_scores_must_not_be_computed": true,
+    "confirmation_can_be_opened_once_only_after_axis_and_weight_hash_lock": true
+  },
+  "post_checker_boundary": {
+    "feature_extraction_requires_separate_hash_bound_authorization": true,
+    "training_requires_separate_hash_bound_authorization": true,
+    "tuning_scoring_requires_separate_hash_bound_authorization": true,
+    "confirmation_scoring_remains_forbidden": true,
+    "next_gate": "materialize_checker_select_fixed_populations_verify_then_hash_bind_selected_only_feature_stage"
+  }
+}

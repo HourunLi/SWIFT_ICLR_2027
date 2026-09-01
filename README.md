@@ -1009,6 +1009,27 @@ hierarchical interval 都低于 0；Full 也稳定低于 CH `1.46` points。准�
 会抵消收益；Full 尚未证明有效。不能继续在这批 dev/ranking 上调参数，下一步需要新的
 query/template-cluster-disjoint ranking population 做确认。
 
+### Prior/Gate 新题归因与权重确认 v1：容量已通过，尚未启动 rollout
+
+[`configs/prior_gate_tuning_v1/protocol.json`](configs/prior_gate_tuning_v1/protocol.json)
+已经把下一阶段写成前瞻协议，且 CPU 容量审计已通过。它不会再使用看过结果的 892 题，也不新增
+H/Key/Complete AI 标注；这里只需要 Phi 生成候选，再由冻结的 numeric checker 给出每条候选是否
+数值匹配。所有历史训练、机制开发、标注、ranking 题及其近模板簇都会整簇排除。
+
+新池预先分成两个互不重叠的部分：权重调参池和只开一次的确认池。每部分先生成 1,300 题
+（850 GSM8K + 450 MATH）×16；仅保留 16 条候选都有明确二值 checker 结果的题，再按预先冻结的
+hash 顺序各取 800 题（720 + 80）。确认池在权重锁死前不能看 correctness 或 CLIR score。当前审计
+得到 2,162 个可用 GSM8K 模板簇和 934 个 MATH 模板簇，足够冻结 2,600 个原始 query；预计最终
+selected output feature 约 1.71 TB，另有 prompt/序列化开销。现在仍是 CPU 准备阶段，rollout、
+feature、训练和确认评分均未授权、未启动。
+
+第一步只做归因：复用已有 CH 和 Full(.25) 三 seed checkpoint，新增训练
+`CH + direct Key/Complete + Gate=0`。这样 `direct−CH` 估计 direct Prior 的增量，
+`Full−direct` 估计固定 `.25` Gate 在 direct Prior 之上的增量。Gate=0 仅是诊断，不是候选默认值。
+若两项都不坏，不调权重；否则只开放更负的一条轴：direct 权重 `{.25,.5,1}`（Gate 固定 `.25`）
+或 Gate 权重 `{.0625,.125,.25}`（direct 固定 `1`）。在调参池选定后只打开一次确认池；如果没有
+任何三模块候选超过 CH，就如实报告当前 Full 没有得到支持，不强行挑一个正结论。
+
 ## Toy smoke test
 
 Toy 数据只验证代码路径，不能证明方法有效：

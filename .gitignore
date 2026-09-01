@@ -49,6 +49,8 @@ __pycache__/
 !/configs/data_expansion_prior_v13/**
 !/configs/three_module_expansion_v1/
 !/configs/three_module_expansion_v1/**
+!/configs/prior_gate_tuning_v1/
+!/configs/prior_gate_tuning_v1/**
 
 # The clean integration branch tracks only explicitly added runtime scripts.
 /scripts/*

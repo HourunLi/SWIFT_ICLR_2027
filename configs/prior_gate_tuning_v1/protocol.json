@@ -1,0 +1,226 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1",
+  "status": "FROZEN_PREPARATION_ROLLOUT_NOT_STARTED",
+  "frozen_at_utc": "2026-09-01",
+  "purpose": "fresh_query_and_template_disjoint_prior_vs_gate_attribution_then_one_axis_weight_tuning_with_sealed_confirmation",
+  "evidence_tier": "prospective_tuning_and_single_use_confirmation_on_train_source_questions",
+  "parent": {
+    "base_ranking_protocol_path": "configs/ranking_expansion_v7/protocol.json",
+    "base_ranking_protocol_file_sha256": "1e9de5d1c6d23c63a7ed6a501440329ce78cdfdb0e26ade2e2189dad56440155",
+    "factorial_completion_path": "configs/three_module_expansion_v1/completion.json",
+    "factorial_completion_file_sha256": "b78b56e445ae4088a99ca3790f4b86130bc7caf3457214a27c1e38f855e4d0b0",
+    "ch_config_path": "configs/three_module_expansion_v1/ch_consistency_h0.json",
+    "ch_config_file_sha256": "d5f67aca2696c08a6331b26beb0840b4e197c146a4dbec57841290a06c741545",
+    "full_config_path": "configs/three_module_expansion_v1/full_consistency_h0_prior_gate.json",
+    "full_config_file_sha256": "edc1212191b15f69cc9af7a88912c95f7172ab8b10e5a36e5d9acc28207496fb",
+    "inspected_892_query_population_is_never_reused_for_tuning": true
+  },
+  "sources": {
+    "allowed": ["gsm8k_train", "math_train"],
+    "protected": ["gsm8k_test", "math_test", "svamp"],
+    "gsm8k": {
+      "inherits_dataset_revision_and_license_from_base": true,
+      "minimum_reference_reasoning_words": 30,
+      "minimum_reference_calculation_markers": 1,
+      "minimum_distinct_intermediate_numeric_values": 2,
+      "reason": "ranking_only_stage_can_include_medium_chains_but_excludes_the_shortest_one_step_items"
+    },
+    "math": {
+      "inherits_dataset_revision_license_subjects_and_train_file_hashes_from_base": true,
+      "allowed_levels": [1, 2, 3, 4, 5],
+      "minimum_official_solution_words": 10,
+      "reason": "fresh_capacity_without_new_checker_or_new_dataset_family"
+    },
+    "protected_policy": {
+      "test_files_read_for_selection": false,
+      "svamp_is_asdiv_derived_and_not_used_as_an_independent_training_source": true,
+      "this_population_is_not_a_protected_test": true
+    }
+  },
+  "historical_exclusion_inputs": [
+    {
+      "label": "v7_permanent_exclusions_including_v6",
+      "path": "run_artifacts/ranking_expansion_v7/pre_rollout/permanent_exclusions.jsonl",
+      "row_count": 3316,
+      "file_sha256": "d5a2248a6976cf4b16294666ac66bf86a20615f39f1d60c833aee49c401844e4",
+      "ordered_rows_sha256": "7fd4918dc4c76280da9211d23a2eb8a54301e4a097c44d2e3621ab72578f20b1",
+      "sidecar_file_sha256": "ea3b3c85fe51d6a757b6e5540a8da70a8d340b10a1425b1457faa3242ca08628"
+    },
+    {
+      "label": "v7_ranking_1500_including_inspected_892",
+      "path": "run_artifacts/ranking_expansion_v7/pre_rollout/ranking_queries.jsonl",
+      "row_count": 1500,
+      "file_sha256": "44daeba2f7ba1103d6ba32f844db9436e28a282af50c7995b224b6c0c2d13c77",
+      "ordered_rows_sha256": "316af600b41c9cb23b65915f204f1957eadedfd651e30421b240c8bffd532911",
+      "sidecar_file_sha256": "c8b5ed8f60784cb1ff170554340e81932f9c746ab1ef9b36c25912f21b4f8fe4"
+    },
+    {
+      "label": "v7_h_acquisition",
+      "path": "run_artifacts/ranking_expansion_v7/pre_rollout/h_acquisition_queries.jsonl",
+      "row_count": 1000,
+      "file_sha256": "94573cfc721d7349dd5aa9342605b12f6e9ad8c9dbc6825333b6b9760ab3e9ec",
+      "ordered_rows_sha256": "fd17cd68b541dec136b313154a7f089c19e74c396249964102049897834912b0",
+      "sidecar_file_sha256": "054a0d3304c2bfbc87c4a0bad0465045ccb45dfcecb5ac588b1ed86601500e41"
+    },
+    {
+      "label": "prior_v12_acquisition",
+      "path": "run_artifacts/data_expansion_prior_v12/pre_rollout/acquisition_queries.jsonl",
+      "row_count": 2000,
+      "file_sha256": "026376b4e45969d3d03576f5a5a77fdcdc37babaadba43ac1a8b73fd0acc7b7d",
+      "ordered_rows_sha256": "a53553f89f97931e1f65a722c1b9488304d5cd628a411021e5d505d80fe6eacd",
+      "sidecar_file_sha256": "42ef3fb2238589b46edc7adcb6e0da39b9c243bb990a9e758b3cda047273993b"
+    },
+    {
+      "label": "prior_v13_mechanical_smoke",
+      "path": "run_artifacts/data_expansion_prior_v13/pre_annotation/proposals/prior_mechanical_natural_48.jsonl",
+      "row_count": 48,
+      "file_sha256": "9bdad5d4be6d2bf9ecb86bbe0ec23dabe71bdeb06f6fc9daf5614e24eef30358",
+      "ordered_rows_sha256": "e0ec70d08dac7dfefa7a8cbd46d4e8f4c2abc2ef2187d7054b1820b9e81f40bf",
+      "sidecar_file_sha256": "b8bac37e209ab25678a34f7679ea4852e552893cb0561d29ba4a08ada84005c8"
+    },
+    {
+      "label": "three_module_train_defense_in_depth",
+      "path": "run_artifacts/three_module_expansion_v1/data/train_factorial.jsonl",
+      "row_count": 5370,
+      "file_sha256": "d5c5129629f610e9353a58fe7df7a3cb09b0e324ed399073ef3e76ec14e1feba",
+      "ordered_rows_sha256": "1eecb047e7050adbeb75f4680227b0ae289442619250100fccf7a820489c5c61",
+      "sidecar_file_sha256": "e293759b5919dd3ea4e877e8b102c55006f8fa58c8eaded244d2895f89ab1d1f"
+    },
+    {
+      "label": "three_module_h_dev_defense_in_depth",
+      "path": "run_artifacts/three_module_expansion_v1/data/h_dev_query_disjoint.jsonl",
+      "row_count": 198,
+      "file_sha256": "e775685bd677dbd7a4e4e002a321c4ec933d6433e19d68c2da8850c3cf84869c",
+      "ordered_rows_sha256": "2e372d16167b6cc5af00993ecd2f18b97dcbd2d40d38ccb42220bc3fd309b771",
+      "sidecar_file_sha256": "b88a442c1ddeda203c447e6fb465e06924d15b4e9d334b57a097edfb8651f101"
+    },
+    {
+      "label": "three_module_prior_dev_defense_in_depth",
+      "path": "run_artifacts/three_module_expansion_v1/data/prior_dev_query_disjoint.jsonl",
+      "row_count": 49,
+      "file_sha256": "1780180ac2cb1fdaf1f1e5b63cc39e0f3961abfa4f34d34d8a351e2cf03e6633",
+      "ordered_rows_sha256": "3ef9a216dbd2692761b30df5d67b10cd127c8aae18ff7d86cf61a86de9aa27a4",
+      "sidecar_file_sha256": "869df55c9a0342cb75a60abb8fc01bb108633e20d2e5f71c66c31b8684b86637"
+    }
+  ],
+  "template_clustering": {
+    "namespace": "clir-gate-tuning-v1",
+    "inherits_entity_template_minhash_and_jaccard_contract_from_v7": true,
+    "exclude_entire_cluster_touching_any_historical_query": true,
+    "one_selected_query_per_cluster": true,
+    "tuning_confirmation_cluster_overlap_required": 0
+  },
+  "population": {
+    "selection_namespace": "clir-gate-tuning-v1-raw-population",
+    "selection_role_order": ["weight_tuning", "sealed_confirmation"],
+    "raw_source_counts": {
+      "weight_tuning": {"gsm8k": 850, "math": 450},
+      "sealed_confirmation": {"gsm8k": 850, "math": 450}
+    },
+    "raw_query_count": 2600,
+    "raw_candidate_rows": 41600,
+    "checker_eligible_query_rule": "exactly_16_candidates_and_every_candidate_is_numeric_match_or_numeric_mismatch",
+    "final_selection_namespace": "clir-gate-tuning-v1-checker-eligible-final",
+    "final_selection_uses": "prefrozen_hash_order_within_split_and_source_only",
+    "final_source_counts": {
+      "weight_tuning": {"gsm8k": 720, "math": 80},
+      "sealed_confirmation": {"gsm8k": 720, "math": 80}
+    },
+    "final_query_count": 1600,
+    "final_candidate_rows": 25600,
+    "yield_failure_policy": "terminal_for_v1_no_post_result_replacement_or_quota_change",
+    "confirmation_correctness_and_scores_sealed_until_weight_lock": true
+  },
+  "generation": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "tokenizer_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "backend": "vllm",
+    "backend_version": "0.5.3.post1",
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "max_new_tokens": 1024,
+    "max_model_length": 4096,
+    "maximum_prompt_tokens": 3072,
+    "prompt_template": "Solve the following math problem step-by-step.\nSimplify your answer as much as possible. Present your final answer as \\boxed{Your Answer}.\n<QUESTION>",
+    "base_seed": 20260901,
+    "seed_namespace": "clir-gate-tuning-v1-vllm-query-seed",
+    "candidate_count": 16,
+    "queries_per_shard": 50,
+    "rollout_shards": 52,
+    "saved_prompt_and_output_token_ids_are_axis_truth": true,
+    "bit_exact_regeneration_claimed": false
+  },
+  "checker": {
+    "checker_version": "clir_numeric_multisource_v3",
+    "correctness_semantics": "numeric_value_match_not_full_semantic_correctness",
+    "unitizer_required": false,
+    "ai_annotation_required": false,
+    "truncated_parse_failure_or_ambiguous_candidate_makes_its_query_ineligible": true
+  },
+  "attribution_and_tuning": {
+    "training_data_is_unchanged_three_module_factorial_manifest": true,
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "fixed_consistency_weight": 1.0,
+    "fixed_h0_onset_bce_weight": 1.0,
+    "h1_and_other_auxiliary_paths_remain_off": true,
+    "stage_a_cells": {
+      "CH": "reuse_existing_C1_H1_P0_checkpoints",
+      "CH_direct_P_gate0": "train_new_with_key_and_complete_weights_1_and_gate_weight_0",
+      "Full_025": "reuse_existing_C1_H1_direct_P1_gate_0.25_checkpoints"
+    },
+    "effect_definitions_at_k16": {
+      "direct_prior_effect": "CH_direct_P_gate0_minus_CH",
+      "gate_effect_given_direct_prior": "Full_025_minus_CH_direct_P_gate0"
+    },
+    "axis_rule": "if_both_effect_means_nonnegative_no_tuning_else_open_only_the_more_negative_effect_axis",
+    "direct_prior_grid_if_opened": [0.25, 0.5, 1.0],
+    "direct_grid_implementation": "set_key_prior_weight_and_complete_prior_weight_together_keep_prior_weight_1_and_gate_prior_weight_0.25",
+    "gate_grid_if_opened": [0.0625, 0.125, 0.25],
+    "gate_grid_implementation": "keep_direct_key_complete_weights_1_and_change_only_gate_prior_weight",
+    "gate_zero_is_diagnostic_only_and_never_a_final_candidate": true,
+    "maximum_new_training_runs_before_confirmation": 9,
+    "weight_selection_metric": "mean_across_three_seeds_Best_of_N_accuracy_at_K16_on_weight_tuning_split",
+    "weight_tie_break": "larger_weight_if_exact_mean_tie",
+    "if_no_prior_candidate_beats_CH": "report_no_supported_three_module_combination_do_not_force_a_positive_claim"
+  },
+  "confirmation": {
+    "opened_once_after_axis_and_weight_are_hash_locked": true,
+    "primary_contrast": "locked_three_module_candidate_minus_CH_at_K16",
+    "secondary_contrasts": ["locked_candidate_minus_U0", "locked_candidate_minus_Full_025"],
+    "bootstrap_replicates": 10000,
+    "benefit_rule": "positive_mean_at_least_two_positive_seeds_and_fixed_seed_query_bootstrap_95_ci_lower_above_zero",
+    "inconclusive_rule": "otherwise_unless_harm_rule_matches",
+    "harm_rule": "negative_mean_and_at_least_two_negative_seeds",
+    "no_second_weight_selection_after_confirmation": true
+  },
+  "budget": {
+    "expected_output_tokens_per_candidate": {"gsm8k": 300, "math": 600},
+    "expected_raw_rollout_output_tokens": 16800000,
+    "selected_feature_bytes_per_token": 202752,
+    "estimated_selected_output_feature_storage_tb_decimal": 1.712848896,
+    "selected_only_feature_extraction": true,
+    "gpu_model": "NVIDIA L20Z",
+    "maximum_concurrent_jobs": 8,
+    "tensor_parallel_size": 1
+  },
+  "execution_authorization": {
+    "source_audit_allowed": true,
+    "pre_rollout_freeze_allowed": true,
+    "rollout_allowed": false,
+    "checker_materialization_allowed": false,
+    "feature_extraction_allowed": false,
+    "training_allowed": false,
+    "confirmation_scoring_allowed": false,
+    "next_gate": "clean_commit_then_freeze_and_independent_recompute_then_hash_bound_rollout_authorization"
+  },
+  "claim_boundary": {
+    "fresh_query_and_template_disjoint_from_all_recorded_historical_use": true,
+    "fresh_confirmatory_for_this_weight_decision": true,
+    "protected_test_or_external_generalization_claim": false,
+    "labels_are_numeric_checker_labels_not_human_gold": true,
+    "training_auxiliary_labels_remain_dual_ai_silver_no_human_verification": true,
+    "this_protocol_can_identify_direct_prior_vs_gate_but_not_every_internal_prior_mechanism": true
+  }
+}

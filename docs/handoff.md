@@ -1094,6 +1094,33 @@ interval=`[-.00710,+.01756]`，hierarchical interval=`[-.01158,+.02242]`。因�
 为 `f7b9b6d…982e2` / `eea7b3a…20ef`。不允许继续在同一 dev/ranking 上调 weight、epoch、
 subset、threshold 或 `.25` Gate。
 
+### Prior/Gate 新题归因与单轴调权 v1：CPU 容量门已通过
+
+用户已同意在全新题上先拆开 direct Prior 与 Gate，再按拆分结果只调一条权重轴。协议在
+`configs/prior_gate_tuning_v1/protocol.json`，准备入口为 `prepare_clir_gate_tuning.py`，纯选择逻辑在
+`src/clir_gate_tuning.py`。当前只执行过 CPU source/capacity audit，未生成 rollout、未抽 feature、
+未训练新 cell，也没有打开确认集。
+
+协议从 GSM8K train 与 MATH train 取题，沿用 v7 的数据 revision、numeric checker 和 Phi revision。
+为了获得新容量，GSM8K 放宽为中等以上链长（reasoning words≥30、calculation marker≥1、不同中间
+数值≥2），MATH 放宽到 level 1--5、官方解至少 10 words；没有引入第三种 checker。八份历史
+manifest 合计映射到 7,843 个唯一 source query，连同近模板簇全部排除。审计后有 3,096 个可选
+代表簇（GSM8K 2,162，MATH 934）。legacy `gsm8k-train-NNNNN` 已机械映射回同一 revision 的
+`gsm8k:train:NNNNN`，避免旧 correctness 数据通过 ID 别名重新进入。
+
+调参/确认各在 rollout 前冻结 1,300 个 query：850 GSM8K +450 MATH；两边 query 与 cluster overlap
+均为 0。每题固定生成 16 条，共 41,600 条 raw trajectory、52 个 50-query shard。checker 后只有
+16/16 candidate 均为 `numeric_match` 或 `numeric_mismatch` 的 query 可进入最终池；每边按冻结 hash
+顺序取 720 GSM8K +80 MATH，共 800 query。任何 source/split 凑不够即终止 v1，不能看完结果换题或
+改 quota。selected output feature 的协议估算约 1.713 TB，尚未计 condition/prompt 与序列化开销。
+
+Stage A 只比较三个 matched cell、三 seed、三 epoch：复用 CH，新增
+`CH_direct_P_gate0`，复用 Full(.25)。定义 `direct effect = direct_gate0−CH`、
+`gate effect = Full(.25)−direct_gate0`。若两项均非负，不开调权；否则只开放均值更负的一轴。
+direct 轴候选 `{.25,.5,1}` 始终固定 Gate `.25`；Gate 轴候选 `{.0625,.125,.25}` 始终保留 direct
+权重 `1`。Gate=0 只用于归因，不能成为最终默认。权重只在 tuning 800 题上锁一次，随后才允许打开
+sealed confirmation 800 题；确认后不得二次选权重。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
@@ -1144,8 +1171,9 @@ subset、threshold 或 `.25` Gate。
    ranking 上再调 direct weight、Gate 权重、epoch 或 subset。
 6. 三模块扩量 v1 已完成 24 个训练、三类机制评估和 892-query ranking；保存全部 authorization、
    checkpoint、shard、merge、summary 和 completion hash，不覆盖、不重跑、不在同一数据上调参。
-   下一道科学门是先冻结一批新的 query/template-cluster-disjoint ranking population，再复跑
-   最小必要的 U0/CH/Full（若目标是完整归因则复跑八格）。在新数据前，CH 只能叫当前最好
+   新题协议 v1 的 CPU 容量门已经通过；下一执行门是 clean commit 后冻结并独立复算 2,600-query
+   manifest，再单独 hash-authorize rollout。随后先复用 CH/Full 并补训 direct-gate0 做归因，按
+   冻结规则只调一条轴，最后只打开一次 800-query confirmation。在确认结果前，CH 只能叫当前最好
    point estimate，H×P 只能叫这轮最稳定的探索性冲突。
 
 当前裁决是：C、H0、direct Prior/Gate 都建立了各自 Silver 机制可学习性；H0 更像 tail/path

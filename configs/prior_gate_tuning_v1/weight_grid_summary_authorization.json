@@ -1,0 +1,29 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-weight-grid-summary-authorization",
+  "status": "AUTHORIZED_PRIOR_GATE_TUNING_V1_WEIGHT_GRID_SUMMARY",
+  "authorized_at_utc": "2026-09-01",
+  "authorization_source": {
+    "kind": "successful_hash_bound_open_tuning_score_merge",
+    "user_instruction": "ok，可以",
+    "scope": "apply the pre-registered K16 mean and exact-tie rule to the already scored open tuning grid"
+  },
+  "scoring_authorization_path": "configs/prior_gate_tuning_v1/weight_grid_scoring_authorization.json",
+  "scoring_authorization_sha256": "86a210d525c5abed0b052eeff1a3a9c677522e5915469a4e50e929586547a9a6",
+  "merge_report_path": "run_artifacts/prior_gate_tuning_v1/weight_grid/scoring/merged/merge_report.json",
+  "merge_report_sha256": "c4461f6e34728c2faf2a6469106b6a696f4f4f2003edde4940165882eb7e70d9",
+  "stage_a_attribution_path": "run_artifacts/prior_gate_tuning_v1/stage_a/attribution.json",
+  "stage_a_attribution_sha256": "bc015bb6f59189e22e1295d95805c5325cb0cf18b5c8b655893e8e36a8eedcc3",
+  "summarizer_path": "summarize_clir_gate_tuning_weight_grid.py",
+  "summarizer_sha256": "c16cb668ebcb678af1a0f6619b24ddb28433cc5fd486abd9c92f0ddc2eb88a19",
+  "output_path": "run_artifacts/prior_gate_tuning_v1/weight_grid/selection.json",
+  "selection_rule": {
+    "metric": "mean_across_three_seeds_Best_of_N_accuracy_at_K16",
+    "maximize": true,
+    "exact_tie_break": "larger_direct_weight",
+    "candidate_direct_weights": [0.25, 0.5, 1.0],
+    "gate_prior_weight_fixed": 0.25
+  },
+  "confirmation_scoring_allowed": false,
+  "confirmation_outcomes_opened": false,
+  "claim_boundary": "select one direct-Prior weight from the open tuning scores only; do not inspect or score the sealed confirmation"
+}

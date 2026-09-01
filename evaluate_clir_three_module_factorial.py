@@ -28,7 +28,7 @@ DEFAULT_COMPLETION = (
 )
 DEFAULT_OUTPUT = (
     PROJECT_ROOT
-    / "run_artifacts/three_module_expansion_v1/evaluation/mechanism_summary.json"
+    / "run_artifacts/three_module_expansion_v1/evaluation/mechanism_summary_v2.json"
 )
 CELL_FACTORS = {
     "u0": (0, 0, 0),
@@ -263,6 +263,52 @@ def _consistency_metrics(
     return relation_metrics(representations, scores, positive, negative, margin=0.2)
 
 
+def prior_metrics(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Add a scale-aware Gate comparison to the historical Prior diagnostics.
+
+    Absolute Gate-to-Prior L2 is not comparable between an untrained, nearly
+    uniform Prior and a learned, concentrated Prior.  The frozen-weight Gate is
+    therefore also compared with a uniform attention map against the *same*
+    learned fused Prior.  Positive advantage means the learned Gate is closer
+    than uniform without changing the original absolute-L2 diagnostic.
+    """
+    report = _prior_run_metrics(rows)
+    uniform_l2: list[float] = []
+    learned_l2: list[float] = []
+    advantage: list[float] = []
+    for index, row in enumerate(rows):
+        gate = np.asarray(row["clir_gate_attention"], dtype=np.float64)
+        key = np.asarray(row["clir_key_prior"], dtype=np.float64)
+        complete = np.asarray(row["clir_complete_prior"], dtype=np.float64)
+        if gate.ndim != 1 or gate.size == 0 or key.shape != gate.shape or complete.shape != gate.shape:
+            raise ValueError(f"unaligned Gate/Prior maps at row {index}")
+        fused = 0.5 * (key + complete)
+        uniform = np.full(gate.shape, 1.0 / gate.size, dtype=np.float64)
+        gate_distance = float(np.square(gate - fused).sum())
+        uniform_distance = float(np.square(uniform - fused).sum())
+        recorded = float(row["clir_prior_gate_squared_l2"])
+        if not np.isclose(gate_distance, recorded, rtol=1e-5, atol=1e-7):
+            raise ValueError(f"recorded Gate L2 drift at row {index}")
+        learned_l2.append(gate_distance)
+        uniform_l2.append(uniform_distance)
+        advantage.append(uniform_distance - gate_distance)
+    report["gate"].update(
+        {
+            "uniform_to_same_fused_prior_squared_l2_mean": float(
+                np.mean(uniform_l2)
+            ),
+            "learned_gate_advantage_over_uniform_l2_mean": float(
+                np.mean(advantage)
+            ),
+            "learned_gate_beats_uniform_rows": int(
+                np.sum(np.asarray(advantage) > 0)
+            ),
+            "scale_aware_diagnostic_status": "posthoc_mechanical_no_retuning",
+        }
+    )
+    return report
+
+
 METRIC_PATHS: dict[str, Callable[[Mapping[str, Any]], float]] = {
     "consistency.representation_separation": lambda row: row["consistency"]["representation"]["mean_separation_positive_minus_negative"],
     "consistency.representation_auroc": lambda row: row["consistency"]["representation"]["relation_classification_auroc"],
@@ -284,6 +330,8 @@ METRIC_PATHS: dict[str, Callable[[Mapping[str, Any]], float]] = {
     "prior.complete_auroc": lambda row: row["prior"]["complete"]["auroc"],
     "prior.complete_bce": lambda row: row["prior"]["complete"]["binary_cross_entropy"],
     "prior.gate_squared_l2": lambda row: row["prior"]["gate"]["full_trajectory_squared_l2_mean"],
+    "prior.gate_uniform_baseline_squared_l2": lambda row: row["prior"]["gate"]["uniform_to_same_fused_prior_squared_l2_mean"],
+    "prior.gate_advantage_over_uniform_l2": lambda row: row["prior"]["gate"]["learned_gate_advantage_over_uniform_l2_mean"],
     "prior.gate_alignment": lambda row: row["prior"]["gate"]["dot_product_mean"],
     "prior.gate_normalized_entropy": lambda row: row["prior"]["gate"]["attention_normalized_entropy_mean"],
     "prior.gate_effective_fraction": lambda row: row["prior"]["gate"]["attention_effective_token_fraction_mean"],
@@ -427,7 +475,7 @@ def command_mechanisms(args: argparse.Namespace) -> None:
                 "checkpoint_sha256": checkpoint_hash,
                 "consistency": _consistency_metrics(c_rows, positive, negative),
                 "hallucination": h_metrics(h_rows),
-                "prior": _prior_run_metrics(p_rows),
+                "prior": prior_metrics(p_rows),
             }
         )
 
@@ -453,13 +501,25 @@ def command_mechanisms(args: argparse.Namespace) -> None:
             "prior.complete_average_precision"
         ]["factorial_effect_mean"]["P_main"]
         > 0,
-        "P_gate_L2_main_effect_negative": metrics["prior.gate_squared_l2"][
+        "P_raw_absolute_gate_L2_main_effect_negative": metrics["prior.gate_squared_l2"][
             "factorial_effect_mean"
         ]["P_main"]
         < 0,
+        "P_scale_aware_gate_advantage_main_effect_positive": metrics[
+            "prior.gate_advantage_over_uniform_l2"
+        ]["factorial_effect_mean"]["P_main"]
+        > 0,
+        "all_P_on_cell_seeds_gate_beats_uniform": all(
+            metrics["prior.gate_advantage_over_uniform_l2"]["cell_seed"][cell][
+                str(seed)
+            ]
+            > 0
+            for cell in ("p", "cp", "hp", "full")
+            for seed in (42, 43, 44)
+        ),
     }
     report = {
-        "schema_version": "clir-three-module-factorial-mechanisms-v1",
+        "schema_version": "clir-three-module-factorial-mechanisms-v1.1",
         "status": "PASS_THREE_MODULE_MECHANISM_EVALUATION",
         "created_at_utc": _utc_now(),
         "evidence_tier": "posthoc_exploratory_silver_no_human_verification",

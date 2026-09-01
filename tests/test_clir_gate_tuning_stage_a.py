@@ -13,8 +13,9 @@ from prepare_clir_gate_tuning_stage_a import (
 )
 from prepare_clir_gate_tuning_weight_grid import _validate_weight_config
 from score_clir import file_sha256
-from score_clir_checkpoint_set import _load_bound_contract
+from score_clir_checkpoint_set import _load_bound_contract, _validate_confirmation_lock
 from summarize_clir_gate_tuning_stage_a import _source_accuracy
+from summarize_clir_gate_tuning_confirmation import confirmation_decision
 from summarize_clir_gate_tuning_weight_grid import choose_weight
 
 
@@ -116,6 +117,113 @@ def test_direct_preflight_requires_prior_gradients_but_no_gate_gradient() -> Non
     bad["prior"]["objective_gradient_norms"]["token_reward_head"] = 1.0
     with pytest.raises(ValueError, match="unexpectedly trained"):
         _assert_direct_preflight(bad)
+
+
+def test_confirmation_lock_binds_selection_and_sealed_population(
+    tmp_path: Path,
+) -> None:
+    selection_path = tmp_path / "selection.json"
+    selection_path.write_text(
+        json.dumps(
+            {
+                "status": "COMPLETE_PRIOR_GATE_TUNING_V1_DIRECT_WEIGHT_SELECTION",
+                "confirmation_outcomes_opened": False,
+                "selection": {
+                    "selected_cell": "direct_100",
+                    "selected_direct_weight": 1.0,
+                    "gate_prior_weight": 0.25,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    input_path = tmp_path / "confirmation.jsonl"
+    input_path.write_text("{}\n", encoding="utf-8")
+    lock_path = tmp_path / "lock.json"
+    lock = {
+        "schema_version": "clir-prior-gate-tuning-v1-confirmation-weight-lock",
+        "status": "LOCKED_PRIOR_GATE_TUNING_V1_CONFIRMATION_12_CHECKPOINTS",
+        "confirmation_opening_allowed": True,
+        "no_second_weight_selection_after_confirmation": True,
+        "weight_selection": {
+            "path": str(selection_path),
+            "file_sha256": file_sha256(selection_path),
+            "selected_cell": "direct_100",
+            "selected_direct_weight": 1.0,
+            "gate_prior_weight": 0.25,
+        },
+        "sealed_confirmation": {
+            "path": str(input_path),
+            "file_sha256": file_sha256(input_path),
+            "rows": 12_800,
+            "queries": 800,
+            "candidates_per_query": 16,
+        },
+        "cells": ["locked_candidate", "ch", "u0", "full_025"],
+        "seeds": [42, 43, 44],
+        "run_count": 12,
+    }
+    lock_path.write_text(json.dumps(lock), encoding="utf-8")
+    authorization = {
+        "weight_lock_path": str(lock_path),
+        "weight_lock_sha256": file_sha256(lock_path),
+        "weight_selection_path": str(selection_path),
+        "weight_selection_sha256": file_sha256(selection_path),
+        "ranking_rows": 12_800,
+        "ranking_queries": 800,
+        "candidates_per_query": 16,
+        "cells": lock["cells"],
+        "seeds": lock["seeds"],
+        "run_count": 12,
+    }
+    _validate_confirmation_lock(
+        authorization=authorization,
+        completion_path=lock_path,
+        completion_sha=file_sha256(lock_path),
+        completion=lock,
+        input_path=input_path,
+        input_sha=file_sha256(input_path),
+    )
+    selection_path.write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="selection hash drift"):
+        _validate_confirmation_lock(
+            authorization=authorization,
+            completion_path=lock_path,
+            completion_sha=file_sha256(lock_path),
+            completion=lock,
+            input_path=input_path,
+            input_sha=file_sha256(input_path),
+        )
+
+
+@pytest.mark.parametrize(
+    ("mean", "positive", "negative", "lower", "expected"),
+    (
+        (0.01, 2, 1, 0.001, "CONFIRMATION_BENEFIT"),
+        (-0.01, 1, 2, -0.02, "CONFIRMATION_HARM"),
+        (0.01, 2, 1, -0.001, "CONFIRMATION_INCONCLUSIVE"),
+        (0.0, 0, 0, 0.0, "CONFIRMATION_INCONCLUSIVE"),
+    ),
+)
+def test_confirmation_decision_uses_the_frozen_rule(
+    mean: float,
+    positive: int,
+    negative: int,
+    lower: float,
+    expected: str,
+) -> None:
+    decision = confirmation_decision(
+        {
+            "mean_paired_effect": mean,
+            "seed_direction_counts": {
+                "positive": positive,
+                "zero": 3 - positive - negative,
+                "negative": negative,
+            },
+            "fixed_seed_query_95_ci": [lower, 0.02],
+        }
+    )
+    assert decision["result"] == expected
 
 
 def test_factorial_scorer_accepts_only_exact_stage_a_3x3_grid(

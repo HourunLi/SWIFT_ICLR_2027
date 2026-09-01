@@ -59,6 +59,75 @@ def _project_path(value: str | Path) -> Path:
     return path.resolve() if path.is_absolute() else (PROJECT_ROOT / path).resolve()
 
 
+def _validate_confirmation_lock(
+    *,
+    authorization: Mapping[str, Any],
+    completion_path: Path,
+    completion_sha: str,
+    completion: Mapping[str, Any],
+    input_path: Path,
+    input_sha: str,
+) -> None:
+    lock_path = _project_path(authorization["weight_lock_path"])
+    if completion_path.resolve() != lock_path:
+        raise ValueError("confirmation completion is not the frozen weight lock")
+    if completion_sha != authorization["weight_lock_sha256"]:
+        raise ValueError("confirmation weight-lock hash drift")
+    if (
+        completion.get("schema_version")
+        != "clir-prior-gate-tuning-v1-confirmation-weight-lock"
+        or completion.get("confirmation_opening_allowed") is not True
+        or completion.get("no_second_weight_selection_after_confirmation") is not True
+    ):
+        raise ValueError("confirmation weight lock is inactive or malformed")
+
+    selection_spec = completion.get("weight_selection")
+    if not isinstance(selection_spec, Mapping):
+        raise ValueError("confirmation weight lock lacks the tuning selection")
+    selection_path = _project_path(str(selection_spec["path"]))
+    selection_sha = file_sha256(selection_path)
+    if (
+        selection_sha != selection_spec["file_sha256"]
+        or selection_path
+        != _project_path(authorization["weight_selection_path"])
+        or selection_sha != authorization["weight_selection_sha256"]
+    ):
+        raise ValueError("confirmation tuning-selection hash drift")
+    selection = _load_json(selection_path)
+    locked = selection.get("selection", {})
+    if (
+        selection.get("status")
+        != "COMPLETE_PRIOR_GATE_TUNING_V1_DIRECT_WEIGHT_SELECTION"
+        or selection.get("confirmation_outcomes_opened") is not False
+        or locked.get("selected_cell") != selection_spec.get("selected_cell")
+        or float(locked.get("selected_direct_weight"))
+        != float(selection_spec.get("selected_direct_weight"))
+        or float(locked.get("gate_prior_weight"))
+        != float(selection_spec.get("gate_prior_weight"))
+    ):
+        raise ValueError("confirmation lock does not match the tuning decision")
+
+    sealed = completion.get("sealed_confirmation")
+    if not isinstance(sealed, Mapping):
+        raise ValueError("confirmation weight lock lacks the sealed population")
+    if (
+        input_path.resolve() != _project_path(str(sealed["path"]))
+        or input_sha != sealed["file_sha256"]
+        or int(sealed["rows"]) != int(authorization["ranking_rows"])
+        or int(sealed["queries"]) != int(authorization["ranking_queries"])
+        or int(sealed["candidates_per_query"])
+        != int(authorization["candidates_per_query"])
+    ):
+        raise ValueError("confirmation input differs from the locked sealed population")
+    if (
+        completion.get("cells") != authorization["cells"]
+        or completion.get("seeds") != authorization["seeds"]
+        or int(completion.get("run_count", -1))
+        != int(authorization["run_count"])
+    ):
+        raise ValueError("confirmation checkpoint grid differs from the weight lock")
+
+
 def _load_bound_contract(
     *,
     authorization_path: Path,
@@ -90,6 +159,15 @@ def _load_bound_contract(
     completion = _load_json(completion_path)
     if completion.get("status") != authorization["training_completion_status"]:
         raise ValueError("checkpoint-set completion status drift")
+    if expected_confirmation:
+        _validate_confirmation_lock(
+            authorization=authorization,
+            completion_path=completion_path,
+            completion_sha=completion_sha,
+            completion=completion,
+            input_path=input_path,
+            input_sha=input_sha,
+        )
     runs = completion.get("runs")
     cells = tuple(str(value) for value in authorization["cells"])
     seeds = tuple(int(value) for value in authorization["seeds"])

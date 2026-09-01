@@ -1,0 +1,126 @@
+{
+  "schema_version": "clir-prior-gate-tuning-v1-completion",
+  "status": "COMPLETE_PRIOR_GATE_TUNING_V1_CONFIRMATION_HARM",
+  "completed_at_utc": "2026-09-01",
+  "evidence_tier": "fresh_query_and_cluster_disjoint_train_source_confirmation_numeric_checker_no_human_verification",
+  "artifacts": {
+    "weight_selection": {
+      "path": "run_artifacts/prior_gate_tuning_v1/weight_grid/selection.json",
+      "file_sha256": "3d77386212b08e59daacf48b84e9a8dba8b87534210c2a33304dee013e233fc9"
+    },
+    "confirmation_lock": {
+      "path": "configs/prior_gate_tuning_v1/confirmation_lock.json",
+      "file_sha256": "3fbd59a96ba3b337439e452bed3fc2bce27fd3e9da41e767931a0733f52f1273"
+    },
+    "confirmation_scoring_authorization": {
+      "path": "configs/prior_gate_tuning_v1/confirmation_scoring_authorization.json",
+      "file_sha256": "949b0219d5ee73259b66a4f0292ab6bfbb95c2b6c5baac35b41eff6ab9ffdb63"
+    },
+    "confirmation_summary_authorization": {
+      "path": "configs/prior_gate_tuning_v1/confirmation_summary_authorization.json",
+      "file_sha256": "7d6b35adf43e127ecf499cd7ef43cc68470a3d9af4e7c8b19396bd3312088650"
+    },
+    "confirmation_score_merge": {
+      "path": "run_artifacts/prior_gate_tuning_v1/confirmation/scoring/merged/merge_report.json",
+      "file_sha256": "570b26dff6044a6a1eeed2c4e9cf0a35c22041ca7d8935ff6694285401567ccf"
+    },
+    "confirmation_summary": {
+      "path": "run_artifacts/prior_gate_tuning_v1/confirmation/summary.json",
+      "file_sha256": "5fdaa598c5a14866f508fdab5a9a08a2d51e8734db500f0ed64f279726c02a77"
+    }
+  },
+  "population": {
+    "open_tuning_queries": 800,
+    "sealed_confirmation_queries": 800,
+    "candidates_per_query": 16,
+    "query_overlap": 0,
+    "template_cluster_overlap": 0,
+    "confirmation_opened_exactly_once": true
+  },
+  "stage_a_attribution_at_k16": {
+    "direct_prior_gate0_minus_ch_mean": -0.005,
+    "gate025_given_direct_prior_mean": 0.005,
+    "full025_minus_ch_mean": 0.0,
+    "selected_tuning_axis": "direct_prior"
+  },
+  "direct_weight_tuning_at_k16": {
+    "gate_prior_weight_fixed": 0.25,
+    "by_direct_weight": {
+      "0.25": {
+        "mean_accuracy": 0.9525,
+        "by_seed": {"42": 0.95875, "43": 0.95, "44": 0.94875}
+      },
+      "0.5": {
+        "mean_accuracy": 0.95375,
+        "by_seed": {"42": 0.9575, "43": 0.9575, "44": 0.94625}
+      },
+      "1.0": {
+        "mean_accuracy": 0.9595833333333333,
+        "by_seed": {"42": 0.965, "43": 0.95375, "44": 0.96}
+      }
+    },
+    "selected_direct_weight": 1.0,
+    "selected_minus_ch_mean": 0.0,
+    "at_least_one_prior_candidate_beats_ch": false,
+    "interpretation": "reducing direct Key/Complete supervision did not repair the Full combination"
+  },
+  "one_time_confirmation_at_k16": {
+    "locked_candidate": {
+      "description": "C1_H1_directPrior1_Gate0.25",
+      "mean_accuracy": 0.9391666666666667,
+      "by_seed": {"42": 0.94875, "43": 0.9275, "44": 0.94125}
+    },
+    "ch": {
+      "description": "C1_H1_P0",
+      "mean_accuracy": 0.9445833333333333,
+      "by_seed": {"42": 0.945, "43": 0.93875, "44": 0.95}
+    },
+    "u0": {
+      "description": "C0_H0_P0",
+      "mean_accuracy": 0.9270833333333334,
+      "by_seed": {"42": 0.92875, "43": 0.92125, "44": 0.93125}
+    },
+    "locked_minus_ch": {
+      "mean": -0.005416666666666667,
+      "by_seed": {"42": 0.00375, "43": -0.01125, "44": -0.00875},
+      "fixed_seed_query_95_ci": [-0.01375, 0.0025],
+      "seed_directions": {"positive": 1, "zero": 0, "negative": 2}
+    },
+    "locked_minus_u0": {
+      "mean": 0.012083333333333333,
+      "by_seed": {"42": 0.02, "43": 0.00625, "44": 0.01},
+      "fixed_seed_query_95_ci": [0.0008333333333333321, 0.02333333333333333],
+      "seed_directions": {"positive": 3, "zero": 0, "negative": 0}
+    },
+    "locked_minus_full025": {
+      "mean": 0.0,
+      "by_seed": {"42": 0.0, "43": 0.0, "44": 0.0},
+      "score_files_byte_identical_per_seed": true
+    },
+    "primary_decision": "CONFIRMATION_HARM",
+    "benefit": false,
+    "harm": true
+  },
+  "final_decision": {
+    "ranking_recommendation_for_current_training_data": "CH",
+    "full_is_supported_as_better_than_ch": false,
+    "engineering_default_gate_prior_weight": 0.25,
+    "engineering_default_is_not_an_efficacy_claim": true,
+    "retune_on_tuning_or_confirmation_population_allowed": false,
+    "next_research_action": "expand or improve Prior supervision and diagnose the H0-P interaction under a new preregistered training and ranking population"
+  },
+  "claim_boundary": {
+    "allowed": [
+      "the fixed 0.25 Gate compensated the negative direct-Prior effect in Stage A",
+      "lower direct-Prior weights 0.25 and 0.5 underperformed the original 1.0 weight on the open tuning split",
+      "the locked Full candidate triggered the preregistered harm rule versus CH on the one-time fresh train-source confirmation",
+      "the locked Full candidate outperformed U0 on that confirmation population"
+    ],
+    "forbidden": [
+      "claiming protected-test or external-domain generalization",
+      "claiming the auxiliary Silver labels are human Gold",
+      "claiming the Full-minus-CH effect size has a wholly negative 95% interval",
+      "selecting another weight after seeing confirmation"
+    ]
+  }
+}

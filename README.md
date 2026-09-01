@@ -1009,26 +1009,31 @@ hierarchical interval 都低于 0；Full 也稳定低于 CH `1.46` points。准�
 会抵消收益；Full 尚未证明有效。不能继续在这批 dev/ranking 上调参数，下一步需要新的
 query/template-cluster-disjoint ranking population 做确认。
 
-### Prior/Gate 新题归因与权重确认 v1：容量已通过，尚未启动 rollout
+### Prior/Gate 新题归因与权重确认 v1：已完成，Full 相对 CH 触发伤害规则
 
-[`configs/prior_gate_tuning_v1/protocol.json`](configs/prior_gate_tuning_v1/protocol.json)
-已经把下一阶段写成前瞻协议，且 CPU 容量审计已通过。它不会再使用看过结果的 892 题，也不新增
-H/Key/Complete AI 标注；这里只需要 Phi 生成候选，再由冻结的 numeric checker 给出每条候选是否
-数值匹配。所有历史训练、机制开发、标注、ranking 题及其近模板簇都会整簇排除。
+前瞻协议、锁定选择与最终裁决分别见
+[`protocol.json`](configs/prior_gate_tuning_v1/protocol.json)、
+[`confirmation_lock.json`](configs/prior_gate_tuning_v1/confirmation_lock.json) 和
+[`completion.json`](configs/prior_gate_tuning_v1/completion.json)。本轮没有复用看过结果的 892 题：
+调参与确认各使用 800 个 query、每题 16 个候选，两边 query 与近模板簇重合均为 0。确认集在
+权重和 checkpoint 写入 Git 锁文件前没有计算 CLIR score，锁定后只打开一次。
 
-新池预先分成两个互不重叠的部分：权重调参池和只开一次的确认池。每部分先生成 1,300 题
-（850 GSM8K + 450 MATH）×16；仅保留 16 条候选都有明确二值 checker 结果的题，再按预先冻结的
-hash 顺序各取 800 题（720 + 80）。确认池在权重锁死前不能看 correctness 或 CLIR score。当前审计
-得到 2,162 个可用 GSM8K 模板簇和 934 个 MATH 模板簇，足够冻结 2,600 个原始 query；预计最终
-selected output feature 约 1.71 TB，另有 prompt/序列化开销。现在仍是 CPU 准备阶段，rollout、
-feature、训练和确认评分均未授权、未启动。
+Stage A 把 Prior 拆成两条影响。关闭 Gate 时，direct Key/Complete 监督相对 CH 平均
+`-0.50` point；在 direct 监督之上恢复固定 `.25` Gate 平均补回 `+0.50` point。因此负项来自
+direct 监督，而不是 Gate 本身，按冻结规则只开放 direct 权重 `{.25,.5,1}`，Gate 始终为 `.25`。
+开放调参集的 BoN@16 分别为 `95.250% / 95.375% / 95.958%`；减弱 direct 监督反而更差，最终锁回
+原始 `direct=1、Gate=.25`。该候选与 CH 在调参集同为 `95.958%`，没有任何 Prior 候选超过 CH。
 
-第一步只做归因：复用已有 CH 和 Full(.25) 三 seed checkpoint，新增训练
-`CH + direct Key/Complete + Gate=0`。这样 `direct−CH` 估计 direct Prior 的增量，
-`Full−direct` 估计固定 `.25` Gate 在 direct Prior 之上的增量。Gate=0 仅是诊断，不是候选默认值。
-若两项都不坏，不调权重；否则只开放更负的一条轴：direct 权重 `{.25,.5,1}`（Gate 固定 `.25`）
-或 Gate 权重 `{.0625,.125,.25}`（direct 固定 `1`）。在调参池选定后只打开一次确认池；如果没有
-任何三模块候选超过 CH，就如实报告当前 Full 没有得到支持，不强行挑一个正结论。
+一次性确认集上，锁定 Full 为 `93.917%`，CH 为 `94.458%`，U0 为 `92.708%`。主对比
+Full−CH=`-0.542` point，逐 seed 为 `+0.375/-1.125/-0.875`，fixed-seed query 95% interval
+为 `[-1.375,+0.250]` points。区间仍跨 0，不能夸大效应大小；但均值为负且两个 seed 为负，按
+事先写死的规则裁决为 `CONFIRMATION_HARM`。Full−U0=`+1.208` points，三 seed 全正且 fixed interval
+为 `[+0.083,+2.333]` points，说明三模块整体仍强于无辅助任务基线，只是把 Prior 加到更强的 CH
+上会抵消一部分收益。
+
+当前训练数据下的排名推荐因此是 **CH**。`.25` Gate 继续作为 main-style 工程默认路径保留，但这不
+等于 Full 有效性结论；不能再用这 1,600 题改权重。下一步若继续 Prior，应扩充或改善 Prior Silver
+监督并单独诊断 H0×Prior 交互，再使用新的预注册训练/排名 population，而不是继续扫 `.25/.5/1`。
 
 ## Toy smoke test
 

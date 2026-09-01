@@ -1094,32 +1094,39 @@ interval=`[-.00710,+.01756]`，hierarchical interval=`[-.01158,+.02242]`。因�
 为 `f7b9b6d…982e2` / `eea7b3a…20ef`。不允许继续在同一 dev/ranking 上调 weight、epoch、
 subset、threshold 或 `.25` Gate。
 
-### Prior/Gate 新题归因与单轴调权 v1：CPU 容量门已通过
+### Prior/Gate 新题归因与单轴调权 v1：一次性确认完成，Full 相对 CH 为 harm
 
-用户已同意在全新题上先拆开 direct Prior 与 Gate，再按拆分结果只调一条权重轴。协议在
-`configs/prior_gate_tuning_v1/protocol.json`，准备入口为 `prepare_clir_gate_tuning.py`，纯选择逻辑在
-`src/clir_gate_tuning.py`。当前只执行过 CPU source/capacity audit，未生成 rollout、未抽 feature、
-未训练新 cell，也没有打开确认集。
+协议 `configs/prior_gate_tuning_v1/protocol.json` 已完整执行。调参与确认各从 rollout 前冻结的
+1,300 个 query 中按 checker-only hash 顺序选出 800 个（720 GSM8K +80 MATH），每题 16 个候选；
+两边 query/cluster overlap 均为 0。最终 full-width selected-only feature 共 25,600 条 trajectory，
+约 1.408 TB；八个独立 verifier 对 1,600 个 query marker、tensor SHA/shape/BF16/finiteness 全部通过。
+feature completion hash=`34c9dd05…de4`，tuning input hash=`94be8c01…7fd`，confirmation sealed
+input hash=`71a1dbe1…681`。
 
-协议从 GSM8K train 与 MATH train 取题，沿用 v7 的数据 revision、numeric checker 和 Phi revision。
-为了获得新容量，GSM8K 放宽为中等以上链长（reasoning words≥30、calculation marker≥1、不同中间
-数值≥2），MATH 放宽到 level 1--5、官方解至少 10 words；没有引入第三种 checker。八份历史
-manifest 合计映射到 7,843 个唯一 source query，连同近模板簇全部排除。审计后有 3,096 个可选
-代表簇（GSM8K 2,162，MATH 934）。legacy `gsm8k-train-NNNNN` 已机械映射回同一 revision 的
-`gsm8k:train:NNNNN`，避免旧 correctness 数据通过 ID 别名重新进入。
+Stage A 使用 CH、direct-P/Gate0、Full(.25) 三格×三 seed。K=16 上 CH=`.95958`、direct-Gate0=`.95458`、
+Full=`.95958`；direct effect=`-.00500`，Gate-given-direct=`+.00500`，Full−CH=`.00000`。所以 Gate
+没有拖累结果，反而补偿了 direct Key/Complete 监督的负项；冻结规则只开放 direct 权重，固定 Gate
+`.25`。Stage-A attribution hash=`bc015bb6…dcc3`。
 
-调参/确认各在 rollout 前冻结 1,300 个 query：850 GSM8K +450 MATH；两边 query 与 cluster overlap
-均为 0。每题固定生成 16 条，共 41,600 条 raw trajectory、52 个 50-query shard。checker 后只有
-16/16 candidate 均为 `numeric_match` 或 `numeric_mismatch` 的 query 可进入最终池；每边按冻结 hash
-顺序取 720 GSM8K +80 MATH，共 800 query。任何 source/split 凑不够即终止 v1，不能看完结果换题或
-改 quota。selected output feature 的协议估算约 1.713 TB，尚未计 condition/prompt 与序列化开销。
+direct `{.25,.5,1}` 的开放调参 K=16 均值分别为 `.95250/.95375/.95958`。`.25−1` 三 seed 全负且
+fixed interval=`[-.01292,-.00167]`；`.5−1` 均值 `-.00583`，fixed interval=`[-.01125,-.00083]`。
+减弱 direct 监督没有修复组合，按预注册最大均值规则锁定 `direct=1、Gate=.25`；其调参均值与 CH
+完全相同，没有 Prior 候选超过 CH。selection hash=`3d773862…fc9`；12-checkpoint Git 锁文件为
+`configs/prior_gate_tuning_v1/confirmation_lock.json`，hash=`3fbd59a9…273`。
 
-Stage A 只比较三个 matched cell、三 seed、三 epoch：复用 CH，新增
-`CH_direct_P_gate0`，复用 Full(.25)。定义 `direct effect = direct_gate0−CH`、
-`gate effect = Full(.25)−direct_gate0`。若两项均非负，不开调权；否则只开放均值更负的一轴。
-direct 轴候选 `{.25,.5,1}` 始终固定 Gate `.25`；Gate 轴候选 `{.0625,.125,.25}` 始终保留 direct
-权重 `1`。Gate=0 只用于归因，不能成为最终默认。权重只在 tuning 800 题上锁一次，随后才允许打开
-sealed confirmation 800 题；确认后不得二次选权重。
+锁定后只打开一次 800-query confirmation。K=16：Full=`.93917`、CH=`.94458`、U0=`.92708`。
+主对比 Full−CH=`-.00542`，逐 seed `+.00375/-.01125/-.00875`，fixed interval
+`[-.01375,+.00250]`，hierarchical interval `[-.01750,+.00625]`。区间跨 0，效应大小仍不精确；但
+预注册 harm 规则只要求均值负且至少两个 seed 负，因此裁决为 `CONFIRMATION_HARM`。次要对比
+Full−U0=`+.01208`，三 seed 全正，fixed interval `[+.00083,+.02333]`；说明 Full 强于纯 U0，
+但 Prior 加到 CH 上会拉低排名。候选和 `full_025` 是同一 checkpoint 别名，三 seed 输出文件逐字节
+一致，机械零对比也通过。summary hash=`5fdaa598…a77`，tracked terminal record 为
+`configs/prior_gate_tuning_v1/completion.json`。
+
+当前训练数据的 ranking 推荐是 CH；`.25` Gate 仍按用户要求保留为 main-style 工程默认，但不能写成
+Full efficacy 结论。确认后禁止在 tuning/confirmation 1,600 题上再改 direct、Gate、epoch、subset
+或阈值。若继续 Prior，先扩充/改善 Prior Silver 监督并诊断 H0×Prior 交互，再预注册全新训练与排名
+population；不要继续在当前网格上加小数点权重。
 
 ## 已知限制
 
@@ -1145,6 +1152,9 @@ sealed confirmation 800 题；确认后不得二次选权重。
   固定 `.25` Gate 在 standalone 路线上学到 Prior 对齐，但 K=16 三 seed 全负。扩量 Full
   已执行，却只比 U0 高 `.52` point 且区间跨 0；H×P 是当前最稳定的负交互。mutual 仍未建立。
   v13 仍因 B 的一个不可用控制项保留非空 block role 而在 schema 门终止，没有自然样本机制指标。
+  新的 800-query 调参显示 direct `.25/.5` 都差于 `1`；独立 800-query confirmation 上 Full−CH
+  均值 `-.54` point、两 seed 负，触发冻结 harm 规则。这个结果确认的是当前训练清单下的组合问题，
+  不能倒推全部 Prior 构念无效，也不能替代更多高质量 Prior 训练标签。
 - gate-prior 现在默认 `.25`，只在 row 同时具有 key/complete coverage 时计算；progress、reconstruction 等权重为 0 时，对应 loss/value 路由会直接跳过，不通过 `0×NaN` 污染 score 或 total。
 - score 中始终输出 pseudo onset 和 path probability；这不表示 MIL/pseudo-tail 训练已经打开。
 - resume 的相同设备 CPU 测试为 bit-exact；不要假设跨设备、跨 PyTorch/CUDA 版本也逐 bit 相同。
@@ -1171,15 +1181,15 @@ sealed confirmation 800 题；确认后不得二次选权重。
    ranking 上再调 direct weight、Gate 权重、epoch 或 subset。
 6. 三模块扩量 v1 已完成 24 个训练、三类机制评估和 892-query ranking；保存全部 authorization、
    checkpoint、shard、merge、summary 和 completion hash，不覆盖、不重跑、不在同一数据上调参。
-   新题协议 v1 的 CPU 容量门已经通过；下一执行门是 clean commit 后冻结并独立复算 2,600-query
-   manifest，再单独 hash-authorize rollout。随后先复用 CH/Full 并补训 direct-gate0 做归因，按
-   冻结规则只调一条轴，最后只打开一次 800-query confirmation。在确认结果前，CH 只能叫当前最好
-   point estimate，H×P 只能叫这轮最稳定的探索性冲突。
+   Prior/Gate 新题协议 v1 也已完整结束；保留 1,600-query tuning/confirmation、1.408 TB feature、
+   九个调权 checkpoint、锁文件、score merge 和 terminal completion，不得再次打开确认或二次选权。
+   下一轮默认以 CH 为当前 ranking 推荐；若仍研究 Prior，先扩充/改善 Silver supervision，并把
+   H0×Prior 交互诊断和新的 query/cluster-disjoint ranking population 一起预注册。
 
 当前裁决是：C、H0、direct Prior/Gate 都建立了各自 Silver 机制可学习性；H0 更像 tail/path
-风险头而不是精确首错定位器。完整组合并没有把这些机制收益相加：CH 的 point estimate 最好，
-H×P 为稳定负交互，Full 相对 U0 的 `+.52` point 区间跨 0。H1 与 mutual 没有因本轮获得新
-证据，原 v7/v12/v13 也仍不能写成通过。正式 Gate/Full 结论必须来自新的 query/cluster-
-disjoint ranking population。
+风险头而不是精确首错定位器。完整组合没有把机制收益相加：新的独立 confirmation 上 CH
+`94.458%`、Full `93.917%`，Full−CH 按冻结规则为 harm；Full 仍比 U0 高 `1.208` points。
+因此当前训练数据的 ranking 推荐是 CH，`.25` Gate 只是保留的 main-style 工程默认，不是 Full
+efficacy 结论。H1 与 mutual 没有因本轮获得新证据，原 v7/v12/v13 也仍不能写成通过。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

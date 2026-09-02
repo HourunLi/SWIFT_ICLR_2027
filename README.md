@@ -1207,6 +1207,46 @@ BoN@16 上，P0−R0 三 seed 为 `+0.11/−0.45/−0.67` point，fixed-seed que
 [`reused_ranking_v1_completion.json`](configs/data_expansion_prior_v16/posthoc_training_v1/reused_ranking_v1_completion.json)。
 R0/P0 与 CH/Full 使用不同训练清单，禁止把 R0→CH 或 P0→Full 写成单一模块因果效应。
 
+### Prior v16-posthoc：C×H0 同切片补测
+
+前一节只有 R0/P0 与 CH/Full 两组各自合法的对比，不能拿 4,352-row 的 R0 直接减去
+5,552-row 的 CH。为补齐 C-only 与 H0-only，查看新分数前冻结了
+[`ch_decomposition_v1.json`](configs/data_expansion_prior_v16/posthoc_training_v1/ch_decomposition_v1.json)：
+U0、C、H0、CH 四格全部使用同一份 5,552-row/1,678-query 清单、3 epochs 和
+seeds 42/43/44。U0/C/H0 新训练 9 个 checkpoint；CH 复用同清单、同配置的 3 个既有
+checkpoint。四格只切换 Consistency 与 onset BCE，Prior、Gate、H1 tail、MIL、pseudo-tail、
+mutual、progress 和 reconstruction 全关。
+
+排名仍复用同一批已看过的 892 题 ×16 candidates，因此是同口径探索性补测，不是新鲜确认：
+
+| K | Random | Oracle | U0 | C-only | H0-only | C+H0 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | `82.74%` | `82.74%` | `82.74%` | `82.74%` | `82.74%` | `82.74%` |
+| 2 | `82.40%` | `89.24%` | `84.27%` | `84.79%` | **`84.87%`** | `84.75%` |
+| 4 | `82.74%` | `92.26%` | `85.58%` | `85.50%` | **`86.36%`** | `85.87%` |
+| 8 | `82.67%` | `94.62%` | `85.24%` | `85.58%` | **`86.06%`** | `85.50%` |
+| 16 | `82.54%` | `95.52%` | `84.90%` | `85.65%` | **`85.91%`** | `85.72%` |
+
+BoN@16 相对 U0 的配对点估计为 C `+0.75` point、H0 `+1.01`、CH `+0.82`；
+hierarchical seed+query 95% intervals 分别为 `[−1.46,+3.03]`、`[−.71,+2.80]`、
+`[−1.12,+2.91]` points，均跨 0。二因子交互 `CH−C−H0+U0` 为 `−.93` point，逐 seed
+`−2.13/−1.57/+.90`，区间 `[−3.14,+1.31]`，也是负点估计但未确认。H0-only 在
+K=2/4/8/16 都是四格最高；CH 在 K=16 比 H0 低 `.19` point，不能解释成稳定差异。
+
+更宽的题内 correct-vs-wrong pairwise accuracy 为 U0/C/H0/CH
+`.63990/.67148/.67603/.67677`，三个辅助格相对 U0 都是 3/3 seeds 正向。这说明 C 与 H0
+都改善了整体对错排序，CH 也没有整体崩坏；没有叠加主要出现在 top-of-16 的极值选择。
+机制集给出相同边界：C-only 的同义正对减难负例表示分离从 U0 `.00030` 升到 `.14413`，
+relation AUROC 从 `.75499` 升到 `.89859`；H0-only 的 token AUROC/AP 为
+`.88030/.84500`，path AUROC `.81935`。但 H0-only 的首错 ±5 token 命中只有 `2.04%`，
+CH 也只有 `1.70%`，所以 H0 仍只能称为坏尾部/坏路径风险学习，不能称为精确首错定位。
+
+当前裁决是：**扩大辅助数据后，C 与 H0 各自都有可学习机制和正向排名点估计；CH 保留两种机制及
+较好的整体 pairwise 排序，但仍没有得到 C+H0 的加和收益。** 旧小数据中“三 seed 全负”的强交互
+信号没有原样复现；本轮交互方向仍偏负但区间跨 0。不能在这批已看过的 892 题上继续调权重，下一次
+新鲜排名集应预注册 U0/C/H0/CH 四格。ignored summary SHA-256=`c7759b04…5ff`；精简终态记录见
+[`ch_decomposition_v1_completion.json`](configs/data_expansion_prior_v16/posthoc_training_v1/ch_decomposition_v1_completion.json)。
+
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 
 用户随后明确选择“V12吧”，因此新建了独立的
@@ -1382,6 +1422,10 @@ pytest -q
   三 seed 已完成。它把 Full 的 Key/Complete、H0 token 和 Consistency relation 机制同时保住，
   同口径复用 892×16 排名上 P0−R0 的 K=16 为 `−0.34` point、Full−CH 为 `0.00` point，区间都
   跨 0。它没有新鲜 Best-of-N population，不能覆盖此前 CH 的排名推荐，也不能据此宣称 Full 已提升最终选择。
+- 同一 5,552-row 清单上的 U0/C/H0/CH 补测也已完成：复用 892×16 排名的 K=16 为
+  `.8490/.8565/.8591/.8572`。C 与 H0 各有正向点估计，且三个辅助格的题内 pairwise 都在
+  3/3 seeds 超过 U0；但所有 BoN 区间跨 0，`C×H0` 交互点估计 `−.93` point 也跨 0。
+  因而可以说“机制学到、整体排序改善、top-of-16 未加和”，不能说模块显著有效或天然冲突。
 - clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代缺失的数据 provenance 上游与 protected-test protocol。
 - clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired
   summarizer；v6.1 新增了单独的 held-out consistency relation evaluator，但尚未重建

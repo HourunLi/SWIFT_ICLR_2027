@@ -6,7 +6,7 @@ import argparse
 from collections import Counter
 import json
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
@@ -124,6 +124,7 @@ def summarize(
     bootstrap_seed: int,
     onset_threshold: float,
     onset_window_tokens: int,
+    h_evaluator: Callable[..., dict[str, Any]] = evaluate_h0,
 ) -> dict[str, Any]:
     cells = ("c0", "c1", "h0", "ch0")
     seeds = (42, 43, 44)
@@ -141,7 +142,7 @@ def summarize(
     for cell in cells:
         for seed in seeds:
             run = scored[(cell, seed)]
-            h_report = evaluate_h0(
+            h_report = h_evaluator(
                 run["h_dev"],
                 onset_threshold=onset_threshold,
                 onset_window_tokens=onset_window_tokens,

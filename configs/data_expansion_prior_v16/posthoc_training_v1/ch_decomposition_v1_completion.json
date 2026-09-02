@@ -1,0 +1,128 @@
+{
+  "schema_version": "clir-prior-v16-posthoc-ch-decomposition-completion-v1",
+  "status": "COMPLETE_MATCHED_U0_C_H_CH_DECOMPOSITION",
+  "completed_at_utc": "2026-09-02T15:09:05Z",
+  "evidence_tier": "posthoc_exploratory_reused_not_fresh",
+  "design": {
+    "cells": ["u0", "c", "h", "ch"],
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "train_rows": 5552,
+    "train_queries": 1678,
+    "identical_training_manifest": true,
+    "new_checkpoints": 9,
+    "reused_hash_locked_ch_checkpoints": 3,
+    "consistency_relations": 400,
+    "hallucination_rows": 400,
+    "prior_rows_present_but_disabled": 432,
+    "disabled": [
+      "direct and gated Prior",
+      "H1 negative-tail value shaping",
+      "Path MIL",
+      "pseudo-onset tail",
+      "mutual Prior distillation",
+      "progress",
+      "reconstruction"
+    ]
+  },
+  "inputs": {
+    "protocol_sha256": "de073cc493478ac715cdb2badce9a263b4a322c87cc5e3fbeb5ff191dd6273d3",
+    "training_manifest_sha256": "ef3bd3a2f5aada2809830181940f464b235c88bd933b83be08c7eb4bf68d6fcf",
+    "ranking_input_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7",
+    "ranking_rows": 14272,
+    "ranking_queries": 892,
+    "candidates_per_query": 16,
+    "hallucination_dev_rows": 197,
+    "consistency_heldout_endpoints": 557,
+    "consistency_heldout_positive_relations": 150,
+    "consistency_heldout_hard_negative_relations": 150
+  },
+  "implementations": {
+    "contract_adapter_sha256": "cd9fae19754637c3613b1eba6e47aa3f73aa3564459084da103d0cbbf6864974",
+    "scoring_engine_sha256": "968d573d748cbf41cec6ae49987d5a91bc1403e0b78b15ca1f57ff7a44ceeac9",
+    "summarizer_sha256": "608a2647a67645919f8889ad4dd9b21aea18cbc2f8457ef201806f4b22a40826",
+    "h_factorial_helper_sha256": "bfd426be548e3dc8f70974fd4d5cd8c10cef07488771777f49b5f681b37031d7",
+    "unbalanced_h_evaluator_sha256": "39290124e72adf2d84d180a08bb55d432817946fce96476331337ba9a8e59e83"
+  },
+  "artifact_hashes": {
+    "ranking_merge_report_sha256": "b8472e3fe39397a0dea847c04ffa2b5fa89e4a495b0e4a53539e792902db62f3",
+    "summary_sha256": "c7759b044d8888ca4bf9a22bacbf52a77e5f44674c2732fe877c08bb1acb55ff"
+  },
+  "verification": {
+    "score_shards": 8,
+    "rows_per_shard": 1784,
+    "checkpoint_shard_outputs": 96,
+    "merged_checkpoints": 12,
+    "merged_rows_per_checkpoint": 14272,
+    "all_checkpoints_epoch_three_and_finite": true,
+    "checkpoint_input_and_config_hashes_match": true,
+    "ranking_candidate_parity_and_scores_finite": true,
+    "ranking_train_canonical_query_overlap": 0,
+    "ranking_train_declared_cluster_overlap": 0,
+    "ranking_train_row_id_overlap": 0,
+    "full_test_suite": "277 passed"
+  },
+  "ranking": {
+    "k_values": [1, 2, 4, 8, 16],
+    "by_k": {
+      "1": {"random_expected": 0.827354260089686, "oracle": 0.827354260089686, "u0": 0.827354260089686, "c": 0.827354260089686, "h": 0.827354260089686, "ch": 0.827354260089686},
+      "2": {"random_expected": 0.8239910313901345, "oracle": 0.8923766816143498, "u0": 0.8426756352765321, "c": 0.8479073243647235, "h": 0.8486547085201793, "ch": 0.8475336322869955},
+      "4": {"random_expected": 0.827354260089686, "oracle": 0.922645739910314, "u0": 0.8557548579970105, "c": 0.8550074738415545, "h": 0.8636023916292974, "ch": 0.8587443946188341},
+      "8": {"random_expected": 0.8266535874439462, "oracle": 0.9461883408071748, "u0": 0.8523916292974589, "c": 0.8557548579970105, "h": 0.8606128550074739, "ch": 0.8550074738415545},
+      "16": {"random_expected": 0.8253923766816144, "oracle": 0.9551569506726457, "u0": 0.8490284005979073, "c": 0.8565022421524664, "h": 0.859118086696562, "ch": 0.8572496263079222}
+    },
+    "k16": {
+      "cell_by_seed": {
+        "u0": [0.8408071748878924, 0.8452914798206278, 0.8609865470852018],
+        "c": [0.8665919282511211, 0.8542600896860987, 0.8486547085201793],
+        "h": [0.8609865470852018, 0.8587443946188341, 0.8576233183856502],
+        "ch": [0.8654708520179372, 0.852017937219731, 0.8542600896860987]
+      },
+      "paired_effects": {
+        "c_minus_u0": {"mean": 0.007473841554559043, "hierarchical_seed_query_95_ci": [-0.014573991031390121, 0.030269058295964046]},
+        "h_minus_u0": {"mean": 0.010089686098654708, "hierarchical_seed_query_95_ci": [-0.00710014947683113, 0.028026905829596438]},
+        "ch_minus_u0": {"mean": 0.008221225710014948, "hierarchical_seed_query_95_ci": [-0.011210762331838597, 0.029147982062780242]},
+        "c_by_h_interaction": {"mean": -0.009342301943198805, "by_seed": [-0.021300448430493273, -0.01569506726457399, 0.008968609865470852], "hierarchical_seed_query_95_ci": [-0.03139013452914807, 0.013079222720478345]}
+      }
+    },
+    "within_query_pairwise_accuracy": {
+      "u0": 0.6399037969501585,
+      "c": 0.6714768191587349,
+      "h": 0.6760311124756934,
+      "ch": 0.6767731040835124
+    }
+  },
+  "mechanisms": {
+    "consistency": {
+      "representation_separation_u0": 0.00030385223257889393,
+      "representation_separation_c": 0.14412540696524298,
+      "representation_separation_ch": 0.22635901858626561,
+      "relation_auroc_u0": 0.7549925925925925,
+      "relation_auroc_c": 0.8985925925925926,
+      "relation_auroc_ch": 0.9208
+    },
+    "hallucination": {
+      "token_auroc_h": 0.8802996066284204,
+      "token_average_precision_h": 0.8449971762654788,
+      "path_auroc_h": 0.8193499622071051,
+      "positive_within_five_tokens_h": 0.02040816326530612,
+      "token_auroc_ch": 0.86110134728789,
+      "token_average_precision_ch": 0.8161317943052283,
+      "path_auroc_ch": 0.8486050986050987,
+      "positive_within_five_tokens_ch": 0.017006802721088433,
+      "interpretation": "H0 learns bad-tail/path risk but not reliable exact first-bad-token localization"
+    }
+  },
+  "decision": {
+    "c_target_learned": true,
+    "h0_target_learned_as_tail_or_path_risk": true,
+    "exact_onset_localization_established": false,
+    "c_ranking_point_estimate_positive": true,
+    "h0_ranking_point_estimate_positive": true,
+    "ch_additive_benefit_established": false,
+    "stable_negative_c_by_h_interaction_established": false,
+    "same_population_retuning_allowed": false,
+    "fresh_u0_c_h_ch_confirmation_required": true
+  },
+  "claim_boundary": "Matched post-hoc dual-AI Silver C-by-H0 decomposition on one 5,552-row training manifest and an already-inspected 892-query ranking population. It is not fresh, protected, confirmatory, Gold, or human-verified, and cannot authorize retuning on this population."
+}

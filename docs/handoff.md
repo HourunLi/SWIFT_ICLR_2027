@@ -1321,6 +1321,48 @@ CH 推荐，也不允许用于下一轮调 epoch、direct/Gate 权重或 subset�
 `4f67968c…6100` / `1e6f736d…88422`；小型 tracked terminal record 为
 `configs/data_expansion_prior_v16/posthoc_training_v1/reused_ranking_v1_completion.json`。
 
+### Prior v16-posthoc C×H0 同切片补测：单项正向，组合不加和
+
+用户指出上一阶段缺少 C-only/H0-only。旧 R0 只有 4,352-row，不能作为 5,552-row CH 的
+因果 baseline，因此提交 `1dc2885` 在新训练前冻结四格扩展：U0=`correctness only`、
+C=`U0+Consistency`、H0=`U0+onset BCE`、CH=`U0+C+H0`。四格共用
+`train_ch_full.jsonl` 的 5,552 rows/1,678 queries、相同 3 epochs、seeds 42/43/44；
+U0/C/H0 新训 9 个 checkpoint，CH 复用已完成且 hash 锁定的 3 个 checkpoint。清单里的
+432 条 Prior target 在四格全部关闭；Gate、H1 tail、MIL、pseudo-tail、mutual、progress、
+reconstruction 也全部关闭。
+
+892×16 复用排名集的三 seed 均值为：
+
+| K | Random | Oracle | U0 | C | H0 | CH |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | `.8274` | `.8274` | `.8274` | `.8274` | `.8274` | `.8274` |
+| 2 | `.8240` | `.8924` | `.8427` | `.8479` | **`.8487`** | `.8475` |
+| 4 | `.8274` | `.9226` | `.8558` | `.8550` | **`.8636`** | `.8587` |
+| 8 | `.8267` | `.9462` | `.8524` | `.8558` | **`.8606`** | `.8550` |
+| 16 | `.8254` | `.9552` | `.8490` | `.8565` | **`.8591`** | `.8572` |
+
+K=16 的 C−U0/H0−U0/CH−U0 为 `+.00747/+.01009/+.00822`；逐 seed 分别是
+`+.02578/+.00897/−.01233`、`+.02018/+.01345/−.00336`、
+`+.02466/+.00673/−.00673`。hierarchical 95% intervals 为
+`[−.01457,+.03027]`、`[−.00710,+.02803]`、`[−.01121,+.02915]`，全部跨 0。
+交互 `CH−C−H0+U0=−.00934`，逐 seed `−.02130/−.01570/+.00897`，区间
+`[−.03139,+.01308]`。所以可报告“正向点估计、组合未超过 H0、负交互仍未确认”，不能写成
+显著增益或天然冲突。
+
+pairwise accuracy 为 U0/C/H0/CH `.63990/.67148/.67603/.67677`，三个辅助格相对 U0
+均为 3/3 seeds 提升。Consistency held-out relation 上，U0→C 的表示分离
+`.000304→.144125`、AUROC `.75499→.89859`；CH 为 `.22636/.92080`，说明组合没有抹掉 C。
+197-row H dev 上，H0 的 token AUROC/AP=`.88030/.84500`、path AUROC=`.81935`；CH 为
+`.86110/.81613/.84861`。H0/CH 的 ±5 token onset 命中仍仅 `2.04%/1.70%`，准确说法继续是
+“坏尾部/坏路径风险”，不是精确首错定位。
+
+8 个 score shards、12×14,272 行 merge、候选 parity、checkpoint/input hash 和 finite score
+均通过；正式状态 `COMPLETE_MATCHED_U0_C_H_CH_DECOMPOSITION`，ignored summary SHA-256=
+`c7759b044d8888ca4bf9a22bacbf52a77e5f44674c2732fe877c08bb1acb55ff`。精简记录为
+`configs/data_expansion_prior_v16/posthoc_training_v1/ch_decomposition_v1_completion.json`。
+它仍是 `posthoc_exploratory_reused_not_fresh`；禁止继续在同一 892 题上选权重/epoch/subset，
+新鲜确认应保留 U0/C/H0/CH 四格而不是只跑 CH/Full。
+
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
 用户随后明确选择“V12吧”，授权的不是修复原 v12，而是单独命名的事后探索路线。

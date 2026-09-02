@@ -135,7 +135,11 @@ def _audit_checkpoint(
     return {
         "cell": cell,
         "seed": seed,
-        "factors": expected_factors,
+        # The decomposition protocol records only the two factors that vary
+        # here (C and H0), while the shared checkpoint-set scorer uses the
+        # historical three-factor tuple (C, H0, Prior).  Prior is deliberately
+        # disabled in every cell of this experiment.
+        "factors": [*expected_factors, 0.0],
         "checkpoint_path": str(checkpoint_path),
         "checkpoint_file_sha256": checkpoint_sha,
         "completed_epoch": int(checkpoint["completed_epoch"]),

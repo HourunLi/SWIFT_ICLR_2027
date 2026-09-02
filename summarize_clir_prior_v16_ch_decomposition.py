@@ -12,6 +12,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from evaluate_clir import atomic_write_json, file_sha256
+from evaluate_clir_three_module_factorial import h_metrics
 from score_clir_prior_v16_ch_decomposition import (
     AUTHORIZATION_STATUS,
     CELLS,
@@ -32,6 +33,27 @@ DEFAULT_PROTOCOL = (
     / "configs/data_expansion_prior_v16/posthoc_training_v1/ch_decomposition_v1.json"
 )
 CELL_ALIASES = {"u0": "c0", "c": "c1", "h": "h0", "ch": "ch0"}
+
+
+def _evaluate_unbalanced_h_dev(
+    rows: list[dict[str, Any]],
+    *,
+    onset_threshold: float,
+    onset_window_tokens: int,
+) -> dict[str, Any]:
+    """Use all 197 cross-module-cleaned rows, not the legacy 100/100 guard."""
+    report = h_metrics(
+        rows,
+        onset_threshold=onset_threshold,
+        onset_window_tokens=onset_window_tokens,
+    )
+    checkpoint_hashes = {
+        str(row.get("clir_checkpoint_sha256", "")) for row in rows
+    }
+    if len(checkpoint_hashes) != 1 or "" in checkpoint_hashes:
+        raise ValueError("H dev score file must bind exactly one checkpoint")
+    report["checkpoint_sha256"] = next(iter(checkpoint_hashes))
+    return report
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -233,6 +255,7 @@ def summarize(protocol_path: Path, merge_path: Path) -> dict[str, Any]:
         bootstrap_seed=int(ranking_spec["bootstrap_seed"]),
         onset_threshold=0.5,
         onset_window_tokens=5,
+        h_evaluator=_evaluate_unbalanced_h_dev,
     )
     factorial["schema_version"] = "clir-prior-v16-posthoc-ch-decomposition-summary-v1"
     factorial["status"] = "COMPLETE_MATCHED_U0_C_H_CH_DECOMPOSITION"

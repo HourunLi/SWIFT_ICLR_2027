@@ -423,6 +423,27 @@ def _validate_scored_rows(
     }
 
 
+def _validate_prior_dev_projection(base_path: Path, combined_path: Path) -> None:
+    """Require the combined dev to rewrite provenance without changing labels."""
+    base = read_jsonl(base_path)
+    combined = read_jsonl(combined_path)
+    if len(base) != len(combined):
+        raise ValueError("Prior dev projection row-count drift")
+    for index, (source, projected) in enumerate(zip(base, combined)):
+        if set(projected) != set(source) | {"source_experiment_population"}:
+            raise ValueError(f"Prior dev projection field drift at row {index}")
+        preserved = set(source) - {"schema_version", "experiment_population"}
+        if any(projected[key] != source[key] for key in preserved):
+            raise ValueError(f"Prior dev projection value drift at row {index}")
+        if (
+            projected["source_experiment_population"]
+            != source["experiment_population"]
+            or projected["experiment_population"] != "three_module_v16_posthoc_v1"
+            or projected["schema_version"] != "clir-three-module-v16-posthoc-row-v1"
+        ):
+            raise ValueError(f"Prior dev projection provenance drift at row {index}")
+
+
 def _load_consistency_report(
     path: Path,
     *,
@@ -471,8 +492,10 @@ def summarize(protocol_path: str | Path) -> dict[str, Any]:
         "direct": output_root / "data/train_r0_p0.jsonl",
         "combined": output_root / "data/train_ch_full.jsonl",
     }
-    prior_dev = output_root / "data/prior_dev_query_disjoint.jsonl"
+    direct_prior_dev = output_root / "data/prior_dev.jsonl"
+    combined_prior_dev = output_root / "data/prior_dev_query_disjoint.jsonl"
     h_dev = output_root / "data/h_dev_query_disjoint.jsonl"
+    _validate_prior_dev_projection(direct_prior_dev, combined_prior_dev)
     seeds = [int(seed) for seed in protocol["training"]["seeds"]]
     checkpoints: dict[tuple[str, int], dict[str, Any]] = {}
     metrics: dict[tuple[str, int], dict[str, Any]] = {}
@@ -490,8 +513,11 @@ def summarize(protocol_path: str | Path) -> dict[str, Any]:
             )
             checkpoints[(cell, seed)] = checkpoint
             prior_path = output_root / f"evaluation/prior_dev_scored/{cell}_seed-{seed}.jsonl"
+            prior_reference = (
+                direct_prior_dev if cell in {"r0", "p0"} else combined_prior_dev
+            )
             prior_rows, prior_artifact = _validate_scored_rows(
-                prior_dev, prior_path, checkpoint["file_sha256"]
+                prior_reference, prior_path, checkpoint["file_sha256"]
             )
             score_artifacts[f"prior/{cell}/seed-{seed}"] = prior_artifact
             run_metrics: dict[str, Any] = {"prior": prior_metrics(prior_rows)}
@@ -583,9 +609,14 @@ def summarize(protocol_path: str | Path) -> dict[str, Any]:
                 "rows": protocol["data_contract"]["combined_train_rows"],
                 "queries": protocol["data_contract"]["combined_train_queries"],
             },
-            "prior_dev": {
-                "path": str(prior_dev),
-                "file_sha256": file_sha256(prior_dev),
+            "direct_prior_dev": {
+                "path": str(direct_prior_dev),
+                "file_sha256": file_sha256(direct_prior_dev),
+                "rows": protocol["data_contract"]["prior_dev_rows"],
+            },
+            "combined_prior_dev": {
+                "path": str(combined_prior_dev),
+                "file_sha256": file_sha256(combined_prior_dev),
                 "rows": protocol["data_contract"]["prior_dev_rows"],
             },
             "h_dev": {

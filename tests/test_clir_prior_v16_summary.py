@@ -7,6 +7,7 @@ from summarize_clir_prior_v16_training import (
     FULL_SCORE_FIELDS,
     STAGE_1_METRICS,
     TOKEN_SCORE_FIELDS,
+    _validate_prior_dev_projection,
     _validate_scored_rows,
     aggregate_contrast,
     evaluate_stage_1_gate,
@@ -131,3 +132,31 @@ def test_full_score_validator_rejects_frozen_input_drift(tmp_path: Path) -> None
     scored_path.write_text(json.dumps(scored) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="frozen score input drift"):
         _validate_scored_rows(reference_path, scored_path, "checkpoint")
+
+
+def test_prior_dev_projection_allows_only_one_provenance_field(
+    tmp_path: Path,
+) -> None:
+    base = {
+        "id": "row-1",
+        "query_id": "query-1",
+        "correctness": 1,
+        "schema_version": "clir-prior-v16-posthoc-training-row-v1",
+        "experiment_population": "prior_v16_posthoc_binary_v1",
+    }
+    projected = {
+        **base,
+        "schema_version": "clir-three-module-v16-posthoc-row-v1",
+        "experiment_population": "three_module_v16_posthoc_v1",
+        "source_experiment_population": "prior_v16_posthoc_binary_v1",
+    }
+    base_path = tmp_path / "base.jsonl"
+    projected_path = tmp_path / "projected.jsonl"
+    base_path.write_text(json.dumps(base) + "\n", encoding="utf-8")
+    projected_path.write_text(json.dumps(projected) + "\n", encoding="utf-8")
+    _validate_prior_dev_projection(base_path, projected_path)
+
+    projected["correctness"] = 0
+    projected_path.write_text(json.dumps(projected) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="projection value drift"):
+        _validate_prior_dev_projection(base_path, projected_path)

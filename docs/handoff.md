@@ -1318,7 +1318,8 @@ cluster ID、row ID 零重合；但旧训练行部分没有 cluster ID，因此 
 证据级别固定为 `posthoc_exploratory_reused_not_fresh`。它不能覆盖此前一次性 1,600 新题确认中的
 CH 推荐，也不允许用于下一轮调 epoch、direct/Gate 权重或 subset。R0/P0 与 CH/Full 的训练清单不同，
 禁止解释 R0→CH、P0→Full。ignored merge/summary SHA-256 分别为
-`4f67968c…6100` / `1e6f736d…88422`。
+`4f67968c…6100` / `1e6f736d…88422`；小型 tracked terminal record 为
+`configs/data_expansion_prior_v16/posthoc_training_v1/reused_ranking_v1_completion.json`。
 
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 

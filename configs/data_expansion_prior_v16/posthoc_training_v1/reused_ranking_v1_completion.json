@@ -1,0 +1,133 @@
+{
+  "schema_version": "clir-prior-v16-posthoc-reused-ranking-completion-v1",
+  "status": "COMPLETE_PRIOR_V16_POSTHOC_REUSED_892_RANKING_V1",
+  "completed_at_utc": "2026-09-02T00:00:00Z",
+  "evidence_tier": "posthoc_exploratory_reused_not_fresh",
+  "minimum_code_commit": "6136e5aceaf59a62a7c36f84f72eb9ab95a90ead",
+  "inputs": {
+    "authorization_sha256": "30df05977729964281b2d815ac03ecb560321f147f94a9521f38ca358b766c23",
+    "training_completion_sha256": "880a11bad8c37b637d0db033cb4dcac7210546f0f1a4a3044b74422657a313b4",
+    "ranking_input_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7",
+    "ranking_rows": 14272,
+    "ranking_queries": 892,
+    "candidates_per_query": 16,
+    "cells": ["r0", "p0", "ch", "full"],
+    "seeds": [42, 43, 44],
+    "epochs": 3
+  },
+  "implementations": {
+    "contract_adapter_sha256": "5ac9bb005af2546e2082ee89e7c508de0217e8b548766a10eba340fc673371c0",
+    "scoring_engine_sha256": "968d573d748cbf41cec6ae49987d5a91bc1403e0b78b15ca1f57ff7a44ceeac9",
+    "summarizer_sha256": "d7011fadeff8b7ab26e47ed2ebbf6506e20b8afa4b468625120ab2dac8f6c9dd"
+  },
+  "artifact_hashes": {
+    "merge_report_sha256": "4f67968c2cc743619c16c75a3f33dcc596a398809447eaff755f291ff2b26100",
+    "summary_sha256": "1e6f736d500bd87c9fdc9941ae09cd8dc423608d3ac275fc5f646aaf0b088422"
+  },
+  "verification": {
+    "canonical_query_overlap_with_r0_p0_train": 0,
+    "canonical_query_overlap_with_ch_full_train": 0,
+    "available_cluster_overlap_with_r0_p0_train": 0,
+    "available_cluster_overlap_with_ch_full_train": 0,
+    "row_id_overlap_with_r0_p0_train": 0,
+    "row_id_overlap_with_ch_full_train": 0,
+    "cluster_scope_limitation": "some legacy training rows have no cluster_id",
+    "score_shards": 8,
+    "rows_per_shard": 1784,
+    "checkpoint_shard_outputs": 96,
+    "merged_checkpoints": 12,
+    "merged_rows_per_checkpoint": 14272,
+    "finite_and_candidate_parity": true,
+    "full_test_suite": "275 passed"
+  },
+  "ranking": {
+    "k_values": [1, 2, 4, 8, 16],
+    "by_k": {
+      "1": {
+        "random_expected": 0.827354260089686,
+        "oracle": 0.827354260089686,
+        "r0": 0.827354260089686,
+        "p0": 0.827354260089686,
+        "ch": 0.827354260089686,
+        "full": 0.827354260089686
+      },
+      "2": {
+        "random_expected": 0.8239910313901345,
+        "oracle": 0.8923766816143498,
+        "r0": 0.8452914798206278,
+        "p0": 0.8475336322869955,
+        "ch": 0.8475336322869955,
+        "full": 0.8505231689088192
+      },
+      "4": {
+        "random_expected": 0.827354260089686,
+        "oracle": 0.922645739910314,
+        "r0": 0.8538863976083707,
+        "p0": 0.858370702541106,
+        "ch": 0.8587443946188341,
+        "full": 0.8632286995515696
+      },
+      "8": {
+        "random_expected": 0.8266535874439462,
+        "oracle": 0.9461883408071748,
+        "r0": 0.8565022421524664,
+        "p0": 0.8523916292974589,
+        "ch": 0.8550074738415545,
+        "full": 0.8561285500747383
+      },
+      "16": {
+        "random_expected": 0.8253923766816144,
+        "oracle": 0.9551569506726457,
+        "r0": 0.8531390134529148,
+        "p0": 0.8497757847533632,
+        "ch": 0.8572496263079222,
+        "full": 0.8572496263079223
+      }
+    },
+    "k16_matched_contrasts": {
+      "p0_minus_r0": {
+        "mean_delta": -0.0033632286995515697,
+        "by_seed": {
+          "42": 0.0011210762331838565,
+          "43": -0.004484304932735426,
+          "44": -0.006726457399103139
+        },
+        "fixed_seed_query_95_ci": [-0.01382660687593423, 0.007100149476831091],
+        "hierarchical_seed_query_95_ci": [-0.016816143497757848, 0.010089686098654708],
+        "selected_candidate_change_rate": 0.8393124065769806,
+        "wrong_to_correct": 83,
+        "correct_to_wrong": 92
+      },
+      "full_minus_ch": {
+        "mean_delta": 0.0,
+        "by_seed": {
+          "42": -0.0033632286995515697,
+          "43": 0.006726457399103139,
+          "44": -0.0033632286995515697
+        },
+        "fixed_seed_query_95_ci": [-0.0085949177877429, 0.0085949177877429],
+        "hierarchical_seed_query_95_ci": [-0.011584454409566517, 0.011584454409566517],
+        "selected_candidate_change_rate": 0.6629297458893871,
+        "wrong_to_correct": 52,
+        "correct_to_wrong": 52
+      }
+    },
+    "within_query_pairwise_accuracy": {
+      "r0": 0.6487565244089653,
+      "p0": 0.657071947600041,
+      "ch": 0.6767731040835124,
+      "full": 0.683834817316549
+    }
+  },
+  "decision": {
+    "direct_prior_top16_benefit_established": false,
+    "full_over_ch_top16_benefit_established": false,
+    "old_large_full_below_ch_gap_reproduced": false,
+    "current_ranking_recommendation": "ch",
+    "reason": "Full ties CH at K=16 on the reused exploratory population; it changes selections but has exactly balanced wrong-to-correct and correct-to-wrong transitions",
+    "fresh_query_cluster_confirmation_still_required": true,
+    "retuning_on_this_population_allowed": false,
+    "original_v16_v17_terminal_statuses_changed": false
+  },
+  "claim_boundary": "Same-population exploratory comparison only. Not fresh, protected, confirmatory, Gold, or human-verified; do not compare R0/P0 against CH/Full as a controlled module effect because the training manifests differ."
+}

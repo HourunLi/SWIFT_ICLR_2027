@@ -1203,7 +1203,9 @@ BoN@16 上，P0−R0 三 seed 为 `+0.11/−0.45/−0.67` point，fixed-seed que
 推荐仍是 CH；若要升级为 Full，仍须用预先冻结的全新 query/template-cluster-disjoint 集确认。
 
 合并与汇总均通过 12-checkpoint ×14,272-row 完整性校验；ignored summary SHA-256=
-`1e6f736d…88422`。R0/P0 与 CH/Full 使用不同训练清单，禁止把 R0→CH 或 P0→Full 写成单一模块因果效应。
+`1e6f736d…88422`，远端可保留的精简结果见
+[`reused_ranking_v1_completion.json`](configs/data_expansion_prior_v16/posthoc_training_v1/reused_ranking_v1_completion.json)。
+R0/P0 与 CH/Full 使用不同训练清单，禁止把 R0→CH 或 P0→Full 写成单一模块因果效应。
 
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 

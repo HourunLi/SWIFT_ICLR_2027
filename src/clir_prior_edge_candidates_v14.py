@@ -21,6 +21,9 @@ from src.clir_prior_mechanical import STRUCTURE_SCHEMA
 
 
 EDGE_PROPOSAL_SCHEMA = "clir-prior-mechanical-edge-candidates-v14-dev-v1"
+FROZEN_EDGE_PROPOSAL_SCHEMA = (
+    "clir-prior-mechanical-edge-candidates-v14-frozen-v1"
+)
 DEFAULT_MIN_PARENTS = 2
 DEFAULT_MAX_PARENTS = 6
 
@@ -239,6 +242,7 @@ def propose_dependency_edges_v14(
     *,
     min_parents: int = DEFAULT_MIN_PARENTS,
     max_parents: int = DEFAULT_MAX_PARENTS,
+    proposal_schema: str = EDGE_PROPOSAL_SCHEMA,
 ) -> list[dict[str, Any]]:
     """Propose bounded, recall-first dependency edges for one public item.
 
@@ -254,6 +258,8 @@ def propose_dependency_edges_v14(
         raise ValueError("parent limits must satisfy 1 <= min <= max")
     if max_parents > 8:
         raise ValueError("max_parents above eight is an unsafe audit burden")
+    if not isinstance(proposal_schema, str) or not proposal_schema.strip():
+        raise ValueError("proposal_schema must be a non-empty string")
     structure = item.get("structure")
     if (
         not isinstance(structure, Mapping)
@@ -436,7 +442,7 @@ def propose_dependency_edges_v14(
         for parent in sorted(chosen):
             output.append(
                 {
-                    "schema_version": EDGE_PROPOSAL_SCHEMA,
+                    "schema_version": proposal_schema,
                     "parent_block_id": parent,
                     "child_block_id": child,
                     "strength": "high" if scores[parent] >= 12 else "medium",

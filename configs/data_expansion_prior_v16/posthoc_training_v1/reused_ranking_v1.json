@@ -1,0 +1,141 @@
+{
+  "schema_version": "clir-prior-v16-posthoc-reused-ranking-v1",
+  "status": "AUTHORIZED_PRIOR_V16_POSTHOC_REUSED_892_RANKING_V1",
+  "frozen_at_utc": "2026-09-02T00:00:00Z",
+  "authorization_source": {
+    "kind": "explicit_user_instruction_in_active_codex_thread",
+    "instructions": [
+      "不能做一次题目测试",
+      "之前那些结论测了多少题的，就跟之前的口径一致就行"
+    ],
+    "operational_interpretation": "score all already-trained v16 R0/P0/CH/Full checkpoints on the same 892-query, 16-candidate population used by the earlier conclusions"
+  },
+  "evidence_tier": "posthoc_exploratory_reused_not_fresh",
+  "confirmation_scoring_allowed": false,
+  "claim_boundary": {
+    "allowed": "direct comparison with earlier exploratory 892-query Best-of-N results under the same candidate population",
+    "not_allowed": [
+      "fresh independent confirmation",
+      "protected-test evidence",
+      "human-verified label claims",
+      "cross-stage R0-to-CH or P0-to-Full causal attribution"
+    ],
+    "fresh_query_cluster_confirmation_required_later": true
+  },
+  "training_completion_path": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/evaluation/staged_training_summary.json",
+  "training_completion_sha256": "880a11bad8c37b637d0db033cb4dcac7210546f0f1a4a3044b74422657a313b4",
+  "training_completion_status": "COMPLETE_PRIOR_V16_POSTHOC_STAGED_TRAINING_AND_MECHANISM_EVALUATION",
+  "ranking_input_path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/ranking_evaluation.jsonl",
+  "ranking_input_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7",
+  "ranking_rows": 14272,
+  "ranking_queries": 892,
+  "candidates_per_query": 16,
+  "source_query_counts": {
+    "gsm8k": 731,
+    "math": 161
+  },
+  "cells": [
+    "r0",
+    "p0",
+    "ch",
+    "full"
+  ],
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "run_count": 12,
+  "completed_epoch": 3,
+  "factors": {
+    "r0": [0, 0, 0],
+    "p0": [0, 0, 1],
+    "ch": [1, 1, 0],
+    "full": [1, 1, 1]
+  },
+  "cell_train_sha256": {
+    "r0": "f0502520536778d26e6804f7dc37ebc899b9eb3f08b8d531b2ebc89d81aedb0f",
+    "p0": "f0502520536778d26e6804f7dc37ebc899b9eb3f08b8d531b2ebc89d81aedb0f",
+    "ch": "ef3bd3a2f5aada2809830181940f464b235c88bd933b83be08c7eb4bf68d6fcf",
+    "full": "ef3bd3a2f5aada2809830181940f464b235c88bd933b83be08c7eb4bf68d6fcf"
+  },
+  "training_inputs": {
+    "r0_p0": {
+      "path": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/data/train_r0_p0.jsonl",
+      "file_sha256": "f0502520536778d26e6804f7dc37ebc899b9eb3f08b8d531b2ebc89d81aedb0f",
+      "rows": 4352,
+      "queries": 880
+    },
+    "ch_full": {
+      "path": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/data/train_ch_full.jsonl",
+      "file_sha256": "ef3bd3a2f5aada2809830181940f464b235c88bd933b83be08c7eb4bf68d6fcf",
+      "rows": 5552,
+      "queries": 1678
+    }
+  },
+  "nonoverlap_contract": {
+    "canonical_query_id": "legacy gsm8k-train-N and gsm8k:train:N are normalized to gsm8k:train:NNNNN before comparison",
+    "required_zero_overlap_axes": [
+      "canonical_query_ids",
+      "declared_cluster_ids",
+      "row_ids"
+    ],
+    "observed_preflight": {
+      "r0_p0": {
+        "canonical_query_ids": 0,
+        "declared_cluster_ids": 0,
+        "row_ids": 0
+      },
+      "ch_full": {
+        "canonical_query_ids": 0,
+        "declared_cluster_ids": 0,
+        "row_ids": 0
+      }
+    },
+    "limitation": "declared cluster IDs are absent for some legacy training rows, so zero cluster overlap is only asserted where cluster IDs exist"
+  },
+  "bound_reports": {
+    "training_protocol": {
+      "path": "configs/data_expansion_prior_v16/posthoc_training_v1/protocol.json",
+      "file_sha256": "ed88f77976fffb5a9563f4a56a7ce902832af9e2c1e1279eb4874d0ca48a766c"
+    },
+    "ranking_manifest": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/ranking_evaluation.jsonl.manifest.json",
+      "file_sha256": "6ae741af6643002aa66721c2761cb83874175431e665458baf795c920025dbb4"
+    },
+    "feature_manifest": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/features/extracted_features.jsonl.manifest.json",
+      "file_sha256": "5ec27619873199e4694733e8588bd9aa4c1f469d4d204b8ea5e8bc729eacb122"
+    },
+    "feature_finalization": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/finalization_report.json",
+      "file_sha256": "092c99a57aeae16c9cb61336714b7270fd3cdc9b47877d67336a9bcce8625b54"
+    }
+  },
+  "evaluation": {
+    "k": [1, 2, 4, 8, 16],
+    "primary_contrast": "full_minus_ch",
+    "secondary_contrast": "p0_minus_r0",
+    "contrast_definition": "right minus left on exactly paired query outcomes, averaged over the three fixed seeds",
+    "bootstrap_replicates": 10000,
+    "bootstrap_seed": 42,
+    "report_random_expected_oracle_and_pairwise": true,
+    "no_checkpoint_weight_epoch_or_subset_selection_on_ranking_results": true,
+    "matched_comparisons_only": {
+      "p0_minus_r0": "same 4352-row training manifest; isolates direct Prior supervision without Gate",
+      "full_minus_ch": "same 5552-row training manifest; tests adding direct Prior supervision plus the fixed main-style 0.25 Gate on top of Consistency+H0"
+    }
+  },
+  "runtime": {
+    "shard_output_root": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ranking_reused_892_v1/scoring_shards",
+    "merged_output_root": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ranking_reused_892_v1/scored",
+    "evaluation_output_root": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ranking_reused_892_v1/evaluation",
+    "num_shards": 8,
+    "batch_size": 2,
+    "num_workers": 0,
+    "pin_memory": false,
+    "amp_dtype": "bfloat16"
+  },
+  "contract_adapter_sha256": "5ac9bb005af2546e2082ee89e7c508de0217e8b548766a10eba340fc673371c0",
+  "scorer_sha256": "968d573d748cbf41cec6ae49987d5a91bc1403e0b78b15ca1f57ff7a44ceeac9"
+}

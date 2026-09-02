@@ -1165,9 +1165,45 @@ AP 为 `.82057/.93785`，而 R0 接近随机；correctness AUROC 只变动 `-.00
 干净提交 `be1d39a` 上的正式汇总状态为
 `COMPLETE_PRIOR_V16_POSTHOC_STAGED_TRAINING_AND_MECHANISM_EVALUATION`，报告 SHA-256=
 `880a11ba…a313b4`。这是无人工复核、post-hoc Silver 的机制可学习性与兼容性证据，不是
-Best-of-N 效果证据；本轮没有打开旧 892 题，也没有生成新的 ranking population。因此当前排名推荐
-仍沿用此前新题确认得到的 CH，下一步必须先冻结全新的 query/template-cluster-disjoint 排名集，
-再比较至少 U0/CH/Full，不能在这 104-row Prior dev 或 197-row H dev 上调权重、epoch 或子集。
+Best-of-N 效果证据；该阶段汇总完成时还没有打开旧 892 题，也没有生成新的 ranking population。
+随后用户另行授权了下面的同口径探索性复测；它不改变这里的机制结论，也不把旧集变成新鲜确认集。
+
+### Prior v16-posthoc：复用 892 题的同口径排名复测
+
+用户要求和此前结论保持同一题量/口径后，提交 `5a2f762` 在产生任何新 score 前冻结了
+[`reused_ranking_v1.json`](configs/data_expansion_prior_v16/posthoc_training_v1/reused_ranking_v1.json)
+及专用批量 scorer。评测完整复用 v7.4 的 892 题 ×16 candidate（731 GSM8K、161 MATH），
+仍取候选前缀 `K=1/2/4/8/16`，并评分已经固定的 seeds 42/43/44、3-epoch checkpoint；没有重新训练、
+挑 epoch、调 loss/Gate 权重或筛题。规范化题号后，它与 R0/P0 的 880 个训练题、CH/Full 的
+1,678 个训练题均为零 query-ID 重合；已有 cluster ID 和 row ID 也零重合。部分历史训练行没有
+cluster ID，因此这里只能对“实际存在的 cluster ID”作零重合声明。
+
+R0/P0 共用 4,352-row 训练清单，CH/Full 共用另一份 5,552-row 清单，所以只允许解释
+`P0−R0` 和 `Full−CH` 两个配对差值：
+
+| K | Random | Oracle | R0 | P0 | P0−R0 | CH | Full | Full−CH |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | `82.74%` | `82.74%` | `82.74%` | `82.74%` | `0.00` point | `82.74%` | `82.74%` | `0.00` point |
+| 2 | `82.40%` | `89.24%` | `84.53%` | `84.75%` | `+0.22` point | `84.75%` | `85.05%` | `+0.30` point |
+| 4 | `82.74%` | `92.26%` | `85.39%` | `85.84%` | `+0.45` point | `85.87%` | `86.32%` | `+0.45` point |
+| 8 | `82.67%` | `94.62%` | `85.65%` | `85.24%` | `-0.41` point | `85.50%` | `85.61%` | `+0.11` point |
+| 16 | `82.54%` | `95.52%` | `85.31%` | `84.98%` | `-0.34` point | **`85.72%`** | **`85.72%`** | **`0.00` point** |
+
+BoN@16 上，P0−R0 三 seed 为 `+0.11/−0.45/−0.67` point，fixed-seed query bootstrap
+95% interval=`[−1.38,+0.71]` points；Full−CH 为 `−0.34/+0.67/−0.34` point，interval=
+`[−0.86,+0.86]` points。两者都跨 0。Prior 路径并非没有进入 score：P0 在 K=16 改变了
+`83.93%` 的候选选择，但合计只有 83 次错→对、92 次对→错；Full 相对 CH 改变 `66.29%`，恰好
+52 次错→对和 52 次对→错。题内 correct-vs-wrong pairwise 均值则为 R0/P0
+`.64876/.65707`、CH/Full `.67677/.68383`。
+
+准确裁决是：扩充后的 direct Prior 仍能明显改写排序，却没有形成稳定的 top-of-16 净收益；
+新 Full 在这套旧探索集上不再复现此前 `Full<CH` 的明显差距，而是与 CH 完全打平，但这只是
+“强负交互暂未复现”，不是“Full 已经提高性能”。由于 892 题早已被多轮查看，本结果只能和旧数字
+作同口径探索性对照，不能覆盖此前 1,600 个新题得到的 CH 推荐，也不能据此继续调参。当前默认排名
+推荐仍是 CH；若要升级为 Full，仍须用预先冻结的全新 query/template-cluster-disjoint 集确认。
+
+合并与汇总均通过 12-checkpoint ×14,272-row 完整性校验；ignored summary SHA-256=
+`1e6f736d…88422`。R0/P0 与 CH/Full 使用不同训练清单，禁止把 R0→CH 或 P0→Full 写成单一模块因果效应。
 
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 
@@ -1342,7 +1378,8 @@ pytest -q
   Prior 对齐，却在 BoN@16 三 seed 全负，也不能替代新的确认性数据。
 - v16-posthoc 另有 384 个新 Prior train +104 dev；selected-only feature、R0/P0 和 CH/Full
   三 seed 已完成。它把 Full 的 Key/Complete、H0 token 和 Consistency relation 机制同时保住，
-  但没有新鲜 Best-of-N population，不能覆盖此前 CH 的排名推荐，也不能据此宣称 Full 已提升最终选择。
+  同口径复用 892×16 排名上 P0−R0 的 K=16 为 `−0.34` point、Full−CH 为 `0.00` point，区间都
+  跨 0。它没有新鲜 Best-of-N population，不能覆盖此前 CH 的排名推荐，也不能据此宣称 Full 已提升最终选择。
 - clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代缺失的数据 provenance 上游与 protected-test protocol。
 - clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired
   summarizer；v6.1 新增了单独的 held-out consistency relation evaluator，但尚未重建

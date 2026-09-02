@@ -1270,15 +1270,55 @@ Stage 1 的三 seed 均值：
 解释边界：Full 确实把 direct Prior 学会，Consistency relation AUROC 和 H token AUROC 的
 Full−CH 差值三个 seed 都为正，因此在这些 Silver 机制集上没有复现“组合后表示机制崩掉”。但 H path
 指标略降且 seed 波动大，path BCE 很差；±5 token 只有 1.7%/3.4%，所以 H0 仍是 tail/path risk，
-不是精确 onset。最重要的是本轮按协议没有复用旧 892-query ranking，也还没有新鲜 ranking population；
-不能从 `.80820 vs .80081` 这种单候选 correctness AUROC 推导 Best-of-N 已提升。此前确认得到的排名推荐
-仍是 CH，直到全新 query/cluster 上至少 U0/CH/Full 完成预注册对比。
+不是精确 onset。在该阶段汇总封存时，协议没有复用旧 892-query ranking，也还没有新鲜 ranking
+population；不能从 `.80820 vs .80081` 这种单候选 correctness AUROC 推导 Best-of-N 已提升。
+后续用户另行授权了下面的同口径旧集复测，但它不是新鲜确认集。
 
 12 个 checkpoint 全部 epoch=3、finite，并绑定正确的 train/config/code hash。干净评测提交
 `be1d39a05f2dd1733b34e9a536dcb65049329360` 上 `275 passed`；正式汇总状态为
 `COMPLETE_PRIOR_V16_POSTHOC_STAGED_TRAINING_AND_MECHANISM_EVALUATION`，summary SHA-256=
 `880a11bad8c37b637d0db033cb4dcac7210546f0f1a4a3044b74422657a313b4`。它只支持 post-hoc、
 dual-AI Silver、无人工复核的机制可学习性/兼容性表述；原 v16/v17 STOP 原样保留。
+
+### Prior v16-posthoc 复用 892 题排名：Full 与 CH 打平，未建立增益
+
+用户明确要求按此前结论的题量与口径做一次最终选择测试。提交 `5a2f762` 在任何新 score 产生前冻结
+`configs/data_expansion_prior_v16/posthoc_training_v1/reused_ranking_v1.json` 和专用多 checkpoint
+scorer；提交 `43e2ae6` 增加严格配对汇总器。完整复用旧 v7.4 的 14,272 rows/892 queries/每题
+16 candidates（731 GSM8K、161 MATH），K 固定为 1/2/4/8/16，评分既有 seeds 42/43/44 的
+12 个 3-epoch checkpoint。没有重新训练、调 epoch/权重、看分选 subset 或生成新候选。
+
+运行前把旧 `gsm8k-train-N` 与新 `gsm8k:train:N` 统一成同一个 canonical ID。排序集与 R0/P0
+的 4,352-row/880-query train、CH/Full 的 5,552-row/1,678-query train 均为 query ID、已有
+cluster ID、row ID 零重合；但旧训练行部分没有 cluster ID，因此 cluster 声明只覆盖实际存在的 ID。
+8 个 GPU shard 各完成 1,784 行，96 个 checkpoint-shard score 原子落盘后，merge 对每个 checkpoint
+逐行验证 source index、ID、query、candidate index、correctness、checkpoint hash 和 finite score，
+12×14,272 行全部通过。
+
+三 seed 均值如下：
+
+| K | Random | Oracle | R0 | P0 | P0−R0 | CH | Full | Full−CH |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | `82.74%` | `82.74%` | `82.74%` | `82.74%` | `0.00` | `82.74%` | `82.74%` | `0.00` |
+| 2 | `82.40%` | `89.24%` | `84.53%` | `84.75%` | `+0.22` | `84.75%` | `85.05%` | `+0.30` |
+| 4 | `82.74%` | `92.26%` | `85.39%` | `85.84%` | `+0.45` | `85.87%` | `86.32%` | `+0.45` |
+| 8 | `82.67%` | `94.62%` | `85.65%` | `85.24%` | `−0.41` | `85.50%` | `85.61%` | `+0.11` |
+| 16 | `82.54%` | `95.52%` | `85.31%` | `84.98%` | `−0.34` | **`85.72%`** | **`85.72%`** | **`0.00`** |
+
+合法主对比只有同训练清单内的两组。K=16 的 P0−R0 三 seed 为
+`+0.11/−0.45/−0.67` point，fixed/hierarchical 95% interval 分别为
+`[−1.38,+0.71]` / `[−1.68,+1.01]` points；P0 改变 `83.93%` 的 top-16 选择，三 seed 合计
+83 次错→对、92 次对→错。Full−CH 为 `−0.34/+0.67/−0.34` point，两个 interval 分别
+`[−0.86,+0.86]` / `[−1.16,+1.16]`；Full 改变 `66.29%` 的选择，合计恰好 52 次错→对和
+52 次对→错。题内 pairwise 从 R0 `.64876` 到 P0 `.65707`，从 CH `.67677` 到 Full
+`.68383`，说明 Prior/Gate 确实改变 score 排序，但没有转化成 top-16 correctness 净增益。
+
+冻结裁决：**direct Prior 的最终选择收益仍未建立；Full 在这批旧探索集上与 CH 打平，旧三模块矩阵中
+`Full<CH` 的强负差距没有复现，但也不能称冲突已被确认解决。** 此人口已被历史实验反复查看，所以
+证据级别固定为 `posthoc_exploratory_reused_not_fresh`。它不能覆盖此前一次性 1,600 新题确认中的
+CH 推荐，也不允许用于下一轮调 epoch、direct/Gate 权重或 subset。R0/P0 与 CH/Full 的训练清单不同，
+禁止解释 R0→CH、P0→Full。ignored merge/summary SHA-256 分别为
+`4f67968c…6100` / `1e6f736d…88422`。
 
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
@@ -1514,8 +1554,10 @@ population；不要继续在当前网格上加小数点权重。
    v17 的 96 条自然样本虽全部机制门通过，但 controls 为 8/12、全局状态仍是 STOP；不得改 control、
    重跑 evaluator 或训练 smoke 行。隔离的 v16-posthoc 已完成 20 个公开 shard 双标、唯一一次冻结
    评价与独立物化复算，发布 384 train +104 dev post-hoc Silver；selected-only exact-token feature、
-   R0/P0 与 CH/Full 三 seed 探索性训练和三类机制评测也已完成。不得把该 replay 写成原 v16/v17 通过，
-   不得在 104/197/557-row 机制集上继续调权重、epoch、subset，也不得用旧 query/cluster 作确认性排名。
+   R0/P0 与 CH/Full 三 seed 探索性训练和三类机制评测也已完成。用户另行授权的同口径 892×16
+   旧集复测也已完成：P0−R0 K=16 为 `−.34` point，Full−CH 为 `0.00` point，区间均跨 0；保存
+   authorization、96 个 score shard、merge 和 summary hash。不得把该 replay 写成原 v16/v17 通过，
+   不得在 104/197/557-row 机制集或复用 892 题上继续调权重、epoch、subset，也不得把旧集称为确认性排名。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；
    它通过 Gate/Prior 对齐门，却在 K=16 三 seed 全负。不得在这 51 条 Prior dev 或 892 题复用
    ranking 上再调 direct weight、Gate 权重、epoch 或 subset。
@@ -1530,7 +1572,8 @@ population；不要继续在当前网格上加小数点权重。
 风险头而不是精确首错定位器。此前新题 confirmation 上 CH=`94.458%`、Full=`93.917%`，Full−CH
 按冻结规则为 harm，因此当前 ranking 推荐仍是 CH。新 v16-posthoc 扩充监督下，Full 同时保住了
 Key/Complete、H0 token 与 Consistency relation 机制，没有出现表示层面的组合崩坏；但它没有新鲜
-Best-of-N 数据，不能翻转旧排名结论。`.25` Gate 仍是 main-style 工程默认，不是 Full efficacy 结论。
+Best-of-N 数据；复用 892 题上 Full 与 CH 的 K=16 均为 `85.72%`，只说明此前明显负差距没有复现，
+不能翻转旧排名结论。`.25` Gate 仍是 main-style 工程默认，不是 Full efficacy 结论。
 H1 与 mutual 没有因本轮获得新证据，原 v7/v12/v13/v16/v17 也仍不能写成通过。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

@@ -163,7 +163,11 @@ def _load_run(
 
 
 def summarize(
-    authorization_path: Path, merge_path: Path, output_path: Path
+    authorization_path: Path,
+    merge_path: Path,
+    output_path: Path,
+    *,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
     authorization = _load_json(authorization_path)
     if (
@@ -267,14 +271,44 @@ def summarize(
     for contrast_index, (name, (left, right)) in enumerate(contrast_specs.items()):
         contrast_by_k: dict[str, Any] = {}
         for k in k_values:
+            left_vectors = [loaded[(left, seed)]["selected"][k] for seed in seeds]
+            right_vectors = [loaded[(right, seed)]["selected"][k] for seed in seeds]
             deltas = np.stack(
                 [
-                    loaded[(right, seed)]["selected"][k]
-                    - loaded[(left, seed)]["selected"][k]
-                    for seed in seeds
+                    right_values - left_values
+                    for left_values, right_values in zip(
+                        left_vectors, right_vectors, strict=True
+                    )
                 ]
             )
             per_seed = deltas.mean(axis=1)
+            transition_by_seed: dict[str, dict[str, int]] = {}
+            transition_total = {
+                "wrong_to_wrong": 0,
+                "wrong_to_correct": 0,
+                "correct_to_wrong": 0,
+                "correct_to_correct": 0,
+            }
+            for seed, left_values, right_values in zip(
+                seeds, left_vectors, right_vectors, strict=True
+            ):
+                transitions = {
+                    "wrong_to_wrong": int(
+                        np.sum((left_values == 0) & (right_values == 0))
+                    ),
+                    "wrong_to_correct": int(
+                        np.sum((left_values == 0) & (right_values == 1))
+                    ),
+                    "correct_to_wrong": int(
+                        np.sum((left_values == 1) & (right_values == 0))
+                    ),
+                    "correct_to_correct": int(
+                        np.sum((left_values == 1) & (right_values == 1))
+                    ),
+                }
+                transition_by_seed[str(seed)] = transitions
+                for label, count in transitions.items():
+                    transition_total[label] += count
             selection_changes = [
                 float(
                     np.mean(
@@ -302,6 +336,10 @@ def summarize(
                 "selected_candidate_change_rate_by_seed": {
                     str(seed): value
                     for seed, value in zip(seeds, selection_changes, strict=True)
+                },
+                "correctness_transition_counts": {
+                    "aggregate_across_seeds": transition_total,
+                    "by_seed": transition_by_seed,
                 },
                 **paired_bootstrap_ci(
                     deltas,
@@ -380,7 +418,7 @@ def summarize(
         },
         "summary_implementation_sha256": file_sha256(__file__),
     }
-    if output_path.exists():
+    if output_path.exists() and not overwrite:
         raise FileExistsError(f"summary already exists: {output_path}")
     return report
 
@@ -390,12 +428,14 @@ def main() -> None:
     parser.add_argument("--authorization", required=True)
     parser.add_argument("--merge-report", required=True)
     parser.add_argument("--output-json", required=True)
+    parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
     output = Path(args.output_json).resolve()
     report = summarize(
         Path(args.authorization).resolve(),
         Path(args.merge_report).resolve(),
         output,
+        overwrite=args.overwrite,
     )
     atomic_write_json(output, report)
     print(json.dumps({"status": report["status"], "output": str(output)}))

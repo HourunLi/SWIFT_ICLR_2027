@@ -53,6 +53,8 @@ __pycache__/
 !/configs/three_module_expansion_v1/**
 !/configs/prior_gate_tuning_v1/
 !/configs/prior_gate_tuning_v1/**
+!/configs/prior_ablation_v2/
+!/configs/prior_ablation_v2/**
 
 # The clean integration branch tracks only explicitly added runtime scripts.
 /scripts/*

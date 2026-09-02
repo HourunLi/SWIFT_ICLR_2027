@@ -1,0 +1,288 @@
+{
+  "schema_version": "clir-prior-component-ablation-v2",
+  "status": "AUTHORIZED_FREEZE_AND_RUN_AFTER_ALL_GPUS_IDLE",
+  "authorized_at_utc": "2026-09-03",
+  "purpose": "comprehensive matched decomposition of Dual Prior supervision, mutual collaboration, Gate coupling, fusion source, and C/H0 context interactions on one training manifest and one larger score-unseen ranking population",
+  "user_request": {
+    "summary": "wait for the GPUs to become idle, test Prior separately with comprehensive ablations and more ranking questions, then report after completion",
+    "gpu_launch_condition": "do not start any GPU work while the current eight-GPU workload remains resident",
+    "final_reporting_only_after_complete": true
+  },
+  "evidence_boundary": {
+    "tier": "prospective_matched_ablation_on_posthoc_dual_ai_silver_training_and_fresh_score_unseen_train_source_ranking",
+    "training_prior_labels": "silver_dual_ai_prior_v16_posthoc_binary_no_human_verification",
+    "ranking_labels": "clir_numeric_multisource_v3_numeric_value_match",
+    "human_or_gold_verified": false,
+    "protected_test_or_external_generalization": false,
+    "prior_v12_v16_v17_terminal_results_reopened": false,
+    "previous_500_892_800_800_ranking_populations_reused": false,
+    "no_weight_epoch_subset_or_threshold_selection_from_the_new_ranking_population": true,
+    "all_predeclared_cells_are_scored_and_reported": true
+  },
+  "frozen_parents": {
+    "training_manifest": {
+      "path": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/data/train_ch_full.jsonl",
+      "file_sha256": "ef3bd3a2f5aada2809830181940f464b235c88bd933b83be08c7eb4bf68d6fcf",
+      "rows": 5552,
+      "queries": 1678,
+      "correctness_rows": 5552,
+      "consistency_relations": 400,
+      "hallucination_h0_rows": 400,
+      "paired_prior_rows": 432
+    },
+    "base_config": {
+      "path": "configs/three_module_expansion_v1/u0_correctness_only.json",
+      "file_sha256": "8de1b4720f319a08447a17e5b11fd0081c25f31c6b635cbc877ba58f96e74f89"
+    },
+    "prior_dev": {
+      "path": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/data/prior_dev_query_disjoint.jsonl",
+      "file_sha256": "100168ff5c90071320fe21518dc77589afa44fa2339bb02780251ca25d5aea02",
+      "rows": 104,
+      "role": "descriptive_mechanism_diagnostic_only_already_inspected_no_selection"
+    },
+    "ranking_source_protocol": {
+      "path": "configs/prior_gate_tuning_v1/protocol.json",
+      "file_sha256": "89b98a4571570287c63fbda8e0478d87ff98063943804e023ed21dace544afbb"
+    },
+    "ranking_checker_completion": {
+      "path": "run_artifacts/prior_gate_tuning_v1/checker/completion.json",
+      "file_sha256": "1cc9716a05716b3c3fd19cd7adda86952fb15a3b17ee7f02b296c261c32bfb02"
+    }
+  },
+  "method_constants": {
+    "direct_prior_weight": 1.0,
+    "mutual_distill_weight": 0.25,
+    "main_style_gate_weight": 0.25,
+    "balanced_fusion_alpha": 0.5,
+    "key_only_fusion_alpha": 1.0,
+    "complete_only_fusion_alpha": 0.0,
+    "consistency_weight_when_on": 1.0,
+    "hallucination_h0_bce_weight_when_on": 1.0,
+    "negative_tail_h1_weight": 0.0,
+    "path_mil_weight": 0.0,
+    "pseudo_tail_weight": 0.0,
+    "progress_weight": 0.0,
+    "reconstruction_weight": 0.0,
+    "why_no_new_weight_sweep": "direct weights 0.25/0.5/1 and Gate weights were already inspected; this run decomposes components without tuning on old or new ranking questions"
+  },
+  "cell_factor_order": [
+    "consistency",
+    "hallucination_h0",
+    "key_direct",
+    "complete_direct",
+    "mutual",
+    "gate",
+    "fusion_alpha"
+  ],
+  "cells": {
+    "u0":              [0, 0, 0, 0, 0, 0, 0.5],
+    "k":               [0, 0, 1, 0, 0, 0, 0.5],
+    "complete":        [0, 0, 0, 1, 0, 0, 0.5],
+    "kc":              [0, 0, 1, 1, 0, 0, 0.5],
+    "kcm":             [0, 0, 1, 1, 1, 0, 0.5],
+    "kcg":             [0, 0, 1, 1, 0, 1, 0.5],
+    "c":               [1, 0, 0, 0, 0, 0, 0.5],
+    "c_kc":            [1, 0, 1, 1, 0, 0, 0.5],
+    "c_kcg":           [1, 0, 1, 1, 0, 1, 0.5],
+    "h":               [0, 1, 0, 0, 0, 0, 0.5],
+    "h_kc":            [0, 1, 1, 1, 0, 0, 0.5],
+    "h_kcg":           [0, 1, 1, 1, 0, 1, 0.5],
+    "ch":              [1, 1, 0, 0, 0, 0, 0.5],
+    "ch_kc":           [1, 1, 1, 1, 0, 0, 0.5],
+    "ch_kcm":          [1, 1, 1, 1, 1, 0, 0.5],
+    "full":            [1, 1, 1, 1, 0, 1, 0.5],
+    "ch_kcmg":         [1, 1, 1, 1, 1, 1, 0.5],
+    "ch_kcg_key":      [1, 1, 1, 1, 0, 1, 1.0],
+    "ch_kcg_complete": [1, 1, 1, 1, 0, 1, 0.0]
+  },
+  "immutable_anchor_checkpoints": {
+    "u0": {
+      "42": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/u0/seed-42/checkpoint.pt", "6d59c97b48e03a18412393f716f648c0ef6f5a15d3cb8b6a5641cf71db2e18d7"],
+      "43": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/u0/seed-43/checkpoint.pt", "2a2eced5cb8d68490f6d36a4e54a4a13ad405b7e1a9b068e6bfcfd9507405e97"],
+      "44": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/u0/seed-44/checkpoint.pt", "1d2a28ebe24c64fdaad30ff0049e4834ae0ab9cae429d1414baee1a99274ef33"]
+    },
+    "c": {
+      "42": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/c/seed-42/checkpoint.pt", "450fac8913ce6abd4d84a497235a8c2a9561c4d61133c836f6d8ebb4838fa863"],
+      "43": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/c/seed-43/checkpoint.pt", "2d35e6dd4dd38a7472cce33c9359cf08e7374d2ab9f1d4b3c98b5d22314ac680"],
+      "44": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/c/seed-44/checkpoint.pt", "51ff9fb55059f9ea0cf901139486e3a35cea4dc613830fad842953999ace70d6"]
+    },
+    "h": {
+      "42": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/h/seed-42/checkpoint.pt", "be040d784cafcbf6db4538e10fdcd4cd8505fb09d1233db6387931cfca23f57a"],
+      "43": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/h/seed-43/checkpoint.pt", "56be66705035063a4cae3b290d5844406d27da7b66ee98bc5e62c99a2cf41187"],
+      "44": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/h/seed-44/checkpoint.pt", "4131b46d03718cb8d6e07ef1e5e5c4ea8b2309164b396ec550b26a4bcece7520"]
+    },
+    "ch": {
+      "42": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/training/ch/seed-42/checkpoint.pt", "9e62be8bc770dd9f4fa23f784ea134e4b2a1b542ab89c5b37dc0ef645f6a5e29"],
+      "43": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/training/ch/seed-43/checkpoint.pt", "7c996172d8dad70a12aae6559de4e7a36952b7e277537d1ed57df3db2acf03cd"],
+      "44": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/training/ch/seed-44/checkpoint.pt", "c4fedb08f1730309afea79e1cd53ef28cd303213d239ed886d9251e5b44d2673"]
+    },
+    "full": {
+      "42": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/training/full/seed-42/checkpoint.pt", "f9d1759470ee756dc3af67efe95f47e77ae1350178168b4c42f5aba6a81d5c45"],
+      "43": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/training/full/seed-43/checkpoint.pt", "686b8887e3fab39cfaea5536beedffc6792c64526785f91c101bd94b61a36864"],
+      "44": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/training/full/seed-44/checkpoint.pt", "f2c8aec894cfff0520d1ff3b65791770e04c9f38bd865eb5f28f2601b6013c56"]
+    }
+  },
+  "training": {
+    "new_cells": ["k", "complete", "kc", "kcm", "kcg", "c_kc", "c_kcg", "h_kc", "h_kcg", "ch_kc", "ch_kcm", "ch_kcmg", "ch_kcg_key", "ch_kcg_complete"],
+    "reused_cells": ["u0", "c", "h", "ch", "full"],
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.0,
+    "max_grad_norm": 1.0,
+    "amp_dtype": "bfloat16",
+    "prior_phase_mode": "joint",
+    "fixed_epoch_no_checkpoint_selection": true,
+    "all_cells_share_exact_training_manifest": true,
+    "generated_configs_may_differ_only_in_the_seven_declared_factors": true
+  },
+  "ranking_population": {
+    "total_queries": 2400,
+    "candidates_per_query": 16,
+    "selected_candidate_rows": 38400,
+    "source_query_counts": {
+      "gsm8k": 950,
+      "asdiv-a": 950,
+      "math": 500
+    },
+    "new_rollout_raw_queries": {
+      "gsm8k": 1200,
+      "asdiv-a": 1100
+    },
+    "new_rollout_candidate_rows": 36800,
+    "math_reserve": {
+      "source": "prior_gate_tuning_v1_checker_eligible_but_unselected_and_never_CLIR_scored",
+      "available_queries_at_design_audit": 507,
+      "select_queries": 500,
+      "selection": "stable_hash_before_any_v2_score",
+      "new_rollout_required": false
+    },
+    "fresh_source_capacity_at_design_audit": {
+      "gsm8k": 1561,
+      "asdiv-a": 1162,
+      "math_new": 40
+    },
+    "new_query_selection": "one_query_per_near_template_cluster; stable hash within source; satisfy bottleneck ASDiv quota first then exclude those clusters from GSM8K",
+    "new_checker_eligible_rule": "exactly_16_candidates_and_every_candidate_is_numeric_match_or_numeric_mismatch",
+    "final_selection": "first_950_checker_eligible_queries_per_new_source_in_prefrozen_hash_order_plus_500_prefrozen_math_reserve",
+    "failure_policy": "FAIL_YIELD_without_post_result_quota_or_checker_change",
+    "source_reporting": "pooled_and_separate_gsm8k_asdiv_math",
+    "asdiv_warning": "ASDiv is short arithmetic and SVAMP-derived-family related; it is a robustness stratum, not independent external evidence",
+    "score_seal": "no_new_v2_CLIR_score_before_code_config_checkpoint_and_population_hash_lock"
+  },
+  "generation": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "tokenizer_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "backend": "vllm",
+    "backend_version": "0.5.3.post1",
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "max_new_tokens": 1024,
+    "max_model_length": 4096,
+    "maximum_prompt_tokens": 3072,
+    "prompt_template": "Solve the following math problem step-by-step.\nSimplify your answer as much as possible. Present your final answer as \\boxed{Your Answer}.\n<QUESTION>",
+    "candidate_count": 16,
+    "queries_per_shard": 50,
+    "rollout_shards": 46,
+    "base_seed": 20260903,
+    "seed_namespace": "clir-prior-component-ablation-v2-rollout",
+    "saved_prompt_and_output_token_ids_are_axis_truth": true
+  },
+  "checker": {
+    "checker_version": "clir_numeric_multisource_v3",
+    "correctness_semantics": "numeric_value_match_not_full_semantic_correctness",
+    "new_source_selection_namespace": "clir-prior-ablation-v2-checker-eligible",
+    "every_selected_query_requires_all_16_binary_candidates": true,
+    "truncated_parse_failure_or_ambiguous_candidate_makes_its_query_ineligible": true
+  },
+  "feature_extraction": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "input_axis_truth": "saved_prompt_token_ids_plus_saved_output_token_ids",
+    "decode_or_retokenize_allowed": false,
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "num_feature_layers": 33,
+    "per_layer_dim": 3072,
+    "feature_dim": 101376,
+    "bytes_per_feature_token": 202752,
+    "worker_count": 8,
+    "condition_saved_once_per_query": true,
+    "selected_only": true
+  },
+  "evaluation": {
+    "k_values": [1, 2, 4, 8, 16],
+    "primary_k": 16,
+    "primary_contrasts": [
+      "kc_minus_u0",
+      "kcg_minus_kc",
+      "kcg_minus_u0",
+      "full_minus_ch"
+    ],
+    "secondary_contrasts": [
+      "k_minus_u0",
+      "complete_minus_u0",
+      "kc_minus_k_minus_complete_plus_u0",
+      "kcm_minus_kc",
+      "c_kc_minus_c",
+      "c_kcg_minus_c_kc",
+      "h_kc_minus_h",
+      "h_kcg_minus_h_kc",
+      "ch_kc_minus_ch",
+      "full_minus_ch_kc",
+      "ch_kcm_minus_ch_kc",
+      "ch_kcmg_minus_full",
+      "mutual_by_gate_interaction_on_ch",
+      "direct_prior_by_consistency_interaction",
+      "direct_prior_by_h0_interaction",
+      "full_stack_by_consistency_interaction",
+      "full_stack_by_h0_interaction",
+      "ch_kcg_key_minus_full",
+      "ch_kcg_complete_minus_full"
+    ],
+    "metrics": [
+      "ordered_prefix_Best_of_N_accuracy",
+      "random_expected",
+      "oracle",
+      "within_query_correct_wrong_pairwise_accuracy",
+      "selection_change_wrong_to_correct_and_correct_to_wrong",
+      "prior_key_complete_AUROC_AP_BCE",
+      "mutual_map_distance_and_diversity",
+      "gate_to_fused_prior_alignment_and_support"
+    ],
+    "uncertainty": {
+      "paired_query_bootstrap_replicates": 10000,
+      "fixed_seed_query_interval": true,
+      "hierarchical_seed_query_interval": true,
+      "source_stratified_intervals": true,
+      "primary_family_holm_adjustment": true
+    },
+    "interpretation_rule": "report point estimate, all three seed directions, paired intervals, source strata, and primary multiplicity adjustment; auxiliary target learnability is not ranking efficacy",
+    "selection_rule": "none_all_19_cells_are_final_and_no_cell_is_dropped_after_results"
+  },
+  "gpu_policy": {
+    "required_gpu_model": "NVIDIA L20Z",
+    "visible_gpu_count": 8,
+    "launch_only_after_all_eight_are_idle": true,
+    "idle_definition": "each GPU has at least 70000 MiB free and no experiment-owned process is active",
+    "maximum_concurrent_jobs": 8,
+    "tensor_parallel_size": 1,
+    "never_preempt_or_compete_with_the_current_user_workload": true
+  },
+  "runtime": {
+    "output_root": "run_artifacts/prior_ablation_v2",
+    "python_environment": "/prodcpfs/user/panzhixin/NeuralUCB-master/.venv",
+    "model_cache": "run_artifacts/model_cache",
+    "rollout_max_num_seqs": 32,
+    "rollout_gpu_memory_utilization": 0.9,
+    "ranking_score_shards": 8,
+    "ranking_score_batch_size": 2,
+    "ranking_score_num_workers": 0,
+    "ranking_score_amp_dtype": "bfloat16",
+    "large_rollouts_features_checkpoints_scores_and_reports_are_git_ignored": true,
+    "tracked_surface": "runner_tests_protocol_and_final_README_handoff_summary_only",
+    "require_clean_committed_code_for_freeze_rollout_extraction_training_and_scoring": true
+  }
+}

@@ -982,6 +982,39 @@ F1/IoU/coverage=`.887958/.811093/.909000`，role/原候选 edge agreement=`.8532
 与 v13 的全部 query/cluster、记录 GPT-5.6-sol/max 和新版 Opus/max 的精确身份，然后才生成
 新包；在 fresh gate 通过前不抽 feature、不训练 Prior。
 
+### Prior v14 fresh mechanical-recall smoke：包已就绪，尚未标注
+
+上述前瞻性版本现已在干净 commit `5fb35a38f6ba30dccf4863af851f276b1a7136ea`
+冻结。代码入口为 `prepare_clir_prior_mechanical_v14.py`，协议为
+`configs/data_expansion_prior_v14/protocol.json`，人类可读协议为
+`docs/data_expansion_prior_v14_smoke.md`。冻结 commit 同时包含新控制题、两侧 launch prompt、
+纯 evaluator 与回归测试；提交前整仓 `248 passed`。
+
+v14 只复用 v13 的安全 block 投影，不复用任何 v13 标签。它将候选边规则冻结为
+`clir-prior-mechanical-edge-candidates-v14-frozen-v1`，并从 v12 已 materialize 的 train pool
+按新 namespace 取 48 条轨迹。排除集合是 v12 800 proposal + v13 48 proposal，共 848 个
+query/cluster；新样本有 48 个不同 query 和 48 个不同 cluster，GSM8K/MATH × numeric
+match/mismatch × medium/long 八格各 6 条。proposal file SHA-256=`843c9e06…eba6`。
+
+CPU prepare/independent verify 已分别返回
+`PASS_PRIOR_V14_FRESH_BLIND_PACKAGES_READY` 和
+`PASS_PRIOR_V14_PACKAGE_INDEPENDENT_RECOMPUTE`。package report SHA-256=`75af81e4…075b6`，
+verification SHA-256=`282c51d5…6fc0`，protocol SHA-256=`fc2fa5c1…9028f`。每个 annotator
+有 4×18=72 行：48 natural、8 个全新 hidden controls、16 个不与 parent 同 shard 的 repeats；
+A/B 总计 144 个 public rows，private index 144 行且绝不能发送。当前 verification 明确记录
+`labels_present=false`。
+
+自然样本候选负担为 1,627 edges：每行 min/mean/max=`6/33.8958/81`，每个 child 最多 6 个
+parent。预冻结门要求两边 controls 都 8/8、target repeats 至少 15/16、common usable non-low
+至少 40、final/Key 至少 `.90/.85`、Complete F1/IoU/coverage 至少 `.90/.80/.90`、role/edge
+agreement 至少 `.85`，每侧 missing-edge row rate 至多 `.15`。任何失败都终止 v14，不能重标、
+裁决、改 prompt/阈值或挑子集。
+
+下一动作只允许分别把 `launch_prompt_a.txt` 交给 GPT-5.6-sol/max、把
+`launch_prompt_b.txt` 交给升级后的 Claude Opus/max，并在两个隔离上下文写入各自 `labels_*`
+目录。两边 4+4 shard 全部完成前不得运行 evaluator；raw gate 通过也只允许另行设计 scale-v15，
+v14 smoke 本身永远不是训练数据。
+
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
 用户随后明确选择“V12吧”，授权的不是修复原 v12，而是单独命名的事后探索路线。

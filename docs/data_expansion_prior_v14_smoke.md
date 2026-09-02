@@ -1,6 +1,9 @@
 # Prior v14 fresh smoke：扩大候选依赖边后重新双标
 
-状态：`FROZEN_FRESH_SMOKE_PACKAGES_NOT_YET_BUILT`
+冻结协议状态：`FROZEN_FRESH_SMOKE_PACKAGES_NOT_YET_BUILT`
+
+本地执行状态：`PASS_PRIOR_V14_PACKAGE_INDEPENDENT_RECOMPUTE`。公共包已生成并独立复算，
+当前没有标签；该执行状态不回写或改动已冻结的 machine protocol。
 
 这轮只回答一个问题：v13 的 block/机械回溯思路不变时，把“每步最多两个候选父依赖”改成更完整但有上限的 2--6 个候选，两个 max 推理模型能否在全新样本上稳定得到 Key 和 Complete。
 

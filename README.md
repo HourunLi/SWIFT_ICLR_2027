@@ -942,7 +942,7 @@ JSON/schema/ID 检查，controls 均为 `8/8`，self-repeat target/Key/Complete 
 `max` 档位的独立新版本，再检查新候选上的真实 `keep/drop` 一致率与 residual missing-edge；
 不能把 bridge 的补边答案直接硬编码进新包。
 
-### Prior v14 fresh smoke：新候选规则已冻结，等待两边 max 标注
+### Prior v14 fresh smoke：Complete 门通过，但依赖边与 Key 门失败，已终止
 
 提交 `5fb35a3` 已在任何 v14 标签出现前冻结
 [`docs/data_expansion_prior_v14_smoke.md`](docs/data_expansion_prior_v14_smoke.md)、
@@ -955,14 +955,25 @@ query/cluster；最终 48 条对应 48 个 query、48 个模板簇，八个 sour
 `PASS_PRIOR_V14_FRESH_BLIND_PACKAGES_READY` 与
 `PASS_PRIOR_V14_PACKAGE_INDEPENDENT_RECOMPUTE`；package report/verification SHA-256 为
 `75af81e4…075b6` / `282c51d5…6fc0`。A/B 各 4 个 shard，每个 12 natural +2 fresh controls
-+4 跨 shard repeats，共 72 行；当前 `labels_present=false`。自然 48 条共有 1,627 条候选边，
++4 跨 shard repeats，共 72 行。自然 48 条共有 1,627 条候选边，
 每行均值 `33.90`、范围 `6--81`，任何 child 最多 6 个父候选。
 
 本轮 A 固定为用户报告的 GPT-5.6-sol/max，B 为升级后的 Claude Opus/max（精确 revision 若产品
-未显示则仍记为未验证）。两边 prompt 已分别放在
-`configs/data_expansion_prior_v14/launch_prompt_a.txt` 与 `launch_prompt_b.txt`；必须在两个隔离
-上下文中运行，不能读取 `PRIVATE_*` 或另一侧目录。此时仍不允许 evaluate、feature extraction
-或 training；只有两侧 4+4 个标签文件全部完成后，才能运行已经冻结的 `evaluate`。
+未显示则仍记为未验证）。两边随后完成全部 4+4 个标签文件：每侧 72 行均通过 JSON、schema、
+唯一 ID 与 blind-package 绑定预检。冻结 evaluator 只运行一次，终止于
+`STOP_PRIOR_V14_MECHANICAL_RECALL_SMOKE`；报告 SHA-256 为
+`5d978b4f…23c`，`trainable_labels_published=false`。
+
+本轮并非全面失败。A/B 的 16 个 target repeats 都为 `16/16`；48 条自然样本的 final-block
+一致率为 `.9167`，Complete F1/IoU/coverage 为 `.9178/.8573/.9258`，role/候选边 decision
+agreement 为 `.8883/.8998`，这些门均通过。失败集中在依赖召回与 Key：两边都在同一个
+`variable_rewrite` 隐藏控制题上只得 `7/8`；自然样本 Key exact 只有 `.7708 < .85`；A/B 仍在
+`.4375/.2917` 的行上补写漏掉的依赖边，远高于 `.15` 上限。
+
+因此 v14 的结论是：程序闭包已经让 Complete 集合达到本轮稳定性门，但 fresh 数据证明当前
+2--6-parent 候选器仍不能稳定覆盖直接依赖，singleton Key 也没有达到双 AI 共识门。按预冻结
+规则，不能修控制题、改 prompt/阈值、裁决、重标、挑选 48 条中的子集，也不能启动 scale-v15、
+抽 feature 或训练 v14；这些标签只保留作失败诊断。
 
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 

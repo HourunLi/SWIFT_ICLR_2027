@@ -982,7 +982,7 @@ F1/IoU/coverage=`.887958/.811093/.909000`，role/原候选 edge agreement=`.8532
 与 v13 的全部 query/cluster、记录 GPT-5.6-sol/max 和新版 Opus/max 的精确身份，然后才生成
 新包；在 fresh gate 通过前不抽 feature、不训练 Prior。
 
-### Prior v14 fresh mechanical-recall smoke：包已就绪，尚未标注
+### Prior v14 fresh mechanical-recall smoke：Complete 稳定，但依赖召回/Key 失败并终止
 
 上述前瞻性版本现已在干净 commit `5fb35a38f6ba30dccf4863af851f276b1a7136ea`
 冻结。代码入口为 `prepare_clir_prior_mechanical_v14.py`，协议为
@@ -1001,8 +1001,7 @@ CPU prepare/independent verify 已分别返回
 `PASS_PRIOR_V14_PACKAGE_INDEPENDENT_RECOMPUTE`。package report SHA-256=`75af81e4…075b6`，
 verification SHA-256=`282c51d5…6fc0`，protocol SHA-256=`fc2fa5c1…9028f`。每个 annotator
 有 4×18=72 行：48 natural、8 个全新 hidden controls、16 个不与 parent 同 shard 的 repeats；
-A/B 总计 144 个 public rows，private index 144 行且绝不能发送。当前 verification 明确记录
-`labels_present=false`。
+A/B 总计 144 个 public rows；private index 仍为私有文件，按协议不得发送。
 
 自然样本候选负担为 1,627 edges：每行 min/mean/max=`6/33.8958/81`，每个 child 最多 6 个
 parent。预冻结门要求两边 controls 都 8/8、target repeats 至少 15/16、common usable non-low
@@ -1010,10 +1009,24 @@ parent。预冻结门要求两边 controls 都 8/8、target repeats 至少 15/16
 agreement 至少 `.85`，每侧 missing-edge row rate 至多 `.15`。任何失败都终止 v14，不能重标、
 裁决、改 prompt/阈值或挑子集。
 
-下一动作只允许分别把 `launch_prompt_a.txt` 交给 GPT-5.6-sol/max、把
-`launch_prompt_b.txt` 交给升级后的 Claude Opus/max，并在两个隔离上下文写入各自 `labels_*`
-目录。两边 4+4 shard 全部完成前不得运行 evaluator；raw gate 通过也只允许另行设计 scale-v15，
-v14 smoke 本身永远不是训练数据。
+用户报告的 GPT-5.6-sol/max 与升级后的 Claude Opus/max 随后在隔离上下文完成全部 4+4 shard。
+两边各 72 行均通过 JSON、schema、唯一 ID 与 package binding 预检；冻结 evaluator 只运行一次，
+得到 `STOP_PRIOR_V14_MECHANICAL_RECALL_SMOKE`。终止报告 SHA-256=
+`5d978b4f8085b110081174fed3f487ccbed605fef7be257c58cb1d7b3ecad23c`。
+
+通过项：A/B self-repeat target/Complete/Key 都是 `16/16`；48 条 natural 全部 common usable
+non-low，eligibility/path exact=`1/1`；final-block=`.9167`；Complete F1/IoU/coverage=
+`.917764/.857262/.925823`；role/edge decision agreement=`.888262/.899816`；
+all-material-union=`0`。失败项：两边都把 `variable_rewrite` hidden control 标错，controls 仅
+`7/8,7/8`；Key exact=`.770833 < .85`；missing-edge row rate A/B=
+`.4375/.291667`，均高于 `.15`。
+
+这说明 v13 式机械闭包配合较高推理强度，已经把 Complete 边界稳定性推进到冻结门以上；但
+v14-dev 在旧 bridge 上看到的候选召回没有在 fresh 样本上复现，当前候选器仍大量漏掉 AI 认为
+必要的直接依赖，并连带使 singleton Key 不稳定。`trainable_labels_published=false`，v14 到此
+终止：不修控制题、不改 prompt/阈值、不裁决/重标、不挑子集，不启动 scale-v15，不抽 feature，
+也不训练。后续若继续 Prior，应先把依赖图更大比例机械化或改变 Key 定义，再用全新
+query/cluster 另冻版本；不能再消费 v14 标签来调同一门。
 
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
@@ -1233,10 +1246,12 @@ population；不要继续在当前网格上加小数点权重。
 3. 下一轮若要确认 H0，应重新预注册并采一批独立 H train/dev 与 ranking population，优先
    把目标表述为 tail/path 风险；若研究目标仍要求精确 onset，先修改/验证 label target 与
    解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
-4. Prior v8--v13 都必须保持终止状态。保存 v12 的 32 个标签 shard、raw report 和独立复算，
+4. Prior v8--v14 都必须保持终止状态。保存 v12 的 32 个标签 shard、raw report 和独立复算，
    不发布其 prospective 400 train +100 dev、不重标 controls/repeats、不改原门；v13 不删除错误
    control role、不覆盖原标签或原报告。后来另行授权的 max bridge 与 v14-dev 候选回放只能作
-   post-hoc 开发证据；若继续，必须另冻全新 query/cluster 的协议，不能把 bridge 写成 v13 pass。
+   post-hoc 开发证据；v14 fresh smoke 的 Complete 门虽通过，但 controls、Key 与 missing-edge
+   门失败，不能补标签、挑子集或启动 scale-v15。若继续，必须先改变依赖图/Key 的机械定义并
+   另冻全新 query/cluster 协议，不能把 bridge 写成 v13 pass 或把 v14 写成可训练。
    v12-posthoc 253-row manifest、506 个 feature、六个 checkpoint、dev/ranking summary 与原失败
    证据并存，不能重命名为原 v12 pass。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；

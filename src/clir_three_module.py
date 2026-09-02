@@ -105,14 +105,19 @@ def _validate_h_target(row: Mapping[str, Any]) -> None:
 
 
 def _rebase(
-    row: Mapping[str, Any], source_parent: Path, target_parent: Path
+    row: Mapping[str, Any],
+    source_parent: Path,
+    target_parent: Path,
+    *,
+    row_schema: str,
+    experiment_population: str,
 ) -> dict[str, Any]:
     rebased = rebase_feature_paths(
         row, source_parent=source_parent, target_parent=target_parent
     )
     rebased["source_experiment_population"] = row.get("experiment_population")
-    rebased["schema_version"] = "clir-three-module-expansion-v1-row"
-    rebased["experiment_population"] = "three_module_expansion_v1"
+    rebased["schema_version"] = row_schema
+    rebased["experiment_population"] = experiment_population
     return rebased
 
 
@@ -132,6 +137,9 @@ def build_unified_data(
     prior_dev_parent: Path,
     target_parent: Path,
     expected: Mapping[str, int] | None = None,
+    row_schema: str = "clir-three-module-expansion-v1-row",
+    experiment_population: str = "three_module_expansion_v1",
+    appended_prior_origin: str = "v12_posthoc_appended_row",
 ) -> dict[str, Any]:
     """Merge shared historical rows, append new Prior rows, and clean dev leaks."""
 
@@ -181,7 +189,13 @@ def build_unified_data(
 
     unified_train: list[dict[str, Any]] = []
     for source_row in consistency_h0_train:
-        row = _rebase(source_row, consistency_h0_parent, target_parent)
+        row = _rebase(
+            source_row,
+            consistency_h0_parent,
+            target_parent,
+            row_schema=row_schema,
+            experiment_population=experiment_population,
+        )
         prior_row = p_by_id.get(str(source_row["id"]))
         if prior_row is not None and str(source_row["id"]) in legacy_prior_ids:
             for field in PRIOR_COPY_FIELDS:
@@ -190,8 +204,14 @@ def build_unified_data(
             row["prior_merge_origin"] = "legacy_shared_historical_row"
         unified_train.append(row)
     for source_row in new_prior_rows:
-        row = _rebase(source_row, prior_parent, target_parent)
-        row["prior_merge_origin"] = "v12_posthoc_appended_row"
+        row = _rebase(
+            source_row,
+            prior_parent,
+            target_parent,
+            row_schema=row_schema,
+            experiment_population=experiment_population,
+        )
+        row["prior_merge_origin"] = appended_prior_origin
         unified_train.append(row)
 
     unified_by_id = _unique_by_id(unified_train, "unified train")
@@ -204,7 +224,7 @@ def build_unified_data(
         relation_counts
     ) != int(expected["consistency_relations"]):
         raise ValueError("Consistency supervision count drift")
-    if set(relation_counts.values()) != {2}:
+    if relation_counts and set(relation_counts.values()) != {2}:
         raise ValueError("every Consistency relation must have exactly two endpoints")
 
     h_rows = [row for row in unified_train if "path_hallucinated" in row]
@@ -243,10 +263,24 @@ def build_unified_data(
     ) != int(expected["clean_prior_dev_rows"]):
         raise ValueError("cross-module query-disjoint dev count drift")
     clean_h_dev = [
-        _rebase(row, h_dev_parent, target_parent) for row in clean_h_dev_source
+        _rebase(
+            row,
+            h_dev_parent,
+            target_parent,
+            row_schema=row_schema,
+            experiment_population=experiment_population,
+        )
+        for row in clean_h_dev_source
     ]
     clean_prior_dev = [
-        _rebase(row, prior_dev_parent, target_parent) for row in clean_prior_dev_source
+        _rebase(
+            row,
+            prior_dev_parent,
+            target_parent,
+            row_schema=row_schema,
+            experiment_population=experiment_population,
+        )
+        for row in clean_prior_dev_source
     ]
     if _query_set(clean_h_dev) & train_queries:
         raise ValueError("clean H dev still overlaps unified train")

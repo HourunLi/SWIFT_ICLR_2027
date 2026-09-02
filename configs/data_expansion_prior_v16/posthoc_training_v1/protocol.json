@@ -1,0 +1,196 @@
+{
+  "schema_version": "clir-prior-v16-posthoc-training-protocol-v1",
+  "status": "AUTHORIZED_STAGED_R0_P0_CH_FULL_TRAINING",
+  "frozen_at_utc": "2026-09-02T00:00:00Z",
+  "authorization_source": {
+    "kind": "explicit_user_instruction_in_active_codex_thread",
+    "instruction": "你可以开始训",
+    "scope": "run the minimal matched R0/P0 mechanism stage, then CH/Full when the frozen Prior learnability gate passes"
+  },
+  "minimum_parent_commit": "ab8d861e2c0518d4233f317e5bece068c0ae1efe",
+  "evidence_boundary": {
+    "tier": "posthoc_exploratory_dual_ai_silver_no_human_verification",
+    "original_v16_status": "STOP_PRIOR_V16_ROLE_ONLY_SCALE",
+    "original_v17_status": "STOP_PRIOR_V17_MECHANICAL_KEY_BINARY_SMOKE",
+    "original_terminal_statuses_are_unchanged": true,
+    "gold_human_verified_confirmatory_or_protected_test": false,
+    "fresh_query_cluster_ranking_confirmation_required_later": true
+  },
+  "frozen_inputs": {
+    "prior_silver": {
+      "path": "run_artifacts/data_expansion_prior_v16_posthoc_binary_v1/pre_annotation/materialized/prior_v16_posthoc_silver.jsonl",
+      "file_sha256": "dd689ae3bc357eeddb48097384100a4f51ae08583f85d5e65ffc300910d2521e",
+      "sidecar_file_sha256": "4e6b0f920b8d5cbd9de2a344276bf09a546e71dcad96889309ee0d5443de41db",
+      "rows": 488,
+      "train_rows": 384,
+      "dev_rows": 104
+    },
+    "prior_materialization_report": {
+      "path": "run_artifacts/data_expansion_prior_v16_posthoc_binary_v1/pre_annotation/materialized/materialization_report.json",
+      "file_sha256": "55085045a86666afc28cde9720d6c00865a4939ea095ade547309aed25b9c7aa"
+    },
+    "prior_materialization_verification": {
+      "path": "run_artifacts/data_expansion_prior_v16_posthoc_binary_v1/pre_annotation/materialized/independent_verification.json",
+      "file_sha256": "16e653981e01509790e8cf498be728856aaa9f0e7f35581e7fca955f2481f65b"
+    },
+    "prior_raw_gate_report": {
+      "path": "run_artifacts/data_expansion_prior_v16_posthoc_binary_v1/pre_annotation/evaluation/raw_gate_report.json",
+      "file_sha256": "05b55f2bbcc726640954e96616904b7bbb7cf98ec07430c1e921e905fd3326bf"
+    },
+    "historical_correctness_train": {
+      "path": "run_artifacts/dual_prior_original_scale_v2/data_v2/train3968_mixed.jsonl",
+      "file_sha256": "3c1ac6068343328ef23d85e380985be641c564ce29d4492e6e95b1526d97f310",
+      "rows": 3968
+    },
+    "consistency_h0_train": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/train_c0_c1_h0_ch0.jsonl",
+      "file_sha256": "e7904f6a169345815e71fcacccba607d1caea0d9b2a893515b26acdd29cbc56e",
+      "rows": 5168
+    },
+    "h_dev": {
+      "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/h_dev.jsonl",
+      "file_sha256": "3fb507d60094c97077d12065adb4da24296bd8baadd73fbe4354a7a3f4a6d208",
+      "rows": 200
+    },
+    "consistency_heldout_endpoints": {
+      "path": "run_artifacts/data_expansion_scale_v6/consistency_training_v6_1/data/heldout_endpoint_features.jsonl",
+      "file_sha256": "24750232069e7d612719852dfc126e27bb946eeabb50b3d1e962c0d5e66ecaba",
+      "rows": 557
+    },
+    "consistency_heldout_positive_relations": {
+      "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/heldout_positive_relations.jsonl",
+      "file_sha256": "fc88a094e9daced8528349d6d199da1e6277bd5180bd3ad62f0c8b09d47e96d1",
+      "rows": 150
+    },
+    "consistency_heldout_negative_relations": {
+      "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/heldout_hard_negative_relations.jsonl",
+      "file_sha256": "fad547c547fdf635b5f7b0973f624d2657365633cf2c48ffd42d136ccbd448f2",
+      "rows": 150
+    }
+  },
+  "feature_contract": {
+    "selected_only": true,
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "cache_dir": "run_artifacts/model_cache",
+    "input_axis_truth": "saved_prompt_token_ids_plus_saved_output_token_ids",
+    "decode_or_retokenize_allowed": false,
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "num_feature_layers": 33,
+    "per_layer_dim": 3072,
+    "feature_dim": 101376,
+    "worker_shards": 8,
+    "expected": {
+      "rows": 488,
+      "queries": 488,
+      "clusters": 488,
+      "output_tokens": 156901,
+      "prompt_tokens": 53383,
+      "total_tokens": 210284,
+      "raw_tensor_bytes": 42635501568
+    }
+  },
+  "data_contract": {
+    "direct_train_rows": 4352,
+    "direct_train_queries": 880,
+    "combined_train_rows": 5552,
+    "combined_train_queries": 1678,
+    "shared_historical_rows": 3968,
+    "legacy_prior_rows": 48,
+    "new_prior_train_rows": 384,
+    "combined_prior_rows": 432,
+    "consistency_endpoint_rows": 800,
+    "consistency_relations": 400,
+    "h_rows": 400,
+    "h_positive_rows": 200,
+    "h_clean_rows": 200,
+    "prior_dev_rows": 104,
+    "clean_h_dev_rows": 197,
+    "removed_h_dev_queries": [
+      "gsm8k:train:03704",
+      "gsm8k:train:06206",
+      "math:train:precalculus:00529"
+    ],
+    "removed_prior_dev_queries": [],
+    "consistency_h0_vs_new_prior_train_query_overlap": 2
+  },
+  "cells": {
+    "r0": {
+      "stage": 1,
+      "train_manifest": "direct",
+      "config": "configs/data_expansion_prior_v12/posthoc_v1/r0_correctness_only.json",
+      "file_sha256": "8de1b4720f319a08447a17e5b11fd0081c25f31c6b635cbc877ba58f96e74f89",
+      "factors": [0, 0, 0],
+      "gate_prior_weight": 0.0
+    },
+    "p0": {
+      "stage": 1,
+      "train_manifest": "direct",
+      "config": "configs/data_expansion_prior_v12/posthoc_v1/p0_direct_prior.json",
+      "file_sha256": "f330de67dfe35636d14c0287a299cb1f24b9ca19fbc3921bfd8631333aed919b",
+      "factors": [0, 0, 1],
+      "gate_prior_weight": 0.0
+    },
+    "ch": {
+      "stage": 2,
+      "train_manifest": "combined",
+      "config": "configs/three_module_expansion_v1/ch_consistency_h0.json",
+      "file_sha256": "d5f67aca2696c08a6331b26beb0840b4e197c146a4dbec57841290a06c741545",
+      "factors": [1, 1, 0],
+      "gate_prior_weight": 0.0
+    },
+    "full": {
+      "stage": 2,
+      "train_manifest": "combined",
+      "config": "configs/three_module_expansion_v1/full_consistency_h0_prior_gate.json",
+      "file_sha256": "edc1212191b15f69cc9af7a88912c95f7172ab8b10e5a36e5d9acc28207496fb",
+      "factors": [1, 1, 1],
+      "gate_prior_weight": 0.25
+    }
+  },
+  "training": {
+    "stage_1_cells": ["r0", "p0"],
+    "stage_2_cells": ["ch", "full"],
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "amp_dtype": "bfloat16",
+    "fixed_epoch_no_checkpoint_selection": true,
+    "single_batch_then_seed42_one_epoch_preflight": true,
+    "same_manifest_within_each_matched_contrast": true,
+    "adaptive_epoch_weight_or_subset_change": false,
+    "disabled": [
+      "H1_negative_tail",
+      "path_MIL",
+      "pseudo_onset_tail",
+      "mutual_prior_distillation",
+      "progress",
+      "reconstruction"
+    ]
+  },
+  "stage_1_gate": {
+    "all_six_runs_complete_finite_and_data_bound": true,
+    "p0_mean_key_auroc_min": 0.70,
+    "p0_mean_complete_auroc_min": 0.70,
+    "p0_minus_r0_key_average_precision_min": 0.05,
+    "p0_minus_r0_complete_average_precision_min": 0.05,
+    "p0_bce_lower_than_r0_for_key_and_complete": true,
+    "p0_minus_r0_correctness_auroc_min": -0.05,
+    "stage_2_allowed_only_if_all_checks_pass": true
+  },
+  "evaluation": {
+    "prior_primary": "104_query_disjoint_posthoc_silver_dev_rows",
+    "h_primary": "197_cross_module_query_disjoint_posthoc_silver_dev_rows",
+    "consistency_primary": "150_positive_and_150_hard_negative_relations_on_557_query_disjoint_endpoints",
+    "ranking": "deferred_until_fresh_query_cluster_population_is_generated",
+    "old_892_query_population": "optional_exploratory_secondary_only_not_a_stage_gate",
+    "no_retuning_on_inspected_dev_outputs": true
+  },
+  "runtime": {
+    "output_root": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1",
+    "large_features_checkpoints_and_reports_remain_git_ignored": true,
+    "require_clean_committed_code_before_feature_plan_and_training": true
+  }
+}

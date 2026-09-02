@@ -188,6 +188,47 @@ def test_unified_merge_enriches_shared_prior_and_removes_cross_task_dev() -> Non
     assert result["report"]["removed_prior_dev_queries"] == ["q-h-positive"]
 
 
+def test_unified_merge_accepts_versioned_population_provenance() -> None:
+    shared = _row("base", "q-base")
+    prior_new = _prior(_row("prior-new", "q-prior-new"))
+    result = build_unified_data(
+        consistency_h0_train=[shared],
+        prior_train=[shared, prior_new],
+        h_dev=[],
+        prior_dev=[],
+        consistency_h0_parent=Path("/source/h"),
+        prior_parent=Path("/source/p"),
+        h_dev_parent=Path("/source/h"),
+        prior_dev_parent=Path("/source/p"),
+        target_parent=Path("/target/data"),
+        expected={
+            "shared_historical_rows": 1,
+            "legacy_prior_rows": 0,
+            "new_prior_rows": 1,
+            "train_rows": 2,
+            "train_queries": 2,
+            "consistency_endpoint_rows": 0,
+            "consistency_relations": 0,
+            "h_rows": 0,
+            "h_positive_rows": 0,
+            "h_clean_rows": 0,
+            "prior_rows": 1,
+            "clean_h_dev_rows": 0,
+            "clean_prior_dev_rows": 0,
+        },
+        row_schema="clir-three-module-v16-posthoc-row-v1",
+        experiment_population="three_module_v16_posthoc_v1",
+        appended_prior_origin="v16_posthoc_appended_row",
+    )
+    assert {row["schema_version"] for row in result["train"]} == {
+        "clir-three-module-v16-posthoc-row-v1"
+    }
+    assert {row["experiment_population"] for row in result["train"]} == {
+        "three_module_v16_posthoc_v1"
+    }
+    assert result["train"][1]["prior_merge_origin"] == "v16_posthoc_appended_row"
+
+
 def test_factorial_effects_use_frozen_averaged_contrasts() -> None:
     cells = {
         "u0": 0.0,

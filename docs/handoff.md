@@ -1028,7 +1028,7 @@ v14-dev 在旧 bridge 上看到的候选召回没有在 fresh 样本上复现，
 也不训练。后续若继续 Prior，应先把依赖图更大比例机械化或改变 Key 定义，再用全新
 query/cluster 另冻版本；不能再消费 v14 标签来调同一门。
 
-### Prior v15 role-only target：开发回放通过，fresh 双盲包已就绪
+### Prior v15 role-only target：fresh smoke 全门通过，scale-v16 已获设计授权
 
 `diagnose_clir_prior_role_v15.py` 对 v14 的 48 条自然 parent 与 32 条跨 shard repeat 做了只读
 目标投影，没有修改任何 v14 标签或终止报告。诊断显示旧 Key 的 11/48 个分歧全部落在
@@ -1073,10 +1073,21 @@ GPT-5.6-sol/max），B 为 `configs/data_expansion_prior_v15/launch_prompt_b.txt
 Opus/max，精确 revision 若界面不显示则保持未验证）。两边必须隔离，不能看 `PRIVATE_*`、
 另一侧、协议/evaluator/checker/reference 或历史标签。
 
-两侧 4+4 shard 全部完成前不能运行 evaluator。冻结门包括 controls 8/8、repeat 至少 15/16、
-common usable non-low 至少 40、path/final/Key/Complete/role/coverage 与反退化门。任一失败即终止
-v15，不修 prompt/control/阈值，不裁决/重标/挑子集；全部通过也只授权另冻 fresh scale-v16。
-本 smoke 永远不可训练，也不提供 Prior、Gate 或 Full 的 Best-of-N 效果证据。
+两侧随后各完成 4 个 shard。独立预检确认全部 8 个文件各 18 行、JSON/schema/唯一 ID/package
+population/block coverage/final-main-step 约束均通过。冻结 evaluator 只运行一次，得到
+`PASS_PRIOR_V15_ROLE_ONLY_SMOKE`；raw report SHA-256=
+`4c894a9ead3d223ddbd5b1ee826c8408d7c0082f09fa4de781e423b7252a50e0`。
+
+冻结门全部为 true：controls A/B=`8/8,8/8`；两侧 target/Complete/Key/role repeats 都是
+`16/16`；48 条 natural 的 eligibility exact=`1`，common usable non-low=`48`，path exact=
+`.979167`，final-block exact=`1`，Key exact/F1=`1/1`，Complete F1/IoU/coverage=
+`.936011/.887400/.939318`，role agreement=`.911668`，all-material-union=`0`。A/B 的平均
+main-step block 比例为 `.4583/.4855`，没有退化成“所有 block 都算 Complete”。
+
+结论是 role-only 数据定义通过了 fresh 双 AI 的操作性与重复性门：v14 的依赖边召回问题被从
+标注对象中移除，结构 Key 不再重复 H0 的首错语义，同时现有 Key/Complete tensor 与 Gate 接口
+不变。它仍不是标签准确率、Prior learnability 或 Best-of-N 效果证据。48 条 smoke 永远不可
+训练，也不进行裁决或子集选择；唯一获准的下一步是另冻 query/cluster-disjoint scale-v16。
 
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
@@ -1301,9 +1312,10 @@ population；不要继续在当前网格上加小数点权重。
    control role、不覆盖原标签或原报告。后来另行授权的 max bridge 与 v14-dev 候选回放只能作
    post-hoc 开发证据；v14 fresh smoke 的 Complete 门虽通过，但 controls、Key 与 missing-edge
    门失败，不能补标签、挑子集或启动旧定义的 scale-v15。新 v15 已通过“取消边标注、结构
-   Key、角色生成 Complete”改变 target，并用全新 query/cluster 冻结双盲包；当前只允许完成
-   两侧 4+4 个 shard 后一次性跑冻结 evaluator。在 v15 通过前不能抽 feature 或启动 scale-v16，
-   也不能把 bridge 写成 v13 pass 或把 v14 写成可训练。
+   Key、角色生成 Complete”改变 target，并用全新 query/cluster 完成双盲 smoke；全部门已通过。
+   当前只允许另冻 scale-v16 acquisition/annotation/materialization 方案，继续排除 v12--v15 的
+   query/cluster；v15 smoke 本身不能抽 feature 或训练，也不能把 bridge 写成 v13 pass、把 v14
+   写成可训练。
    v12-posthoc 253-row manifest、506 个 feature、六个 checkpoint、dev/ranking summary 与原失败
    证据并存，不能重命名为原 v12 pass。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；

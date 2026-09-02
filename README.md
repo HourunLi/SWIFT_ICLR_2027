@@ -15,9 +15,9 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史 48 条；另有 v12-posthoc 202 train +51 dev | 只允许已登记的探索性 R0/P0；原 v12/v13 仍不可训练 | v12 原 blocker 是 Complete 边界，v13 在 schema 门终止；后续明确授权的 post-hoc exact-consensus 子集能学会 Key/Complete，但未改善最终排序 |
+| Dual Prior | 历史 48 条；另有 v12-posthoc 202 train +51 dev；v15 fresh smoke 已打包待标 | 只允许已登记的探索性 R0/P0；v15 smoke 永远不可训练 | v12-posthoc 子集能学会 Key/Complete，但未改善最终排序；v15 改为 AI 标 block 角色、程序生成 Key/Complete，尚无 fresh 标注结果 |
 
-失败批次不能直接混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8--v13 分别保留各自冻结失败状态；v12 是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，v13 是 `FAIL_PRIOR_V13_SCHEMA`。后续用户另行授权并明确命名的 `v12-posthoc` 只是一条带 easy-sample bias 的探索路线，不修改原门、不重标、不降阈值，也不能写成 v12/v13 通过。
+失败批次不能直接混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8--v14 分别保留各自冻结失败状态；v12 是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，v13 是 `FAIL_PRIOR_V13_SCHEMA`，v14 是 `STOP_PRIOR_V14_MECHANICAL_RECALL_SMOKE`。后续用户另行授权并明确命名的 `v12-posthoc` 只是一条带 easy-sample bias 的探索路线，不修改原门、不重标、不降阈值，也不能写成 v12/v13 通过。v15 是新的 role-only 定义烟测，目前只有已验证的双盲包，没有标签或训练授权。
 
 ## 2026-08-23 clean integration 审计与训练试跑
 
@@ -994,6 +994,34 @@ Complete F1/IoU/coverage=`.9185/.8572/.9236`，role agreement=`.8883`，A/B proj
 均为 `16/16`，Complete=全集比例为 0。该结果只证明新定义值得进入 fresh smoke；它不修复 v14，
 也没有验证新 prompt/control、发布标签、抽 feature 或授权训练。下一步必须先冻结并运行全新
 query/cluster-disjoint v15 role-only smoke。
+
+### Prior v15 fresh smoke：协议与双盲包已冻结，等待两边标注
+
+提交 `46b4c80` 在任何 v15 标签出现前冻结了
+[`docs/data_expansion_prior_v15_smoke.md`](docs/data_expansion_prior_v15_smoke.md)、
+`configs/data_expansion_prior_v15/protocol.json`、`prepare_clir_prior_role_v15.py`、新控制题、
+评价器和两侧 launch prompt；固定环境完整测试为 `253 passed`。v15 不改 Prior head、loss、mask、
+exact-token 映射或 `.25` Gate 接口，只改变 Silver target 的取得方式：AI 只输出
+`eligibility/path_status/block_roles/final_block_id`，程序生成
+`Complete=全部 main_step blocks` 与 `Key=final main_step block`。最早错误仍只由 H 负责。
+
+新 population 从冻结 v12 acquisition 的 train-only 行中选取，排除 v12/v13/v14 共 896 个
+proposal query/cluster。最终 48 条有 48 个不同 query 和 cluster，GSM8K/MATH ×
+numeric match/mismatch × medium/long 八格各 6 条。A/B 各有 4 个 18-row shard：每 shard
+12 natural +2 fresh controls +4 跨 shard repeats，共 72 行/侧、144 个公开 package rows；公开包
+没有依赖边、Key、Complete、checker 或 reference 字段。
+
+生成与独立重算状态分别是 `PASS_PRIOR_V15_FRESH_BLIND_PACKAGES_READY` 和
+`PASS_PRIOR_V15_PACKAGE_INDEPENDENT_RECOMPUTE`，无 mismatch，且 `labels_present=false`。
+protocol/proposal/package-report/verification SHA-256 分别为
+`2dafc4d6…265`、`17c52426…826`、`0e072958…1d6`、`b935ba3f…bc2`。
+标注 A 使用用户报告的 GPT-5.6-sol/max，B 使用升级后的 Claude Opus/max；一键任务分别在
+`configs/data_expansion_prior_v15/launch_prompt_a.txt` 与
+`configs/data_expansion_prior_v15/launch_prompt_b.txt`。两边全部完成前不得运行 evaluator。
+
+v15 的 48 条 natural 永远是 prompt-development smoke，不能抽 feature 或训练。任一冻结门失败
+就终止 v15，不重标、不裁决、不挑子集；全部通过也只允许另冻 query/cluster-disjoint scale-v16，
+不能直接把 smoke 行当训练数据或声称 Prior/Gate 改善 Best-of-N。
 
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 

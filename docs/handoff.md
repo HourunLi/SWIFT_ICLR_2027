@@ -1028,7 +1028,7 @@ v14-dev 在旧 bridge 上看到的候选召回没有在 fresh 样本上复现，
 也不训练。后续若继续 Prior，应先把依赖图更大比例机械化或改变 Key 定义，再用全新
 query/cluster 另冻版本；不能再消费 v14 标签来调同一门。
 
-### Prior v15-dev role-only target：开发回放通过，尚未 fresh 标注
+### Prior v15 role-only target：开发回放通过，fresh 双盲包已就绪
 
 `diagnose_clir_prior_role_v15.py` 对 v14 的 48 条自然 parent 与 32 条跨 shard repeat 做了只读
 目标投影，没有修改任何 v14 标签或终止报告。诊断显示旧 Key 的 11/48 个分歧全部落在
@@ -1047,12 +1047,36 @@ post-hoc 投影状态为 `PASS_POSTHOC_PRIOR_ROLE_V15_DEV_REPLAY`：结构 Key e
 `.918497/.857186/.923564`；role agreement=`.888262`；A/B projected target repeat 都是
 `16/16`；all-material union rate=`0`。针对新语义另加了 fresh controls，包括“候选引入的变量
 定义属于 main_step”和“错误链的结构 Key 仍是 final calculation”。针对测试与整仓测试分别为
-`4 passed`、`252 passed`。
+`5 passed`、`253 passed`。
 
-这是 target-design 的 post-hoc 开发证据，不是 v14 翻盘，也没有测试新提示词在 fresh 样本上的
-可操作性。不能从投影结果生成训练标签。下一动作是单独冻结 v15 fresh role-only smoke，排除
-v12/v13/v14 全部 proposal query/cluster，再由两种 max-reasoning 模型盲标；只有所有 fresh 门
-通过，才允许另立 scale 版本。
+这是 target-design 的 post-hoc 开发证据，不是 v14 翻盘，不能从投影结果生成训练标签。
+
+后续已在任何 fresh 标签出现前用提交 `46b4c806302b7d112b66f1df63459f15fb6e75f3` 单独冻结
+v15 role-only smoke。协议与入口分别为
+`configs/data_expansion_prior_v15/protocol.json`、
+`docs/data_expansion_prior_v15_smoke.md` 和 `prepare_clir_prior_role_v15.py`。新选择排除
+v12/v13/v14 共 896 个 proposal query/cluster，从 v12 acquisition 的 train-only population
+中得到 48 个新 query、48 个新 cluster；GSM8K/MATH × numeric match/mismatch × medium/long
+八格各 6 条。选择只使用冻结 source/checker/length/SHA 字段。
+
+A/B 各有 4 个 shard，每个固定为 12 natural +2 fresh controls +4 cross-shard repeats，共
+72 行/侧。公开 package 只给问题、回复、units 和 deterministic blocks，不含 candidate edge、
+Key、Complete、checker、reference 或 expected label。自然样本 block 数 min/mean/max=
+`9/19.1042/40`；AI 每行只做 role/path/final 判断，边、Key set、Complete set 的自由决策数均为 0。
+
+正式准备状态为 `PASS_PRIOR_V15_FRESH_BLIND_PACKAGES_READY`，独立重算状态为
+`PASS_PRIOR_V15_PACKAGE_INDEPENDENT_RECOMPUTE`，`mismatches=[]`、`labels_present=false`。
+protocol/proposal/package-report/verification/private-index SHA-256 分别为
+`2dafc4d6…265`、`17c52426…826`、`0e072958…1d6`、`b935ba3f…bc2`、`d2375011…db`。
+A 的一键任务为 `configs/data_expansion_prior_v15/launch_prompt_a.txt`（用户报告
+GPT-5.6-sol/max），B 为 `configs/data_expansion_prior_v15/launch_prompt_b.txt`（升级后的
+Opus/max，精确 revision 若界面不显示则保持未验证）。两边必须隔离，不能看 `PRIVATE_*`、
+另一侧、协议/evaluator/checker/reference 或历史标签。
+
+两侧 4+4 shard 全部完成前不能运行 evaluator。冻结门包括 controls 8/8、repeat 至少 15/16、
+common usable non-low 至少 40、path/final/Key/Complete/role/coverage 与反退化门。任一失败即终止
+v15，不修 prompt/control/阈值，不裁决/重标/挑子集；全部通过也只授权另冻 fresh scale-v16。
+本 smoke 永远不可训练，也不提供 Prior、Gate 或 Full 的 Best-of-N 效果证据。
 
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
@@ -1276,8 +1300,10 @@ population；不要继续在当前网格上加小数点权重。
    不发布其 prospective 400 train +100 dev、不重标 controls/repeats、不改原门；v13 不删除错误
    control role、不覆盖原标签或原报告。后来另行授权的 max bridge 与 v14-dev 候选回放只能作
    post-hoc 开发证据；v14 fresh smoke 的 Complete 门虽通过，但 controls、Key 与 missing-edge
-   门失败，不能补标签、挑子集或启动 scale-v15。若继续，必须先改变依赖图/Key 的机械定义并
-   另冻全新 query/cluster 协议，不能把 bridge 写成 v13 pass 或把 v14 写成可训练。
+   门失败，不能补标签、挑子集或启动旧定义的 scale-v15。新 v15 已通过“取消边标注、结构
+   Key、角色生成 Complete”改变 target，并用全新 query/cluster 冻结双盲包；当前只允许完成
+   两侧 4+4 个 shard 后一次性跑冻结 evaluator。在 v15 通过前不能抽 feature 或启动 scale-v16，
+   也不能把 bridge 写成 v13 pass 或把 v14 写成可训练。
    v12-posthoc 253-row manifest、506 个 feature、六个 checkpoint、dev/ranking summary 与原失败
    证据并存，不能重命名为原 v12 pass。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；

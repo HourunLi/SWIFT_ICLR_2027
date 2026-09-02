@@ -2,7 +2,7 @@
   "schema_version": "clir-prior-v16-posthoc-ch-decomposition-completion-v1",
   "status": "COMPLETE_MATCHED_U0_C_H_CH_DECOMPOSITION",
   "completed_at_utc": "2026-09-02T15:09:05Z",
-  "evidence_tier": "posthoc_exploratory_reused_not_fresh",
+  "evidence_tier": "posthoc_exploratory_dual_ai_silver_reused_ranking_not_fresh",
   "design": {
     "cells": ["u0", "c", "h", "ch"],
     "seeds": [42, 43, 44],

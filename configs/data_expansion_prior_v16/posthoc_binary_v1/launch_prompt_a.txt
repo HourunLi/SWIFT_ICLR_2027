@@ -1,0 +1,15 @@
+你现在是 CLIR Prior v16-posthoc binary replay 的独立标注者 A，使用 GPT-5.6 Sol、max reasoning 完成本任务。
+
+工作目录：/prodcpfs/user/panzhixin/ICLR_2027
+
+先完整阅读：
+/prodcpfs/user/panzhixin/ICLR_2027/configs/data_expansion_prior_v16/posthoc_binary_v1/annotation_prompt.md
+
+然后只读取下面目录中的 10 个公开 JSONL：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v16_posthoc_binary_v1/pre_annotation/packages/annotator_a/
+
+逐 shard 标注，并分别写到：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v16_posthoc_binary_v1/pre_annotation/labels_a/prior_v16_posthoc_a_00.jsonl
+一直到 prior_v16_posthoc_a_09.jsonl。输入与输出一一对应；00、01 各 56 行，02--09 各 55 行。
+
+严格遵守 annotation_prompt.md 的四字段 JSONL schema。不要读取 PRIVATE_*、协议、代码、测试、checker、参考答案、历史标签、annotator_b 包或输出。不要启动训练、评估或修改其他文件。完成后只报告 10 个输出路径、每个行数，以及是否通过你自己的 JSON/ID/字段/残余 block 顺序检查。

@@ -1089,7 +1089,7 @@ main-step block 比例为 `.4583/.4855`，没有退化成“所有 block 都算 
 不变。它仍不是标签准确率、Prior learnability 或 Best-of-N 效果证据。48 条 smoke 永远不可
 训练，也不进行裁决或子集选择；唯一获准的下一步是另冻 query/cluster-disjoint scale-v16。
 
-### Prior v16 role-only scale：包已冻结并复算，等待双 AI 标注
+### Prior v16 role-only scale：双标完成，冻结扩量门失败
 
 提交 `4e1c92ffe255aa7b2a4df19815f1e8e2c1fe9291` 在任何 v16 标签出现前冻结了
 `configs/data_expansion_prior_v16/protocol.json`、
@@ -1116,9 +1116,30 @@ tie-break 只用标注前 SHA priority。
 正式包状态为 `PASS_PRIOR_V16_FRESH_BLIND_PACKAGES_READY`，独立复算为
 `PASS_PRIOR_V16_PACKAGE_INDEPENDENT_RECOMPUTE`，`mismatches=[]`。protocol/proposal/package-report/
 verification/private-index SHA-256 为 `ea8a5c66…504e` / `273caf3b…1321` / `f7a7908d…265f` /
-`a79e631c…db5b` / `a0b8c8d…2439`。当前没有标签、Silver manifest、feature 或训练；下一步只能由
-GPT-5.6-sol/max 与升级 Opus/max 各自按 launch prompt 独立完成 12 个 shard，然后一次性运行冻结
-evaluator。失败后不改 prompt、门、标签或子集；通过也不自动建立 Prior/Gate/BoN 效果。
+`a79e631c…db5b` / `a0b8c8d…2439`。用户报告的 GPT-5.6-sol/max 与升级 Opus/max 随后各自独立
+完成 12 个 shard。24 个 label 文件均恰好 56 行，JSON/schema/ID/package/block 覆盖与顺序严格
+合法；没有缺片、额外文件或格式错误。
+
+冻结 evaluator 只运行一次，终止于 `STOP_PRIOR_V16_ROLE_ONLY_SCALE`；raw report SHA-256 为
+`eb4e82ef61de2275dd40446a3094b63ebc3b51ec09e281e7d5233b6ab7d27b4e`。主要数字是：controls
+A/B=`8/12,11/12`；target self-repeat=`60/60,53/60`；600 条 natural 的 eligibility exact=`1`、
+path exact=`.98`，但 final-block exact=`.8067 < .95`、role agreement=`.7670 < .85`、Complete
+macro IoU/coverage=`.6796/.7975`。冻结配额只能 prospective-select `473/500`（train/dev=
+`375/98`），选中部分的 IoU/coverage 也只有 `.7159/.8281 < .80/.90`。排除原因包含 116 条
+final-block disagreement 和 5 条可用 repeat parent 漂移。
+
+只读归因排除了 schema/evaluator/映射故障：在 10017 个自然 block 上，A 标了 5887 个
+`main_step`，B 标了 3855 个；A→B 最大的非一致流向是 main→heading 1038、main→premise 475、
+main→formula 288。也就是说，A 系统性地把“现在计算……”、题面复述和未代入的通用公式也当成
+主链，而 B 更严格。与此同时，B 的 7 个 repeat 漂移也横跨 premise/formula/duplicate/main，
+说明目标边界本身在复杂样本上不够稳定，不能简单宣布某一侧就是真值。v15 的 48 条 smoke 因而
+没有代表 scale 难度。
+
+v16 没有发布 Silver manifest、feature 或训练。必须原样保留两侧标签和报告，不改 prompt、门或
+标签，不裁决、不混合尝试、不从 473 条容易样本里救子集，也不能 materialize、抽 feature 或训练。
+若继续 Prior，应另立全新前瞻版本：对新 query/cluster 先机械冻结 final calculation block，机械
+排除明显 heading/premise/formula/wrapper/duplicate，再让双 AI 只做剩余 block 的二元“是否被最终
+计算实际使用”判断；先过新的 smoke，再谈扩量和 GPU 训练。
 
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
@@ -1344,10 +1365,11 @@ population；不要继续在当前网格上加小数点权重。
    post-hoc 开发证据；v14 fresh smoke 的 Complete 门虽通过，但 controls、Key 与 missing-edge
    门失败，不能补标签、挑子集或启动旧定义的 scale-v15。新 v15 已通过“取消边标注、结构
    Key、角色生成 Complete”改变 target，并用全新 query/cluster 完成双盲 smoke；全部门已通过。
-   scale-v16 acquisition/annotation/materialization 方案现已在无标签状态冻结并独立复算，排除
-   v12--v15 共 944 个 query/cluster，得到 600 个新 query/cluster 和 24 个公开 shard。当前只允许
-   两个指定的不同模型系列按冻结 launch prompt 独立标注；过门前不能 materialize、抽 feature 或
-   训练。v15 smoke 本身仍不能抽 feature 或训练，也不能把 bridge 写成 v13 pass、把 v14 写成可训练。
+   scale-v16 已完成 600 个新 query/cluster 的 24-shard 双标与唯一一次冻结评价，但 controls、B
+   repeat、final block、role、配额、Complete IoU 和 coverage 门失败，终止于
+   `STOP_PRIOR_V16_ROLE_ONLY_SCALE`。原标签和 raw report 必须保存；不得改 prompt/门、裁决、重标、
+   混合尝试、救 473 条子集、materialize、抽 feature 或训练。v15 smoke 本身也仍不能抽 feature 或
+   训练，不能把 bridge 写成 v13 pass、把 v14 或 v16 写成可训练。
    v12-posthoc 253-row manifest、506 个 feature、六个 checkpoint、dev/ranking summary 与原失败
    证据并存，不能重命名为原 v12 pass。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；

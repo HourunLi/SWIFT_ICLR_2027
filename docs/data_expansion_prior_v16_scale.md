@@ -16,3 +16,21 @@ AI 或程序替双方裁决语义争议。
 所有候选、配额、重复题、控制题、门槛和选择顺序都在标注前冻结。失败后不改提示词、不裁决、不从
 失败批次另挑“看起来好”的子集。即使通过，也只能说明这套双 AI Silver 流程能稳定产生可训练目标，
 不能说明标签等同人工 Gold，更不能直接说明 Prior、Gate 或 Best-of-N 一定有效。
+
+## 冻结执行结果（2026-09-02）
+
+GPT-5.6-sol/max 与升级后的 Claude Opus/max 各完成 12 个 shard。24 个输出文件的 JSON、行数、
+唯一 ID、输入 ID 集合、七字段 schema、block 覆盖和顺序全部合法。冻结 evaluator 随后只运行一次，
+返回 `STOP_PRIOR_V16_ROLE_ONLY_SCALE`；报告位于
+`run_artifacts/data_expansion_prior_v16/pre_annotation/evaluation/raw_gate_report.json`，SHA-256 为
+`eb4e82ef61de2275dd40446a3094b63ebc3b51ec09e281e7d5233b6ab7d27b4e`。
+
+关键结果：controls A/B=`8/12,11/12`，self-repeat=`60/60,53/60`；600 条自然样本的 final-block
+exact=`.8067`、role agreement=`.7670`、Complete IoU/coverage=`.6796/.7975`。冻结配额只能选出
+473/500 条，选中部分的 IoU/coverage 也只有 `.7159/.8281`。因此
+`trainable_labels_published=false`，没有 Silver manifest、feature 或训练。
+
+失败的主要原因是主链边界在规模化样本上不稳定。A 在 10017 个 block 中标了 5887 个 main-step，
+B 标了 3855 个；最大分歧来自标题/计划、题面复述和纯公式是否算主链。B 的 7 个 repeat 漂移表明
+这也不是只把某一位标注者换成真值就能解决的问题。按本协议，v16 到此终止：不得修改 prompt、
+门槛或标签，不得裁决、重标、混合尝试或选容易子集，也不得 materialize、抽 feature 或训练。

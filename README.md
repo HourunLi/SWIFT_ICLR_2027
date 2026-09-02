@@ -15,9 +15,9 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史 48 条；另有 v12-posthoc 202 train +51 dev；v15 smoke 48 条；v16 待双标 600 条 | 只允许已登记的探索性 R0/P0；v15 smoke 永远不可训练；v16 过门前不可训练 | v12-posthoc 子集能学会 Key/Complete，但未改善最终排序；v15 role-only 定义通过 fresh 门；v16 的 600 条扩量包已冻结并独立复算，目标是过门后发布 400 train +100 dev |
+| Dual Prior | 历史 48 条；另有 v12-posthoc 202 train +51 dev；v15 smoke 48 条；v16 已双标 600 条但扩量门失败 | 只允许已登记的探索性 R0/P0；v15 smoke 与 v16 都不可训练 | v12-posthoc 子集能学会 Key/Complete，但未改善最终排序；v15 role-only 小烟测通过，v16 扩到 600 条后暴露出主链边界不稳定，未发布计划中的 400 train +100 dev |
 
-失败批次不能直接混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8--v14 分别保留各自冻结失败状态；v12 是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，v13 是 `FAIL_PRIOR_V13_SCHEMA`，v14 是 `STOP_PRIOR_V14_MECHANICAL_RECALL_SMOKE`。后续用户另行授权并明确命名的 `v12-posthoc` 只是一条带 easy-sample bias 的探索路线，不修改原门、不重标、不降阈值，也不能写成 v12/v13 通过。v15 是新的 role-only 定义烟测，已通过全部 fresh 操作性门，但 smoke 行仍无训练资格。另立的 scale-v16 已完成标注前冻结与包复算，当前仍没有 v16 标签或可训练行。
+失败批次不能直接混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8--v14 分别保留各自冻结失败状态；v12 是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，v13 是 `FAIL_PRIOR_V13_SCHEMA`，v14 是 `STOP_PRIOR_V14_MECHANICAL_RECALL_SMOKE`。后续用户另行授权并明确命名的 `v12-posthoc` 只是一条带 easy-sample bias 的探索路线，不修改原门、不重标、不降阈值，也不能写成 v12/v13 通过。v15 的 role-only 小烟测通过，但 48 条 smoke 行无训练资格；同一定义扩大到 600 条的 v16 已完成双标并终止于 `STOP_PRIOR_V16_ROLE_ONLY_SCALE`，没有发布任何 v16 可训练行。
 
 ## 2026-08-23 clean integration 审计与训练试跑
 
@@ -1030,7 +1030,7 @@ Complete union=全部 material 的比例为 0。相比 v14，依赖边漏标门�
 v15 的 48 条 natural 永远是 prompt-development smoke，不能抽 feature 或训练；通过只允许另冻
 query/cluster-disjoint scale-v16，并在 scale 数据上重新执行独立标注、选择与训练门。
 
-### Prior v16 scale：600 条 role-only 双标包已冻结，等待 A/B
+### Prior v16 scale：600 条双标完成，但冻结扩量门失败
 
 提交 `4e1c92f` 在任何 v16 标签出现前冻结了
 [`docs/data_expansion_prior_v16_scale.md`](docs/data_expansion_prior_v16_scale.md)、
@@ -1038,7 +1038,7 @@ query/cluster-disjoint scale-v16，并在 scale 数据上重新执行独立标�
 控制题、60 个跨 shard self-repeat、评价器、exact-token materializer 和两侧 launch prompt。
 新增测试后整仓固定环境为 `257 passed`。
 
-本轮不重新调用 Phi，也不需要 GPU。它复用 v12 已冻结的 2000-query/16000-trajectory acquisition，
+本轮没有重新调用 Phi，也没有使用 GPU。它复用 v12 已冻结的 2000-query/16000-trajectory acquisition，
 永久排除 v12--v15 已消费的 944 个 query/cluster，再按 GSM8K/MATH × numeric match/mismatch ×
 train/dev 八格选出 600 条；最终确有 600 个不同 query 和 600 个不同 template cluster。标注池为
 480 train proposal +120 dev proposal，若全部冻结门通过，再按 label-independent SHA 顺序及八格
@@ -1051,12 +1051,25 @@ A/B 各有 12 个 56-row shard，每个固定为 50 natural +1 hidden control +5
 trajectory 上归一化，没有在共识子集上重新 softmax。
 
 包状态是 `PASS_PRIOR_V16_FRESH_BLIND_PACKAGES_READY`，独立复算是
-`PASS_PRIOR_V16_PACKAGE_INDEPENDENT_RECOMPUTE`，24 个公开 shard/1344 行无 mismatch。
+`PASS_PRIOR_V16_PACKAGE_INDEPENDENT_RECOMPUTE`，24 个公开 shard/1344 行无 mismatch。随后 A 使用
+用户报告的 GPT-5.6-sol/max，B 使用升级后的 Claude Opus/max，各完成 12 个 shard；全部文件、行数、
+ID、schema、block 覆盖与顺序都通过严格预检。冻结 evaluator 只运行一次，结果为
+`STOP_PRIOR_V16_ROLE_ONLY_SCALE`，raw report SHA-256=
+`eb4e82ef61de2275dd40446a3094b63ebc3b51ec09e281e7d5233b6ab7d27b4e`。
+
+失败不是格式或数量小波动：A/B controls=`8/12,11/12`，self-repeat target exact=`60/60,53/60`；
+600 条自然样本的 final-block exact=`.8067 < .95`，role agreement=`.7670 < .85`，Complete IoU/
+coverage=`.6796/.7975`。按冻结配额最多只能选 473/500 条，且 prospective selected IoU/coverage
+仍只有 `.7159/.8281`，低于 `.80/.90`。只读归因显示 A 标了 5887 个 main-step block，B 只标
+3855 个；主要分歧是 A 把标题、题面复述和纯公式也纳入主链，而 B 更严格。B 自己的 7 个 repeat
+漂移又说明边界并非只是一侧固定偏差。小规模 v15 通过没有在 600 条复杂样本上复现。
+
 protocol/proposal/package-report/verification/private-index SHA-256 分别为
 `ea8a5c66…504e`、`273caf3b…1321`、`f7a7908d…265f`、`a79e631c…db5b`、`a0b8c8d…2439`。
-当前 `annotation_started=false`、`training_started=false`、`trainable_labels_published=false`。
-通过后也只能说双 AI Silver 目标已满足预注册的操作稳定性门，不能说等同人工 Gold、Prior 已可学、
-`.25` Gate 有效或 Best-of-N 提升。
+当前 `training_started=false`、`trainable_labels_published=false`。按冻结协议不得改 v16 prompt/门槛、
+裁决、重标、混合尝试或从 473 条容易样本中救子集；不得 materialize、抽 feature 或训练 v16。若继续
+Prior，必须另立前瞻版本并使用全新 query/cluster，先把 final block 机械冻结、把显然的标题/复述/
+纯公式/答案包装机械排除，再让双 AI 只判断剩余 block 是否被最终计算实际使用。
 
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 

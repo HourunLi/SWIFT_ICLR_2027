@@ -15,7 +15,7 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史 48 条；另有 v12-posthoc 202 train +51 dev；v15 smoke 48 条；v16 已双标 600 条但扩量门失败；v16-posthoc 已冻结 490 条待双标 | 目前仍只允许已登记的探索性 R0/P0；新 post-hoc 包尚不能训练 | v12-posthoc 子集能学会 Key/Complete，但未改善最终排序；v16-posthoc 只把 v17 的机械 Key/二分类规则用于旧 v16 population，必须过完整双标门后才能发布探索性 Silver |
+| Dual Prior | 历史 48 条；v12-posthoc 202 train +51 dev；v15 smoke 48 条；v16 扩量门失败；v16-posthoc 已发布 384 train +104 dev | v12-posthoc 与 v16-posthoc 只允许探索性训练 | v12-posthoc 能学会 Key/Complete，但未改善最终排序；v16-posthoc 用机械 Key + 双 AI 二分类得到 488 条无人工复核的 post-hoc Silver，尚未做 feature、训练或排名验证 |
 
 失败批次不能直接混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8--v14 分别保留各自冻结失败状态；v12 是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，v13 是 `FAIL_PRIOR_V13_SCHEMA`，v14 是 `STOP_PRIOR_V14_MECHANICAL_RECALL_SMOKE`。后续用户另行授权并明确命名的 `v12-posthoc` 只是一条带 easy-sample bias 的探索路线，不修改原门、不重标、不降阈值，也不能写成 v12/v13 通过。v15 的 role-only 小烟测通过，但 48 条 smoke 行无训练资格；同一定义扩大到 600 条的 v16 已完成双标并终止于 `STOP_PRIOR_V16_ROLE_ONLY_SCALE`，没有发布任何 v16 可训练行。
 
@@ -1102,7 +1102,7 @@ numeric match/mismatch 和 medium/long；容量复算得到 96 个不同 query/c
 后续另立 `v16-posthoc replay`，在隔离目录把修正后的删除规则用于 v16 旧 population；它不能覆盖原
 v16/v17，也不能被称为前瞻 pass。
 
-### Prior v16-posthoc：490 条机械 Key/二分类包已冻结，等待双标
+### Prior v16-posthoc：双标门与物化校验通过，发布 488 条探索性 Silver
 
 用户在看到 v17 结果前已经授权“v17 不行就用 v16 重跑”。因此提交 `0928c25` 新建了隔离的
 `v16-posthoc mechanical-binary replay`，没有修改原 v16/v17 的 prompt、标签、报告或 STOP 结论。
@@ -1123,11 +1123,20 @@ A/B 各有 10 个 shard：每片 49 条 natural、5 条跨片 self-repeat；cont
 还必须分别至少留下 360/90 行。
 
 正式包状态为 `PASS_PRIOR_V16_POSTHOC_BLIND_PACKAGES_READY`，独立复算为
-`PASS_PRIOR_V16_POSTHOC_PACKAGE_INDEPENDENT_RECOMPUTE`，`mismatches=[]`。proposal/package-report/
-verification/private-index SHA-256 分别为 `08ab3daa…8cdb` / `4e9b6cfe…3724` /
-`75998edf…014c` / `3e0e5673…79a7`。当前尚无 post-hoc 标签、评价、materialized Silver、feature 或
-训练；下一步只允许 GPT-5.6 Sol/max 与升级后的 Claude Opus/max 分别完成 A/B 十片公开包。此阶段不需
-Phi rollout，也不需 GPU。
+`PASS_PRIOR_V16_POSTHOC_PACKAGE_INDEPENDENT_RECOMPUTE`，`mismatches=[]`。用户报告 A/B 分别由
+GPT-5.6 Sol/max 与升级后的 Claude Opus/max 完成全部十片；严格 schema、ID、package binding 和
+block coverage 预检均通过，冻结 evaluator 只运行一次并返回
+`PASS_PRIOR_V16_POSTHOC_BINARY_REPLAY`。A/B control 为 `11/12,12/12`，self-repeat 为
+`49/50,48/50`；4092 个自然 residual 判断的一致率/κ 为 `.93744/.87300`，整行完全一致率
+`.69184`，Complete unit IoU/coverage 为 `.92575/.96976`，所有冻结门均通过。
+
+发布规则只排除了两个 repeat 不稳定 parent，得到 488 个不同 query/cluster：384 train、104 dev。
+149 行含有局部 A/B 分歧，这些 residual 位置按预注册规则 mask，不强行取某一方。`materialize` 与
+独立 `verify-materialized` 分别返回 `PASS_PRIOR_V16_POSTHOC_SILVER_MATERIALIZATION` 和
+`PASS_PRIOR_V16_POSTHOC_MATERIALIZATION_RECOMPUTE`，`mismatches=[]`；raw gate report 与 Silver
+JSONL SHA-256 分别为 `05b55f2b…26bf`、`dd689ae3…21e`。现在允许抽 exact-token feature 并做探索性
+Prior 训练；尚未开始 feature、训练或 ranking。原 v16/v17 STOP 不变，这批无人工复核的 post-hoc
+Silver 不能证明标签客观准确、Prior 有效或 Best-of-N 提升，后续确认仍必须使用全新 query/cluster。
 
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 

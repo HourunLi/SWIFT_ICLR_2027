@@ -1184,7 +1184,7 @@ natural gates 都通过。唯一失败是 A/B controls 均 `8/12`。
 96 条仍永久 nontrainable。按结果前用户授权，下一步冻结隔离 `v16-posthoc replay`，使用修正后的
 删除规则重新标原 v16 population，并明确把它限制为 post-hoc 数据构建证据。
 
-### Prior v16-posthoc mechanical/binary replay：包已冻结，等待双标
+### Prior v16-posthoc mechanical/binary replay：双标、门评估和 Silver 物化均通过
 
 用户在 v17 结果揭晓前已授权失败时回退到 v16。提交
 `0928c257b242c5eb2e83c716c19dbc8415d78465` 因而建立单独的
@@ -1208,11 +1208,21 @@ correctness 或难度挑容易样本；剩余行全部发布，residual 分歧�
 train/dev 至少须为 360/90。
 
 `prepare` 状态为 `PASS_PRIOR_V16_POSTHOC_BLIND_PACKAGES_READY`；独立完整重算为
-`PASS_PRIOR_V16_POSTHOC_PACKAGE_INDEPENDENT_RECOMPUTE`、`mismatches=[]`。proposal/package-report/
-verification/private-index hash=`08ab3daa…8cdb` / `4e9b6cfe…3724` / `75998edf…014c` /
-`3e0e5673…79a7`。当前尚无 replay label、raw gate report、Silver materialization、feature 或训练。
-下一步仅运行两份 launch prompt；无需 Phi rollout 或 GPU。只有 evaluator PASS 后才能执行一次
-`materialize` 与独立 `verify-materialized`，之后才讨论 exact-token feature 和探索性 Prior 训练。
+`PASS_PRIOR_V16_POSTHOC_PACKAGE_INDEPENDENT_RECOMPUTE`、`mismatches=[]`。用户报告 A/B 分别使用
+GPT-5.6 Sol/max 与升级 Opus/max 完成全部十片。20 个 label 文件严格预检后，冻结 evaluator 只运行
+一次并返回 `PASS_PRIOR_V16_POSTHOC_BINARY_REPLAY`：controls A/B=`11/12,12/12`，self-repeat=
+`49/50,48/50`；4092 个自然 residual decision 的 agreement/κ=`.93744/.87300`，row exact=
+`.69184`，Complete unit IoU/coverage=`.92575/.96976`，双方都判 used/not-used 的比例分别为
+`.52957/.40787`，所有冻结门通过。raw report hash=`05b55f2b…26bf`。
+
+按预先冻结的发布规则只排除两个 repeat 不稳定 parent，不按 agreement、IoU、题源或难度挑行，最终
+物化 488 个不同 trajectory/query/cluster：384 train、104 dev。149 行有局部 residual 分歧，对应
+Complete token 只做 mask；完整 output token 为 156901，Key positive 为 9992，Complete positive 为
+52524，Complete supervised 为 151795。`materialize` 与独立复算状态分别为
+`PASS_PRIOR_V16_POSTHOC_SILVER_MATERIALIZATION` / `PASS_PRIOR_V16_POSTHOC_MATERIALIZATION_RECOMPUTE`，
+`mismatches=[]`，Silver JSONL hash=`dd689ae3…21e`。因此 exact-token feature extraction 与探索性
+Prior 训练现已获准，但尚未启动；它们需要 GPU。该 pass 不修改原 v16/v17 STOP，也不支持标签准确性、
+Gate 或排名增益结论；正式确认必须使用全新 query/template cluster。
 
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
@@ -1446,9 +1456,9 @@ population；不要继续在当前网格上加小数点权重。
    v12-posthoc 253-row manifest、506 个 feature、六个 checkpoint、dev/ranking summary 与原失败
    证据并存，不能重命名为原 v12 pass。
    v17 的 96 条自然样本虽全部机制门通过，但 controls 为 8/12、全局状态仍是 STOP；不得改 control、
-   重跑 evaluator 或训练 smoke 行。隔离的 v16-posthoc 已在提交 `0928c25` 冻结并独立复算 490 条、
-   20 个公开 shard；下一步只运行 A/B launch prompt。双标与全部冻结门通过前不得 materialize、抽
-   feature 或训练，也不能把 post-hoc replay 写成原 v16/v17 通过。
+   重跑 evaluator 或训练 smoke 行。隔离的 v16-posthoc 已完成 20 个公开 shard 双标、唯一一次冻结
+   评价与独立物化复算，发布 384 train +104 dev post-hoc Silver；现在只允许 selected-only exact-token
+   feature 与探索性训练。不得把该 replay 写成原 v16/v17 通过，也不得用旧 query/cluster 作确认性排名。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；
    它通过 Gate/Prior 对齐门，却在 K=16 三 seed 全负。不得在这 51 条 Prior dev 或 892 题复用
    ranking 上再调 direct weight、Gate 权重、epoch 或 subset。

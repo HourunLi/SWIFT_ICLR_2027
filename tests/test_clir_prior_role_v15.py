@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+from pathlib import Path
 
 import pytest
 
@@ -143,3 +145,22 @@ def test_v15_blind_shards_and_evaluator_pass_perfect_fixture() -> None:
     assert report["status"] == "PASS_PRIOR_V15_ROLE_ONLY_SMOKE"
     assert report["cross_annotator_natural"]["key_exact_rate"] == 1.0
     assert report["trainable_labels_published"] is False
+
+
+def test_v15_protocol_and_prompt_freeze_role_only_target() -> None:
+    root = Path(__file__).resolve().parents[1]
+    protocol = json.loads(
+        (root / "configs/data_expansion_prior_v15/protocol.json").read_text()
+    )
+    assert protocol["status"] == "FROZEN_BEFORE_ANY_V15_LABEL"
+    assert protocol["target"]["ai_does_not_output"] == [
+        "dependency_edges",
+        "key",
+        "complete",
+    ]
+    assert protocol["target"]["hallucination_h0_exclusively_owns_first_error_localization"]
+    assert protocol["gates"]["controls_min_pass"] == 8
+    assert protocol["claim_boundary"]["smoke_rows_trainable"] is False
+    prompt = (root / "configs/data_expansion_prior_v15/annotation_prompt.md").read_text()
+    assert "不要输出 `dependency_edges`" in prompt
+    assert "最早错误完全属于 Hallucination" in prompt

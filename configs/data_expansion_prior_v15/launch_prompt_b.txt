@@ -1,0 +1,18 @@
+你是 Prior-v15 标注者 B（升级后的 Claude Opus，max reasoning；若界面显示精确 revision 请记录）。在仓库根目录工作。
+
+完整阅读 configs/data_expansion_prior_v15/annotation_prompt.md，然后依次读取：
+run_artifacts/data_expansion_prior_v15/pre_annotation/packages/annotator_b/prior_v15_b_00.jsonl
+run_artifacts/data_expansion_prior_v15/pre_annotation/packages/annotator_b/prior_v15_b_01.jsonl
+run_artifacts/data_expansion_prior_v15/pre_annotation/packages/annotator_b/prior_v15_b_02.jsonl
+run_artifacts/data_expansion_prior_v15/pre_annotation/packages/annotator_b/prior_v15_b_03.jsonl
+
+把结果分别写入同名编号：
+run_artifacts/data_expansion_prior_v15/pre_annotation/labels_b/prior_v15_b_00.jsonl
+run_artifacts/data_expansion_prior_v15/pre_annotation/labels_b/prior_v15_b_01.jsonl
+run_artifacts/data_expansion_prior_v15/pre_annotation/labels_b/prior_v15_b_02.jsonl
+run_artifacts/data_expansion_prior_v15/pre_annotation/labels_b/prior_v15_b_03.jsonl
+
+每个输出文件必须恰好 18 行 JSONL，item_id 与对应输入完全相同且不重复。只允许 prompt 规定的七个字段。
+逐 shard 完成后用 json.loads、行数、唯一 ID 和输入 ID 集合做机械自检。不要读取 PRIVATE_*、labels_a、
+另一侧 package、checker、参考答案、协议、代码、测试、历史标签或 evaluator；不要输出依赖边、Key、Complete。
+若文件已完整存在，只做机械复核，不混入第二次尝试。

@@ -1089,6 +1089,37 @@ main-step block 比例为 `.4583/.4855`，没有退化成“所有 block 都算 
 不变。它仍不是标签准确率、Prior learnability 或 Best-of-N 效果证据。48 条 smoke 永远不可
 训练，也不进行裁决或子集选择；唯一获准的下一步是另冻 query/cluster-disjoint scale-v16。
 
+### Prior v16 role-only scale：包已冻结并复算，等待双 AI 标注
+
+提交 `4e1c92ffe255aa7b2a4df19815f1e8e2c1fe9291` 在任何 v16 标签出现前冻结了
+`configs/data_expansion_prior_v16/protocol.json`、
+`docs/data_expansion_prior_v16_scale.md`、`src/clir_prior_role_scale_v16.py`、
+`prepare_clir_prior_role_scale_v16.py`、评价器、materializer、测试和 A/B launch prompt。针对 v15/v16
+测试为 `9 passed`，整仓固定环境为 `257 passed`。
+
+v16 不新增 rollout：它从 v12 已冻结的 16000 条 materialized trajectory 中排除 v12--v15 共
+944 个已用 query/cluster。容量审计仍有 1054 个可用 query；冻结 selector 最终得到 600 条、600 个
+不同 query、600 个不同 cluster，八格 proposal 配额为 train 480、dev 120。若 raw gate 通过，冻结
+quota selector 才可发布 train 400、dev 100，不能按看过的 role agreement 或 Complete IoU 挑容易行。
+
+双标包每侧 12 shard，每 shard `50 natural +1 hidden control +5 repeat=56`，共 672 行/侧；两边
+重复检查同一批 60 个 natural parent，parent/repeat 不同 shard。公开包只有 question/response/units/
+deterministic blocks；没有依赖边、Key、Complete、checker、reference 或 expected label。AI 每侧约做
+10017 个 block role 判断，但不做任何 edge/set 自由选择。
+
+目标生成规则在标注前写死：两边相同 final block 生成全 coverage 的 Key；双方都标 main-step 的
+block 生成 Complete 正例；双方都标 non-main 的 block 生成 Complete 负例；main/non-main 分歧 block
+对应 output token 的 Complete mask=0。非 material output token 仍是 covered negative，attention
+仍在完整 trajectory 上归一化。任一侧已抽到的 self-repeat 失败会排除 parent；其余 final quota 的
+tie-break 只用标注前 SHA priority。
+
+正式包状态为 `PASS_PRIOR_V16_FRESH_BLIND_PACKAGES_READY`，独立复算为
+`PASS_PRIOR_V16_PACKAGE_INDEPENDENT_RECOMPUTE`，`mismatches=[]`。protocol/proposal/package-report/
+verification/private-index SHA-256 为 `ea8a5c66…504e` / `273caf3b…1321` / `f7a7908d…265f` /
+`a79e631c…db5b` / `a0b8c8d…2439`。当前没有标签、Silver manifest、feature 或训练；下一步只能由
+GPT-5.6-sol/max 与升级 Opus/max 各自按 launch prompt 独立完成 12 个 shard，然后一次性运行冻结
+evaluator。失败后不改 prompt、门、标签或子集；通过也不自动建立 Prior/Gate/BoN 效果。
+
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
 用户随后明确选择“V12吧”，授权的不是修复原 v12，而是单独命名的事后探索路线。
@@ -1313,9 +1344,10 @@ population；不要继续在当前网格上加小数点权重。
    post-hoc 开发证据；v14 fresh smoke 的 Complete 门虽通过，但 controls、Key 与 missing-edge
    门失败，不能补标签、挑子集或启动旧定义的 scale-v15。新 v15 已通过“取消边标注、结构
    Key、角色生成 Complete”改变 target，并用全新 query/cluster 完成双盲 smoke；全部门已通过。
-   当前只允许另冻 scale-v16 acquisition/annotation/materialization 方案，继续排除 v12--v15 的
-   query/cluster；v15 smoke 本身不能抽 feature 或训练，也不能把 bridge 写成 v13 pass、把 v14
-   写成可训练。
+   scale-v16 acquisition/annotation/materialization 方案现已在无标签状态冻结并独立复算，排除
+   v12--v15 共 944 个 query/cluster，得到 600 个新 query/cluster 和 24 个公开 shard。当前只允许
+   两个指定的不同模型系列按冻结 launch prompt 独立标注；过门前不能 materialize、抽 feature 或
+   训练。v15 smoke 本身仍不能抽 feature 或训练，也不能把 bridge 写成 v13 pass、把 v14 写成可训练。
    v12-posthoc 253-row manifest、506 个 feature、六个 checkpoint、dev/ranking summary 与原失败
    证据并存，不能重命名为原 v12 pass。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；

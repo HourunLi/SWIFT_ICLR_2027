@@ -1168,8 +1168,8 @@ fresh scale-v18。若 v17 terminal fail，用户允许另冻 `v16-posthoc replay
 12 个公开 shard/264 行和 private index；独立 `verify` 从父 acquisition 与排除清单完整重算，结果为
 `PASS_PRIOR_V17_PACKAGE_INDEPENDENT_RECOMPUTE`、`mismatches=[]`。proposal/package-report/
 verification/private-index SHA-256 为 `885fff97…4545` / `b1866207…298d` / `6860f26b…cd4a` /
-`e9d7be2…541d`。每侧自然样本共需 855 个 binary decision。当前 label/evaluation/feature/training 均未
-开始；下一动作只允许分别运行 A/B launch prompt，严格预检完成后再执行唯一一次 evaluator。
+`e9d7be2…541d`。每侧自然样本共需 855 个 binary decision。这是标注前状态；随后分别运行 A/B
+launch prompt，严格预检完成后再执行了唯一一次 evaluator。
 
 A/B 六片随后全部完成，严格前检通过。冻结 evaluator 只运行一次并返回
 `STOP_PRIOR_V17_MECHANICAL_KEY_BINARY_SMOKE`；报告 hash=`3235aec6…64c`。自然部分明显优于 v16：
@@ -1183,6 +1183,36 @@ natural gates 都通过。唯一失败是 A/B controls 均 `8/12`。
 替代的早期方程判为冗余，B 把 Key 已自含的换算事实判为冗余。不得据此修改 v17 control 或翻转 STOP；
 96 条仍永久 nontrainable。按结果前用户授权，下一步冻结隔离 `v16-posthoc replay`，使用修正后的
 删除规则重新标原 v16 population，并明确把它限制为 post-hoc 数据构建证据。
+
+### Prior v16-posthoc mechanical/binary replay：包已冻结，等待双标
+
+用户在 v17 结果揭晓前已授权失败时回退到 v16。提交
+`0928c257b242c5eb2e83c716c19dbc8415d78465` 因而建立单独的
+`configs/data_expansion_prior_v16/posthoc_binary_v1` 和
+`run_artifacts/data_expansion_prior_v16_posthoc_binary_v1`；不覆盖 v16/v17 文件，也不改变两个 STOP。
+这不是 prospective scale：旧 v16 population 已参与 target 诊断，最多只能构造 post-hoc Silver
+训练数据；任何 ranking/泛化确认仍须换全新 query/cluster。
+
+冻结 selector 不读取 v16/v17 标签或模型置信度，只把 v17 机械编译器应用到原 v16 的全部 600 条。
+490 条通过（386 train、104 dev，490 个不同 query/cluster），72 条因 answer-producing calculation
+后存在不安全计算而拒绝，38 条因没有显式答案计算而拒绝。每条至少两个 residual block；每侧共需
+4092 个二分类判断，均值 8.351/行。题目始终可见；纯题面复述默认可删，但新建并被后续采用的变量/
+方程、以及题目未给出却被 Key 采用的换算常数仍算 used。12 个 control 的 expected label 在新标签
+出现前按这一书面规则重写；这吸收 v17 教训，但不回写 v17。
+
+每侧十片，每片 49 natural +5 跨片 repeat；12 个 control 轮转后 00/01 为 56 行，02--09 为 55 行，
+每侧总计 552 行。全局门沿用 v17 的 controls、repeat、agreement、κ、row exact、Complete IoU/
+coverage、双类别支持和反退化检查。只有全部全局门通过才可发布；发布规则也预先锁死：任一 natural
+为 low，或任一已有 repeat 为 low/目标漂移，则排除 parent；不得按跨标注者 agreement、IoU、题源、
+correctness 或难度挑容易样本；剩余行全部发布，residual 分歧只 mask 对应 Complete token。发布后
+train/dev 至少须为 360/90。
+
+`prepare` 状态为 `PASS_PRIOR_V16_POSTHOC_BLIND_PACKAGES_READY`；独立完整重算为
+`PASS_PRIOR_V16_POSTHOC_PACKAGE_INDEPENDENT_RECOMPUTE`、`mismatches=[]`。proposal/package-report/
+verification/private-index hash=`08ab3daa…8cdb` / `4e9b6cfe…3724` / `75998edf…014c` /
+`3e0e5673…79a7`。当前尚无 replay label、raw gate report、Silver materialization、feature 或训练。
+下一步仅运行两份 launch prompt；无需 Phi rollout 或 GPU。只有 evaluator PASS 后才能执行一次
+`materialize` 与独立 `verify-materialized`，之后才讨论 exact-token feature 和探索性 Prior 训练。
 
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
@@ -1415,6 +1445,10 @@ population；不要继续在当前网格上加小数点权重。
    训练，不能把 bridge 写成 v13 pass、把 v14 或 v16 写成可训练。
    v12-posthoc 253-row manifest、506 个 feature、六个 checkpoint、dev/ranking summary 与原失败
    证据并存，不能重命名为原 v12 pass。
+   v17 的 96 条自然样本虽全部机制门通过，但 controls 为 8/12、全局状态仍是 STOP；不得改 control、
+   重跑 evaluator 或训练 smoke 行。隔离的 v16-posthoc 已在提交 `0928c25` 冻结并独立复算 490 条、
+   20 个公开 shard；下一步只运行 A/B launch prompt。双标与全部冻结门通过前不得 materialize、抽
+   feature 或训练，也不能把 post-hoc replay 写成原 v16/v17 通过。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；
    它通过 Gate/Prior 对齐门，却在 K=16 三 seed 全负。不得在这 51 条 Prior dev 或 892 题复用
    ranking 上再调 direct weight、Gate 权重、epoch 或 subset。

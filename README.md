@@ -15,7 +15,7 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
 | Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史 48 条；另有 v12-posthoc 202 train +51 dev；v15 smoke 48 条；v16 已双标 600 条但扩量门失败 | 只允许已登记的探索性 R0/P0；v15 smoke 与 v16 都不可训练 | v12-posthoc 子集能学会 Key/Complete，但未改善最终排序；v15 role-only 小烟测通过，v16 扩到 600 条后暴露出主链边界不稳定，未发布计划中的 400 train +100 dev |
+| Dual Prior | 历史 48 条；另有 v12-posthoc 202 train +51 dev；v15 smoke 48 条；v16 已双标 600 条但扩量门失败；v16-posthoc 已冻结 490 条待双标 | 目前仍只允许已登记的探索性 R0/P0；新 post-hoc 包尚不能训练 | v12-posthoc 子集能学会 Key/Complete，但未改善最终排序；v16-posthoc 只把 v17 的机械 Key/二分类规则用于旧 v16 population，必须过完整双标门后才能发布探索性 Silver |
 
 失败批次不能直接混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8--v14 分别保留各自冻结失败状态；v12 是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，v13 是 `FAIL_PRIOR_V13_SCHEMA`，v14 是 `STOP_PRIOR_V14_MECHANICAL_RECALL_SMOKE`。后续用户另行授权并明确命名的 `v12-posthoc` 只是一条带 easy-sample bias 的探索路线，不修改原门、不重标、不降阈值，也不能写成 v12/v13 通过。v15 的 role-only 小烟测通过，但 48 条 smoke 行无训练资格；同一定义扩大到 600 条的 v16 已完成双标并终止于 `STOP_PRIOR_V16_ROLE_ONLY_SCALE`，没有发布任何 v16 可训练行。
 
@@ -1088,8 +1088,8 @@ numeric match/mismatch 和 medium/long；容量复算得到 96 个不同 query/c
 冻结实现 commit=`b20831f9…e31d`。正式包与独立复算分别为
 `PASS_PRIOR_V17_FRESH_BLIND_PACKAGES_READY` / `PASS_PRIOR_V17_PACKAGE_INDEPENDENT_RECOMPUTE`，
 12 个公开 shard、264 行、`mismatches=[]`。proposal/package-report/verification/private-index hash
-分别为 `885fff97…4545` / `b1866207…298d` / `6860f26b…cd4a` / `e9d7be2…541d`。当前尚无 v17 标签、
-评价、feature 或训练；下一步是独立完成 A/B 六片标注，再只运行一次冻结 evaluator。
+分别为 `885fff97…4545` / `b1866207…298d` / `6860f26b…cd4a` / `e9d7be2…541d`。这是标注前的
+冻结状态；随后才独立完成 A/B 六片标注并只运行一次冻结 evaluator。
 
 两侧 12 个 shard 后续全部完成并通过 schema/ID/block 前检，冻结 evaluator 只运行一次，返回
 `STOP_PRIOR_V17_MECHANICAL_KEY_BINARY_SMOKE`；raw report SHA-256=`3235aec6…64c`。自然样本的
@@ -1101,6 +1101,33 @@ numeric match/mismatch 和 medium/long；容量复算得到 96 个不同 query/c
 冻结规则仍要求 v17 终止，不能事后改 control、重跑 evaluator 或训练 96 条 smoke。按用户事先授权，
 后续另立 `v16-posthoc replay`，在隔离目录把修正后的删除规则用于 v16 旧 population；它不能覆盖原
 v16/v17，也不能被称为前瞻 pass。
+
+### Prior v16-posthoc：490 条机械 Key/二分类包已冻结，等待双标
+
+用户在看到 v17 结果前已经授权“v17 不行就用 v16 重跑”。因此提交 `0928c25` 新建了隔离的
+`v16-posthoc mechanical-binary replay`，没有修改原 v16/v17 的 prompt、标签、报告或 STOP 结论。
+这批数据的 query/cluster 已用于方法开发，所以它只可能成为无人工复核的 post-hoc Silver 训练数据，
+不能当作前瞻验证；未来排序确认仍必须使用全新的 query/template cluster。
+
+程序对原 v16 的 600 条自然候选重新运行已经冻结的机械编译器：490 条能安全找到最终答案计算且至少
+保留两个待判 block，其中 386 条沿用原 train split、104 条沿用原 dev split；72 条因答案计算后仍有
+不安全计算、38 条因没有明确答案计算而拒绝。每位 AI 实际只需做 4092 个 `used|not_used` 判断。
+题目始终可见，纯粹重抄题目条件不算使用；若块建立了后续真正采用的新变量/方程，或提供题目未给出、
+Key 实际使用的单位换算常数，则算使用。这个补充同时用于标注提示词和在任何新标签出现前重写的 12 个
+control 答案，避免重复 v17 的“文字规则与控制答案互相打架”。
+
+A/B 各有 10 个 shard：每片 49 条 natural、5 条跨片 self-repeat；control 共 12 条，所以前两片各
+56 行，其余各 55 行，每侧共 552 行。冻结发布规则不会按 A/B 一致率、IoU、题源、正确性或难度再挑
+容易行：全局门通过后，仅预先排除任一侧 natural 为 low，或任一已有 repeat 为 low/目标漂移的 parent；
+其余自然行全部发布，双方意见不同的 residual block 只把 Complete loss mask 设 0。起始 386/104 行
+还必须分别至少留下 360/90 行。
+
+正式包状态为 `PASS_PRIOR_V16_POSTHOC_BLIND_PACKAGES_READY`，独立复算为
+`PASS_PRIOR_V16_POSTHOC_PACKAGE_INDEPENDENT_RECOMPUTE`，`mismatches=[]`。proposal/package-report/
+verification/private-index SHA-256 分别为 `08ab3daa…8cdb` / `4e9b6cfe…3724` /
+`75998edf…014c` / `3e0e5673…79a7`。当前尚无 post-hoc 标签、评价、materialized Silver、feature 或
+训练；下一步只允许 GPT-5.6 Sol/max 与升级后的 Claude Opus/max 分别完成 A/B 十片公开包。此阶段不需
+Phi rollout，也不需 GPU。
 
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 

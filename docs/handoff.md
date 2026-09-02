@@ -1220,9 +1220,65 @@ GPT-5.6 Sol/max 与升级 Opus/max 完成全部十片。20 个 label 文件严�
 Complete token 只做 mask；完整 output token 为 156901，Key positive 为 9992，Complete positive 为
 52524，Complete supervised 为 151795。`materialize` 与独立复算状态分别为
 `PASS_PRIOR_V16_POSTHOC_SILVER_MATERIALIZATION` / `PASS_PRIOR_V16_POSTHOC_MATERIALIZATION_RECOMPUTE`，
-`mismatches=[]`，Silver JSONL hash=`dd689ae3…21e`。因此 exact-token feature extraction 与探索性
-Prior 训练现已获准，但尚未启动；它们需要 GPU。该 pass 不修改原 v16/v17 STOP，也不支持标签准确性、
-Gate 或排名增益结论；正式确认必须使用全新 query/template cluster。
+`mismatches=[]`，Silver JSONL hash=`dd689ae3…21e`。该 pass 不修改原 v16/v17 STOP，也不支持标签
+准确性、Gate 或排名增益结论；后续虽已完成探索性训练，正式确认仍必须使用全新 query/template cluster。
+
+### Prior v16-posthoc staged training：direct 可学，Full 保住三种机制，ranking 待新题
+
+用户明确授权“你可以开始训”。提交 `eee2c8453cfa6b1d6aba9b3e6ebaaaa8d2a76fca` 在执行前冻结
+`configs/data_expansion_prior_v16/posthoc_training_v1/protocol.json`、准备/预检代码和数据绑定。
+设计分两阶段：Stage 1 比较同一 4,352-row/880-query manifest 上的 R0 与 direct-Prior P0；只有
+P0 的 Key/Complete AUROC/AP/BCE、correctness guard 和六 checkpoint 完整性七项门全部通过，
+Stage 2 才比较同一 5,552-row/1,678-query manifest 上的 CH 与 Full。Full 固定保留 main-style
+`.25` Gate；所有格都是 seeds 42/43/44、3 epochs、batch 4、BF16。H1、Path MIL、pseudo-tail、
+mutual、progress、reconstruction 不在本轮。
+
+新 v16-posthoc 的 488 条 selected trajectory/condition feature 全部按保存的 prompt/output token ID
+抽取；模型 revision=`2fe19245…8b77`，SDPA、BF16、33 层×3072=`101376` 维。488+488 个 tensor
+逐个通过 SHA、shape、dtype、finite 校验，原始 tensor bytes=`42,635,501,568`（约 39.7 GiB）。
+Stage-1 direct manifest 是 3,968 历史行 +384 新 Prior train；历史中另有 48 条 Prior target，所以
+P0 每轮有 432 条 Key/Complete 监督。Stage-2 再接入 800 个 Consistency endpoint/400 个正关系和
+400 条 H0（200 positive +200 clean）。跨模块清理后 H dev 为 197 题，Prior dev 为 104 题；
+Consistency dev 保持 557 endpoint 上 150 positive +150 hard negative relation。
+
+Stage 1 的三 seed 均值：
+
+| 指标 | R0 | P0 | P0−R0 |
+|---|---:|---:|---:|
+| Key AP | `.06361` | `.82057` | `+.75696` |
+| Key AUROC | `.50436` | `.96557` | `+.46121` |
+| Key BCE | `.53641` | `.10153` | `-.43489` |
+| Complete AP | `.35859` | `.93785` | `+.57925` |
+| Complete AUROC | `.52293` | `.96356` | `+.44063` |
+| Complete BCE | `.67719` | `.27225` | `-.40495` |
+| correctness AUROC | `.77846` | `.76885` | `-.00961` |
+
+七项冻结门全部通过，才启动 CH/Full。Stage 2 三 seed 均值：
+
+| 机制指标 | CH | Full | Full−CH |
+|---|---:|---:|---:|
+| Key AP / AUROC | `.07521/.48005` | `.78801/.96482` | `+.71279/+.48476` |
+| Complete AP / AUROC | `.37828/.53571` | `.93380/.95974` | `+.55551/+.42403` |
+| Gate 优于同一 fused prior 下 uniform 的 L2 | `-.00061` | `+.01507` | `+.01568` |
+| H token AP / AUROC | `.81613/.86110` | `.82449/.87224` | `+.00836/+.01114` |
+| H path AP / AUROC | `.79078/.84861` | `.76329/.82535` | `-.02749/-.02326` |
+| H 首错 ±5 token | `.01701` | `.03401` | `+.01701` |
+| Consistency relation AP / AUROC | `.91172/.92080` | `.94148/.94593` | `+.02975/+.02513` |
+| Consistency 正负 cosine 分离 | `.22636` | `.27048` | `+.04412` |
+| Prior-dev correctness AUROC | `.80081` | `.80820` | `+.00739` |
+
+解释边界：Full 确实把 direct Prior 学会，Consistency relation AUROC 和 H token AUROC 的
+Full−CH 差值三个 seed 都为正，因此在这些 Silver 机制集上没有复现“组合后表示机制崩掉”。但 H path
+指标略降且 seed 波动大，path BCE 很差；±5 token 只有 1.7%/3.4%，所以 H0 仍是 tail/path risk，
+不是精确 onset。最重要的是本轮按协议没有复用旧 892-query ranking，也还没有新鲜 ranking population；
+不能从 `.80820 vs .80081` 这种单候选 correctness AUROC 推导 Best-of-N 已提升。此前确认得到的排名推荐
+仍是 CH，直到全新 query/cluster 上至少 U0/CH/Full 完成预注册对比。
+
+12 个 checkpoint 全部 epoch=3、finite，并绑定正确的 train/config/code hash。干净评测提交
+`be1d39a05f2dd1733b34e9a536dcb65049329360` 上 `275 passed`；正式汇总状态为
+`COMPLETE_PRIOR_V16_POSTHOC_STAGED_TRAINING_AND_MECHANISM_EVALUATION`，summary SHA-256=
+`880a11bad8c37b637d0db033cb4dcac7210546f0f1a4a3044b74422657a313b4`。它只支持 post-hoc、
+dual-AI Silver、无人工复核的机制可学习性/兼容性表述；原 v16/v17 STOP 原样保留。
 
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
@@ -1457,8 +1513,9 @@ population；不要继续在当前网格上加小数点权重。
    证据并存，不能重命名为原 v12 pass。
    v17 的 96 条自然样本虽全部机制门通过，但 controls 为 8/12、全局状态仍是 STOP；不得改 control、
    重跑 evaluator 或训练 smoke 行。隔离的 v16-posthoc 已完成 20 个公开 shard 双标、唯一一次冻结
-   评价与独立物化复算，发布 384 train +104 dev post-hoc Silver；现在只允许 selected-only exact-token
-   feature 与探索性训练。不得把该 replay 写成原 v16/v17 通过，也不得用旧 query/cluster 作确认性排名。
+   评价与独立物化复算，发布 384 train +104 dev post-hoc Silver；selected-only exact-token feature、
+   R0/P0 与 CH/Full 三 seed 探索性训练和三类机制评测也已完成。不得把该 replay 写成原 v16/v17 通过，
+   不得在 104/197/557-row 机制集上继续调权重、epoch、subset，也不得用旧 query/cluster 作确认性排名。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；
    它通过 Gate/Prior 对齐门，却在 K=16 三 seed 全负。不得在这 51 条 Prior dev 或 892 题复用
    ranking 上再调 direct weight、Gate 权重、epoch 或 subset。
@@ -1470,9 +1527,10 @@ population；不要继续在当前网格上加小数点权重。
    H0×Prior 交互诊断和新的 query/cluster-disjoint ranking population 一起预注册。
 
 当前裁决是：C、H0、direct Prior/Gate 都建立了各自 Silver 机制可学习性；H0 更像 tail/path
-风险头而不是精确首错定位器。完整组合没有把机制收益相加：新的独立 confirmation 上 CH
-`94.458%`、Full `93.917%`，Full−CH 按冻结规则为 harm；Full 仍比 U0 高 `1.208` points。
-因此当前训练数据的 ranking 推荐是 CH，`.25` Gate 只是保留的 main-style 工程默认，不是 Full
-efficacy 结论。H1 与 mutual 没有因本轮获得新证据，原 v7/v12/v13 也仍不能写成通过。
+风险头而不是精确首错定位器。此前新题 confirmation 上 CH=`94.458%`、Full=`93.917%`，Full−CH
+按冻结规则为 harm，因此当前 ranking 推荐仍是 CH。新 v16-posthoc 扩充监督下，Full 同时保住了
+Key/Complete、H0 token 与 Consistency relation 机制，没有出现表示层面的组合崩坏；但它没有新鲜
+Best-of-N 数据，不能翻转旧排名结论。`.25` Gate 仍是 main-style 工程默认，不是 Full efficacy 结论。
+H1 与 mutual 没有因本轮获得新证据，原 v7/v12/v13/v16/v17 也仍不能写成通过。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

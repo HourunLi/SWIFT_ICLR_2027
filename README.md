@@ -13,9 +13,9 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 | 数据层 | 现有规模 | 现在能否训练 | 准确含义 |
 |---|---:|---|---|
 | Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
-| Consistency | 27 个 compact/expanded 正 pair（54 个 view）+702 个负 pair | 是，但只够筛选实验 | 同一道题、同一路径的一简一详应得到接近表示；没有独立 held-out relation set |
+| Consistency | 历史 27 个 compact/expanded 正 pair +702 个负 pair；v6.1 新增 400 个训练正关系、150 正+150 难负 held-out 关系 | v6.1 可作探索性训练和独立关系评测 | 同一道题、同一路径的一简一详应得到接近表示；新关系集已完成 query/template-cluster 隔离，但仍是双 AI Silver |
 | Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史 48 条；v12-posthoc 202 train +51 dev；v15 smoke 48 条；v16 扩量门失败；v16-posthoc 已发布 384 train +104 dev | v12-posthoc 与 v16-posthoc 只允许探索性训练 | v12-posthoc 能学会 Key/Complete，但未改善最终排序；v16-posthoc 用机械 Key + 双 AI 二分类得到 488 条无人工复核的 post-hoc Silver，尚未做 feature、训练或排名验证 |
+| Dual Prior | 历史 48 条；v12-posthoc 202 train +51 dev；v15 smoke 48 条；v16 扩量门失败；v16-posthoc 384 train +104 dev | v12-posthoc 与 v16-posthoc 只允许探索性训练 | v12-posthoc 能学会 Key/Complete，但未改善最终排序；v16-posthoc 已完成 selected-only feature、R0/P0 与 CH/Full 各三 seed 训练，证明新 Key/Complete Silver 可学且未挤掉 C/H0 机制，但尚无新鲜排名验证 |
 
 失败批次不能直接混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8--v14 分别保留各自冻结失败状态；v12 是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，v13 是 `FAIL_PRIOR_V13_SCHEMA`，v14 是 `STOP_PRIOR_V14_MECHANICAL_RECALL_SMOKE`。后续用户另行授权并明确命名的 `v12-posthoc` 只是一条带 easy-sample bias 的探索路线，不修改原门、不重标、不降阈值，也不能写成 v12/v13 通过。v15 的 role-only 小烟测通过，但 48 条 smoke 行无训练资格；同一定义扩大到 600 条的 v16 已完成双标并终止于 `STOP_PRIOR_V16_ROLE_ONLY_SCALE`，没有发布任何 v16 可训练行。
 
@@ -1134,9 +1134,40 @@ block coverage 预检均通过，冻结 evaluator 只运行一次并返回
 149 行含有局部 A/B 分歧，这些 residual 位置按预注册规则 mask，不强行取某一方。`materialize` 与
 独立 `verify-materialized` 分别返回 `PASS_PRIOR_V16_POSTHOC_SILVER_MATERIALIZATION` 和
 `PASS_PRIOR_V16_POSTHOC_MATERIALIZATION_RECOMPUTE`，`mismatches=[]`；raw gate report 与 Silver
-JSONL SHA-256 分别为 `05b55f2b…26bf`、`dd689ae3…21e`。现在允许抽 exact-token feature 并做探索性
-Prior 训练；尚未开始 feature、训练或 ranking。原 v16/v17 STOP 不变，这批无人工复核的 post-hoc
-Silver 不能证明标签客观准确、Prior 有效或 Best-of-N 提升，后续确认仍必须使用全新 query/cluster。
+JSONL SHA-256 分别为 `05b55f2b…26bf`、`dd689ae3…21e`。原 v16/v17 STOP 不变，这批无人工复核的
+post-hoc Silver 不能证明标签客观准确；后续训练也只能提供探索性机制证据，最终排序确认仍必须使用
+全新 query/cluster。
+
+### Prior v16-posthoc：selected feature 与分阶段训练已完成
+
+用户授权“可以开始训”后，提交 `eee2c84` 冻结了
+[`posthoc_training_v1`](configs/data_expansion_prior_v16/posthoc_training_v1/protocol.json)：先跑
+`R0=correctness-only` 对 `P0=direct Key/Complete`，只有冻结的 Prior learnability 七项门全部通过，
+才允许跑 `CH=Consistency+H0` 对 `Full=CH+direct Prior+main-style .25 Gate`。所有格固定
+seeds 42/43/44、3 epochs；H1 negative-tail、Path MIL、pseudo-onset tail、mutual、progress 和
+reconstruction 全关。R0/P0 共用 4,352 行、880 题；CH/Full 共用 5,552 行、1,678 题，其中
+Consistency 为 400 正关系、H0 为 200 positive +200 clean、Prior 为旧 48 +新 384 条监督。
+
+488 条 selected-only trajectory 与 condition feature 均按保存 token ID 抽取为 BF16
+`33×3072=101376` 维并逐 tensor 验证，原始 tensor 约 39.7 GiB。12 个 checkpoint 都完成 3 epoch，
+参数、optimizer/metrics、配置/数据/code provenance 均 finite 且 hash 一致；全量测试为
+`275 passed`。104-row Prior dev 上，Stage-1 P0 的 Key/Complete AUROC 为 `.96557/.96356`，
+AP 为 `.82057/.93785`，而 R0 接近随机；correctness AUROC 只变动 `-.00961`，七项门全部通过。
+
+在相同 5,552 行组合训练上，Full 的 Key/Complete AUROC 为 `.96482/.95974`，而 CH 为
+`.48005/.53571`；说明 direct Prior 在三模块里仍学得会。Full 相对 CH 的 H0 token AUROC
+`.87224 vs .86110`、Consistency relation AUROC `.94593 vs .92080`，三个 seed 的两项 AUROC
+差值均为正；同一 Prior dev 上 correctness AUROC 为 `.80820 vs .80081`。因此这次没有看到旧小数据
+里“Full 把 C/H0 机制挤掉”的现象。限制同样明确：H path AUROC 从 CH `.84861` 到 Full `.82535`，
+方向混合且 path BCE 很差；首错 ±5 token 命中率也只有 CH `1.70%`、Full `3.40%`，H0 仍只能称
+坏尾部/路径风险信号，不能称精确首错定位器。
+
+干净提交 `be1d39a` 上的正式汇总状态为
+`COMPLETE_PRIOR_V16_POSTHOC_STAGED_TRAINING_AND_MECHANISM_EVALUATION`，报告 SHA-256=
+`880a11ba…a313b4`。这是无人工复核、post-hoc Silver 的机制可学习性与兼容性证据，不是
+Best-of-N 效果证据；本轮没有打开旧 892 题，也没有生成新的 ranking population。因此当前排名推荐
+仍沿用此前新题确认得到的 CH，下一步必须先冻结全新的 query/template-cluster-disjoint 排名集，
+再比较至少 U0/CH/Full，不能在这 104-row Prior dev 或 197-row H dev 上调权重、epoch 或子集。
 
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 
@@ -1309,6 +1340,9 @@ pytest -q
   另立的 post-hoc exact 子集新增 202 train +51 dev，证明 direct Key/Complete 可学，但复用
   ranking 上 gate-off BoN@16 无增益、BoN@8 三 seed 一致回退；固定 `.25` Gate 虽学到
   Prior 对齐，却在 BoN@16 三 seed 全负，也不能替代新的确认性数据。
+- v16-posthoc 另有 384 个新 Prior train +104 dev；selected-only feature、R0/P0 和 CH/Full
+  三 seed 已完成。它把 Full 的 Key/Complete、H0 token 和 Consistency relation 机制同时保住，
+  但没有新鲜 Best-of-N population，不能覆盖此前 CH 的排名推荐，也不能据此宣称 Full 已提升最终选择。
 - clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代缺失的数据 provenance 上游与 protected-test protocol。
 - clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired
   summarizer；v6.1 新增了单独的 held-out consistency relation evaluator，但尚未重建

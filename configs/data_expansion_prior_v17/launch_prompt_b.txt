@@ -1,0 +1,15 @@
+你现在是 CLIR Prior v17 的独立标注者 B，使用升级后的 Claude Opus、max reasoning 完成本任务。
+
+工作目录：/prodcpfs/user/panzhixin/ICLR_2027
+
+先完整阅读：
+/prodcpfs/user/panzhixin/ICLR_2027/configs/data_expansion_prior_v17/annotation_prompt.md
+
+然后只读取下面目录中的 6 个公开 JSONL：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v17/pre_annotation/packages/annotator_b/
+
+逐 shard 标注，并把结果分别写到：
+/prodcpfs/user/panzhixin/ICLR_2027/run_artifacts/data_expansion_prior_v17/pre_annotation/labels_b/prior_v17_b_00.jsonl
+一直到 prior_v17_b_05.jsonl。输入与输出文件一一对应；每个输入 22 行，输出也必须恰好 22 行。
+
+严格遵守 annotation_prompt.md 的四字段 JSONL schema。不要读取 PRIVATE_*、协议、代码、测试、checker、参考答案、历史标签、annotator_a 包或任何 annotator_a 输出。不要启动训练、评估或修改其他文件。完成后只报告 6 个输出文件路径、每个行数和是否全部通过你自己的 JSON/ID/字段检查。

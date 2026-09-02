@@ -1141,6 +1141,29 @@ v16 没有发布 Silver manifest、feature 或训练。必须原样保留两侧�
 排除明显 heading/premise/formula/wrapper/duplicate，再让双 AI 只做剩余 block 的二元“是否被最终
 计算实际使用”判断；先过新的 smoke，再谈扩量和 GPU 训练。
 
+### Prior v17 mechanical-Key/binary smoke：协议与实现已冻结，尚未标注
+
+v17 使用全新 schema，不修复 v16。只读 v16 归因用于确定“应简化哪种表示”，没有把 v16 标签拿来
+选 v17 行或当 v17 标签。selector 永久排除 v12--v16 共 1544 个 query/cluster，从剩余 acquisition
+选出 96 条 query/cluster-disjoint natural：GSM8K 84、MATH 12，并覆盖 match/mismatch、medium/long。
+MATH fresh 容量已经很小（各格可用 query 为 9/9/2/4），所以本轮是验证定义的 smoke，不是假装一次
+完成正式扩量；若通过，scale-v18 需要新增 acquisition 才能保持题源配额和真正余量。
+
+`src/clir_prior_binary_v17.py` 先机械固定最后一条安全、显式且包含候选数值答案的计算为 Key；机械
+排除 exact duplicate、答案包装、无新计算的题面复述/计划/标题、未代入通用公式以及全部安全 Key
+后缀。找不到安全 Key、后缀仍有计算、或残余少于两个 block 的行不会进入 proposal。选中 96 条的
+平均残余负担为 8.906 block/行，平均机械负例 7.771 block/行。
+
+AI schema 只有四个字段：`item_id,residual_decisions,confidence,rationale`；每个残余 block 只选
+`used|not_used`。判断方式是从固定 Key 反向做删除测试，照候选实际路线判断，算错也不修。两边共同
+used 加机械 Key 形成 Complete 正例，共同 not-used 加机械排除形成负例，分歧残余遮住。没有 path、
+onset、role、final、edge 或自由集合输出。每侧 6 shard ×22 行=`16 natural+2 control+4 repeat`，
+共 132 行；A/B launch prompt 已分别锁定 GPT-5.6 Sol/max 和升级 Opus/max。
+
+冻结门和执行命令见 `docs/data_expansion_prior_v17_smoke.md`。这 96 条永久 nontrainable；PASS 只开放
+fresh scale-v18。若 v17 terminal fail，用户允许另冻 `v16-posthoc replay`，但必须使用独立目录、
+报告与名称，不覆盖原 v16，也不能把 replay 写成 prospective v16 pass。
+
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
 用户随后明确选择“V12吧”，授权的不是修复原 v12，而是单独命名的事后探索路线。

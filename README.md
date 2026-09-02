@@ -1071,6 +1071,20 @@ protocol/proposal/package-report/verification/private-index SHA-256 分别为
 Prior，必须另立前瞻版本并使用全新 query/cluster，先把 final block 机械冻结、把显然的标题/复述/
 纯公式/答案包装机械排除，再让双 AI 只判断剩余 block 是否被最终计算实际使用。
 
+### Prior v17：机械 Key + 剩余 block 二分类已冻结，等待双标
+
+[`docs/data_expansion_prior_v17_smoke.md`](docs/data_expansion_prior_v17_smoke.md) 与
+[`protocol.json`](configs/data_expansion_prior_v17/protocol.json) 将 v16 的规模失败转化为更窄的新任务。
+程序先固定最后一条明确产出候选数值答案的计算为 Key，并机械排除计划/标题、题面复述、未代入的
+通用公式、重复、答案包装和 Key 后总结；两个 AI 只需从 Key 往回判断其余 block 是 `used` 还是
+`not_used`。它们不再判断 path、final block、七类 role、依赖边、Key 或 Complete。
+
+96 条 natural 全部来自未被 v12--v16 使用的新 query/template cluster：84 GSM8K、12 MATH，覆盖
+numeric match/mismatch 和 medium/long；容量复算得到 96 个不同 query/cluster，平均每行只需判
+约 8.9 个残余 block。每侧 6 个 22-row shard，含 12 个隐藏控制和 24 个跨 shard repeat。v17 是
+非训练 prompt-development smoke；通过只允许另冻 fresh scale-v18，失败才允许另立隔离命名的
+`v16-posthoc replay`，不能覆盖或翻转原 v16 的失败结论。
+
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 
 用户随后明确选择“V12吧”，因此新建了独立的

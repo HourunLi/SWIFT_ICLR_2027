@@ -1028,6 +1028,32 @@ v14-dev 在旧 bridge 上看到的候选召回没有在 fresh 样本上复现，
 也不训练。后续若继续 Prior，应先把依赖图更大比例机械化或改变 Key 定义，再用全新
 query/cluster 另冻版本；不能再消费 v14 标签来调同一门。
 
+### Prior v15-dev role-only target：开发回放通过，尚未 fresh 标注
+
+`diagnose_clir_prior_role_v15.py` 对 v14 的 48 条自然 parent 与 32 条跨 shard repeat 做了只读
+目标投影，没有修改任何 v14 标签或终止报告。诊断显示旧 Key 的 11/48 个分歧全部落在
+`flawed|flawed` 行；双方都判为 supported 的 26 行 Key 全部一致。这说明把“最早致命错误”放进
+Prior Key，会让 Prior 重复承担 H0 的首错任务，也是 H×P 冲突的一个明确语义风险。
+
+新文件 `src/clir_prior_role_v15.py` 定义一个更简单且与 main 的 support-prior 身份更一致的候选
+目标：AI 只审每个 deterministic block 的角色、`path_status` 和 `final_block_id`；程序令
+`Complete=全部 main_step blocks`，`Key=final main_step block`。无论路径正确还是错误，Key 都是
+结构上的答案决定步骤；错误从哪里开始继续只由 H 负责。这样不需要候选依赖边，也不要求 AI
+直接输出 Key/Complete，同时保持原始 unit index 到 exact-token target 的映射和现有
+Key/Complete head、loss、coverage mask、Gate 接口不变。
+
+post-hoc 投影状态为 `PASS_POSTHOC_PRIOR_ROLE_V15_DEV_REPLAY`：结构 Key exact/F1=
+`.916667/.916667`；role-derived Complete F1/IoU/coverage=
+`.918497/.857186/.923564`；role agreement=`.888262`；A/B projected target repeat 都是
+`16/16`；all-material union rate=`0`。针对新语义另加了 fresh controls，包括“候选引入的变量
+定义属于 main_step”和“错误链的结构 Key 仍是 final calculation”。针对测试与整仓测试分别为
+`4 passed`、`252 passed`。
+
+这是 target-design 的 post-hoc 开发证据，不是 v14 翻盘，也没有测试新提示词在 fresh 样本上的
+可操作性。不能从投影结果生成训练标签。下一动作是单独冻结 v15 fresh role-only smoke，排除
+v12/v13/v14 全部 proposal query/cluster，再由两种 max-reasoning 模型盲标；只有所有 fresh 门
+通过，才允许另立 scale 版本。
+
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
 用户随后明确选择“V12吧”，授权的不是修复原 v12，而是单独命名的事后探索路线。

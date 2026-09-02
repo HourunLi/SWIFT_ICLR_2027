@@ -975,6 +975,26 @@ agreement 为 `.8883/.8998`，这些门均通过。失败集中在依赖召回�
 规则，不能修控制题、改 prompt/阈值、裁决、重标、挑选 48 条中的子集，也不能启动 scale-v15、
 抽 feature 或训练 v14；这些标签只保留作失败诊断。
 
+### Prior v15-dev：去掉依赖边，让 H 与 Prior 各司其职
+
+v14 的只读失败诊断发现，11 条 Key 分歧全部来自双方都判为 `flawed` 的路径：两个 AI 对
+“最早哪一步算致命错误”意见不同；26 条双方都判为 `supported` 的路径没有一条 Key 分歧。
+这说明旧 Key 口径实际上重复了 H0 的首错定位任务。与此同时，v14 的 block role agreement
+已经达到 `.8883`，用 `main_step` 角色直接机械生成 Complete，并没有损失 Complete 稳定性。
+
+新原型 `src/clir_prior_role_v15.py` 因此只让 AI 判断 block 角色、路径是否有错和最终完成答案的
+block；不再输出依赖边、Key 或 Complete。程序固定生成：`Complete = 所有 main_step block`，
+`Key = final main_step block`。错误链的首错仍完全交给 H，Prior 只表示“哪些步骤构成候选实际
+答案、最终决定答案的是哪一步”。训练侧仍得到相同的 exact-token Key/Complete target，因此不改
+现有 Prior head、loss、Gate 或 manifest tensor 接口。
+
+`diagnose_clir_prior_role_v15.py` 对 v14 标签的 post-hoc target projection 得到
+`PASS_POSTHOC_PRIOR_ROLE_V15_DEV_REPLAY`：结构 Key exact/F1=`.9167/.9167`，角色生成的
+Complete F1/IoU/coverage=`.9185/.8572/.9236`，role agreement=`.8883`，A/B projected repeat
+均为 `16/16`，Complete=全集比例为 0。该结果只证明新定义值得进入 fresh smoke；它不修复 v14，
+也没有验证新 prompt/control、发布标签、抽 feature 或授权训练。下一步必须先冻结并运行全新
+query/cluster-disjoint v15 role-only smoke。
+
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 
 用户随后明确选择“V12吧”，因此新建了独立的

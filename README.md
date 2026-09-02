@@ -920,6 +920,28 @@ Complete 稳定性结果。报告 SHA-256 为 `179d1006…577f`，且 `trainable
 启动 v14、抽 feature 或训练 v13。若仍要使用 v12 严格共识子集，只能另立明确的 post-hoc
 探索版本，并保留 v12/v13 的失败结论。
 
+### Prior v13 max 桥接与未来候选边开发：机械回放通过，仍非训练数据
+
+在上述冻结终局之后，用户明确说明旧 B 使用了错误模型，并另行授权 GPT-5.6-sol/max 与新版
+Opus/max 对原公开包做一次隔离的 bridge 复标。新结果写入独立 ignored 目录，没有覆盖 v13
+原标签或原报告；新版 Opus 的精确 revision 仍未验证。A/B 各 4 shard、72 行全部通过
+JSON/schema/ID 检查，controls 均为 `8/8`，self-repeat target/Key/Complete 均为 `16/16`。
+48 条自然样本的 path/final/Key 一致率为 `1/.9375/.875`，Complete F1/IoU/coverage 为
+`.88796/.81109/.90900`。因此 max bridge 解决了原 schema 与重复稳定性问题，但 Complete F1
+仍略低于 `.90`，且旧 top-2 候选器迫使 A/B 在 `.625/.667` 的行上自行补依赖边。
+
+新文件 `src/clir_prior_edge_candidates_v14.py` 不修改 v13 compiler，而是作为 post-hoc 开发器：
+规范化逗号数字与简单 LaTeX 分数，优先找实际计算结果而非后续复述，为每个显式数值/变量保留
+最近生产者，并把每个 child 的候选父节点动态限制在 2--6 个。只读入口
+`diagnose_clir_prior_edge_candidates_v14.py` 在 bridge 上覆盖双方共同补出的 `26/26` 条边；按
+单边看覆盖 A=`38/43`、B=`48/50`，剩余漏边行率降到 `.1042/.0417`。候选负担从每行
+`23.65` 增至 `33.46`（`1.415x`），任何 child 最多 6 条，开发检查全部通过。
+
+这只是 `PASS_POSTHOC_EDGE_CANDIDATE_V14_DEV_REPLAY`：它不把 v13 改成通过，不发布训练标签，
+也不授权 feature/training。下一步只能先冻结一个使用全新 query/cluster、精确记录两边模型和
+`max` 档位的独立新版本，再检查新候选上的真实 `keep/drop` 一致率与 residual missing-edge；
+不能把 bridge 的补边答案直接硬编码进新包。
+
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 
 用户随后明确选择“V12吧”，因此新建了独立的

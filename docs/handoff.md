@@ -954,6 +954,34 @@ IoU/coverage、role 或 edge 指标；不能把“只有一个 schema 错误”�
 通过。v13 到此终止，不启动 v14、不抽 feature、不训练 smoke。以后若用 v12 子集，只能另立
 post-hoc exploratory 版本，并明确不构成 v12 或 v13 翻盘。
 
+### Prior v13 max bridge 与候选边 v14-dev：旧结论不变，机械召回问题已缓解
+
+v13 终止后，用户澄清旧 B 实际使用了错误模型，并明确授权两边提高推理强度。GPT-5.6-sol/max
+与新版 Opus/max 在两个隔离上下文中重标原公开 4+4 shard，分别写入
+`labels_a_max_bridge`/`labels_b_max_bridge`，没有覆盖冻结标签。新版 Opus 精确型号/revision
+尚未机器验证，因此本轮只能叫 post-hoc bridge。八个文件各 18 行，JSON、schema、唯一 ID 和
+package binding 全过；两边 controls=`8/8,8/8`，self-repeat target/Complete/Key 均为
+`16/16`。自然 48 条上 eligibility/path=`1/1`，final-block=`.9375`、Key=`.875`、Complete
+F1/IoU/coverage=`.887958/.811093/.909000`，role/原候选 edge agreement=`.853222/.863436`。
+
+剩余主 blocker 已转成旧机械候选召回：A/B 分别在 `.625/.6667` 的自然行使用 `missing_edges`；
+43/50 条补边中各有 30 条对应 child 已占满 v13 的两个候选。双方补边的交集为 26、并集为 67，
+所以既不能降低 missing-edge 门，也不能把单边自由补边直接并入 Complete。
+
+用户随后授权改进机械候选。为保持 v13 可复现，新增的
+`src/clir_prior_edge_candidates_v14.py` 与 `diagnose_clir_prior_edge_candidates_v14.py` 完全旁路
+旧 compiler/evaluator：它修正逗号数和简单 LaTeX fraction，区分实际数值生产步骤与后续复述，
+按显式 operand/变量保留最近生产者，跳过抢占邻接槽位的标题/计划，并把每个 child 的候选动态
+限制为 2--6。post-hoc bridge 回放状态为 `PASS_POSTHOC_EDGE_CANDIDATE_V14_DEV_REPLAY`：共同
+补边召回 `26/26=1`，单边召回 A=`38/43=.8837`、B=`48/50=.96`，剩余漏边行率
+`.1042/.0417`；候选均值 `23.65→33.46`、总量 `1135→1606`（`1.415x`），最大 6 parent/child。
+
+这一结果只支持“新候选规则值得进入前瞻性 fresh smoke”。它不修改
+`FAIL_PRIOR_V13_SCHEMA`，bridge 不是训练数据，也没有重新测新候选上的 A/B `keep/drop`，所以
+不能从旧标签机械推导新 Complete 后训练。正式下一步是先冻结独立新协议、排除 v12 proposal
+与 v13 的全部 query/cluster、记录 GPT-5.6-sol/max 和新版 Opus/max 的精确身份，然后才生成
+新包；在 fresh gate 通过前不抽 feature、不训练 Prior。
+
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 
 用户随后明确选择“V12吧”，授权的不是修复原 v12，而是单独命名的事后探索路线。
@@ -1174,8 +1202,10 @@ population；不要继续在当前网格上加小数点权重。
    解码方法，而不是把本轮 0% exact 用调阈值包装成成功。
 4. Prior v8--v13 都必须保持终止状态。保存 v12 的 32 个标签 shard、raw report 和独立复算，
    不发布其 prospective 400 train +100 dev、不重标 controls/repeats、不改原门；v13 不删除错误
-   control role、不重跑、不启动 v14。另立的 v12-posthoc 253-row manifest、506 个 feature、六个
-   checkpoint、dev/ranking summary 与原失败证据并存，不能重命名为原 v12 pass。
+   control role、不覆盖原标签或原报告。后来另行授权的 max bridge 与 v14-dev 候选回放只能作
+   post-hoc 开发证据；若继续，必须另冻全新 query/cluster 的协议，不能把 bridge 写成 v13 pass。
+   v12-posthoc 253-row manifest、506 个 feature、六个 checkpoint、dev/ranking summary 与原失败
+   证据并存，不能重命名为原 v12 pass。
 5. 保留已完成的 P0/固定 `.25` PG0 三 seed 实验、机制报告、ranking scores 和 completion hash；
    它通过 Gate/Prior 对齐门，却在 K=16 三 seed 全负。不得在这 51 条 Prior dev 或 892 题复用
    ranking 上再调 direct weight、Gate 权重、epoch 或 subset。

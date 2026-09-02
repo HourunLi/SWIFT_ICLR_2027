@@ -51,3 +51,14 @@ python prepare_clir_prior_binary_v17.py evaluate
 
 完整冻结字段、父文件 hash、配额、模型边界和 fallback 见
 `configs/data_expansion_prior_v17/protocol.json`。
+
+## 标注前冻结结果（2026-09-02）
+
+代码与协议提交为 `b20831f9cf10a803d46d64542fa6fc704a20e31d`。正式包状态是
+`PASS_PRIOR_V17_FRESH_BLIND_PACKAGES_READY`，随后从源 acquisition、历史排除清单和冻结 selector
+独立重算，得到 `PASS_PRIOR_V17_PACKAGE_INDEPENDENT_RECOMPUTE`、`mismatches=[]`。两侧合计 12 个
+公开 shard、264 行；每侧 natural 的残余二分类判断量为 855 个，不需要 GPU。
+
+proposal/package-report/verification/private-index 的 SHA-256 依次为
+`885fff97…4545` / `b1866207…298d` / `6860f26b…cd4a` / `e9d7be2…541d`。当前没有 label、evaluation、
+feature 或训练；下一步只能让两个独立模型分别完成 A/B 公共包，再运行一次冻结 evaluator。

@@ -1071,7 +1071,7 @@ protocol/proposal/package-report/verification/private-index SHA-256 分别为
 Prior，必须另立前瞻版本并使用全新 query/cluster，先把 final block 机械冻结、把显然的标题/复述/
 纯公式/答案包装机械排除，再让双 AI 只判断剩余 block 是否被最终计算实际使用。
 
-### Prior v17：机械 Key + 剩余 block 二分类已冻结，等待双标
+### Prior v17：机械 Key + 剩余 block 二分类正式包已就绪
 
 [`docs/data_expansion_prior_v17_smoke.md`](docs/data_expansion_prior_v17_smoke.md) 与
 [`protocol.json`](configs/data_expansion_prior_v17/protocol.json) 将 v16 的规模失败转化为更窄的新任务。
@@ -1084,6 +1084,12 @@ numeric match/mismatch 和 medium/long；容量复算得到 96 个不同 query/c
 约 8.9 个残余 block。每侧 6 个 22-row shard，含 12 个隐藏控制和 24 个跨 shard repeat。v17 是
 非训练 prompt-development smoke；通过只允许另冻 fresh scale-v18，失败才允许另立隔离命名的
 `v16-posthoc replay`，不能覆盖或翻转原 v16 的失败结论。
+
+冻结实现 commit=`b20831f9…e31d`。正式包与独立复算分别为
+`PASS_PRIOR_V17_FRESH_BLIND_PACKAGES_READY` / `PASS_PRIOR_V17_PACKAGE_INDEPENDENT_RECOMPUTE`，
+12 个公开 shard、264 行、`mismatches=[]`。proposal/package-report/verification/private-index hash
+分别为 `885fff97…4545` / `b1866207…298d` / `6860f26b…cd4a` / `e9d7be2…541d`。当前尚无 v17 标签、
+评价、feature 或训练；下一步是独立完成 A/B 六片标注，再只运行一次冻结 evaluator。
 
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 

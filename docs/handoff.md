@@ -1141,7 +1141,7 @@ v16 没有发布 Silver manifest、feature 或训练。必须原样保留两侧�
 排除明显 heading/premise/formula/wrapper/duplicate，再让双 AI 只做剩余 block 的二元“是否被最终
 计算实际使用”判断；先过新的 smoke，再谈扩量和 GPU 训练。
 
-### Prior v17 mechanical-Key/binary smoke：协议与实现已冻结，尚未标注
+### Prior v17 mechanical-Key/binary smoke：正式双标包已就绪
 
 v17 使用全新 schema，不修复 v16。只读 v16 归因用于确定“应简化哪种表示”，没有把 v16 标签拿来
 选 v17 行或当 v17 标签。selector 永久排除 v12--v16 共 1544 个 query/cluster，从剩余 acquisition
@@ -1163,6 +1163,13 @@ onset、role、final、edge 或自由集合输出。每侧 6 shard ×22 行=`16 
 冻结门和执行命令见 `docs/data_expansion_prior_v17_smoke.md`。这 96 条永久 nontrainable；PASS 只开放
 fresh scale-v18。若 v17 terminal fail，用户允许另冻 `v16-posthoc replay`，但必须使用独立目录、
 报告与名称，不覆盖原 v16，也不能把 replay 写成 prospective v16 pass。
+
+冻结实现 commit=`b20831f9cf10a803d46d64542fa6fc704a20e31d`。`prepare` 已发布 96 条 proposal、
+12 个公开 shard/264 行和 private index；独立 `verify` 从父 acquisition 与排除清单完整重算，结果为
+`PASS_PRIOR_V17_PACKAGE_INDEPENDENT_RECOMPUTE`、`mismatches=[]`。proposal/package-report/
+verification/private-index SHA-256 为 `885fff97…4545` / `b1866207…298d` / `6860f26b…cd4a` /
+`e9d7be2…541d`。每侧自然样本共需 855 个 binary decision。当前 label/evaluation/feature/training 均未
+开始；下一动作只允许分别运行 A/B launch prompt，严格预检完成后再执行唯一一次 evaluator。
 
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 

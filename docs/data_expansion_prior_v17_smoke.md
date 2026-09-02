@@ -62,3 +62,25 @@ python prepare_clir_prior_binary_v17.py evaluate
 proposal/package-report/verification/private-index 的 SHA-256 依次为
 `885fff97…4545` / `b1866207…298d` / `6860f26b…cd4a` / `e9d7be2…541d`。当前没有 label、evaluation、
 feature 或训练；下一步只能让两个独立模型分别完成 A/B 公共包，再运行一次冻结 evaluator。
+
+## 冻结执行结果
+
+12 个 label shard 全部完成。严格前检确认 A/B 各 132 行、ID 与 package population 完全一致、四字段
+schema 合法，并按序覆盖全部 residual block；两侧均无 low confidence。冻结 evaluator 随后只运行
+一次，得到 `STOP_PRIOR_V17_MECHANICAL_KEY_BINARY_SMOKE`。raw report SHA-256 为
+`3235aec6712705b4c505708201a6c7c7da8d7594b6fc5499cb6dd28d8cc2064c`。
+
+自然数据本身的结果很好：两侧 self-repeat 都是 `24/24`；96 条 natural 的 855 个 residual 判断中，
+agreement=`.9602`、Cohen κ=`.9194`、整行 exact=`.7813`、Complete unit IoU=`.9519`、mask
+coverage=`.9804`，双方共同 used/not-used 分别占 `.5368/.4234`，没有退化或 low-confidence。所有
+natural gate 都通过。
+
+唯一失败项是隐藏 controls：A/B 均为 `8/12 < 11/12`。只读检查显示，我在四道题里把题面已经提供、
+而 Key 又自包含的数量复述预设成 `used`，但 prompt 明确写着“题面始终可见，纯复述不应算 used”；
+两位 AI 都按文字规则稳定判为 `not_used`。另有一条单位换算事实和一条冗余方程存在边界差异。这说明
+本次 STOP 主要是预注册控制答案与书面删除规则错位，而不是自然样本双标再次崩坏；但冻结协议要求
+all gates，所以仍必须终止，不能事后改 control 答案让 v17 通过，也不能训练这 96 条。
+
+按用户在结果前给出的 fallback，下一步另立并明确命名 `v16-posthoc replay`：保留原 v16/v17 结果，
+把修正后的删除规则重新用于 v16 的 600 条旧 population。该 replay 是事后开发/训练数据路线，不能
+称为 prospective v16 或 v17 pass，后续效果仍需全新 query/cluster population 验证。

@@ -1141,7 +1141,7 @@ v16 没有发布 Silver manifest、feature 或训练。必须原样保留两侧�
 排除明显 heading/premise/formula/wrapper/duplicate，再让双 AI 只做剩余 block 的二元“是否被最终
 计算实际使用”判断；先过新的 smoke，再谈扩量和 GPU 训练。
 
-### Prior v17 mechanical-Key/binary smoke：正式双标包已就绪
+### Prior v17 mechanical-Key/binary smoke：冻结 STOP，仅 controls 失败
 
 v17 使用全新 schema，不修复 v16。只读 v16 归因用于确定“应简化哪种表示”，没有把 v16 标签拿来
 选 v17 行或当 v17 标签。selector 永久排除 v12--v16 共 1544 个 query/cluster，从剩余 acquisition
@@ -1170,6 +1170,19 @@ fresh scale-v18。若 v17 terminal fail，用户允许另冻 `v16-posthoc replay
 verification/private-index SHA-256 为 `885fff97…4545` / `b1866207…298d` / `6860f26b…cd4a` /
 `e9d7be2…541d`。每侧自然样本共需 855 个 binary decision。当前 label/evaluation/feature/training 均未
 开始；下一动作只允许分别运行 A/B launch prompt，严格预检完成后再执行唯一一次 evaluator。
+
+A/B 六片随后全部完成，严格前检通过。冻结 evaluator 只运行一次并返回
+`STOP_PRIOR_V17_MECHANICAL_KEY_BINARY_SMOKE`；报告 hash=`3235aec6…64c`。自然部分明显优于 v16：
+两侧 repeats 都是 `24/24`，855 个 residual decisions 的 agreement/κ=`.9602/.9194`，row exact=
+`.7813`，Complete unit IoU/coverage=`.9519/.9804`，used/not-used 支持充分、无 low confidence，所有
+natural gates 都通过。唯一失败是 A/B controls 均 `8/12`。
+
+只读 control audit 发现主要问题是冻结 expected label 与 prompt 自相矛盾：`unused_early_guess`、
+`unused_alternative`、`duplicate_and_plan_removed` 把题面重复数量预设为 used，而 prompt 明确要求题面
+始终可见且纯复述为 not-used；两位模型在这些项上给出了相同的 not-used。A 还把已被后续候选集合
+替代的早期方程判为冗余，B 把 Key 已自含的换算事实判为冗余。不得据此修改 v17 control 或翻转 STOP；
+96 条仍永久 nontrainable。按结果前用户授权，下一步冻结隔离 `v16-posthoc replay`，使用修正后的
+删除规则重新标原 v16 population，并明确把它限制为 post-hoc 数据构建证据。
 
 ### Prior v12-posthoc exact 子集：direct target 可学，ranking 不增益
 

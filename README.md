@@ -1071,7 +1071,7 @@ protocol/proposal/package-report/verification/private-index SHA-256 分别为
 Prior，必须另立前瞻版本并使用全新 query/cluster，先把 final block 机械冻结、把显然的标题/复述/
 纯公式/答案包装机械排除，再让双 AI 只判断剩余 block 是否被最终计算实际使用。
 
-### Prior v17：机械 Key + 剩余 block 二分类正式包已就绪
+### Prior v17：自然双标稳定，但控制题预设错位导致冻结 STOP
 
 [`docs/data_expansion_prior_v17_smoke.md`](docs/data_expansion_prior_v17_smoke.md) 与
 [`protocol.json`](configs/data_expansion_prior_v17/protocol.json) 将 v16 的规模失败转化为更窄的新任务。
@@ -1090,6 +1090,17 @@ numeric match/mismatch 和 medium/long；容量复算得到 96 个不同 query/c
 12 个公开 shard、264 行、`mismatches=[]`。proposal/package-report/verification/private-index hash
 分别为 `885fff97…4545` / `b1866207…298d` / `6860f26b…cd4a` / `e9d7be2…541d`。当前尚无 v17 标签、
 评价、feature 或训练；下一步是独立完成 A/B 六片标注，再只运行一次冻结 evaluator。
+
+两侧 12 个 shard 后续全部完成并通过 schema/ID/block 前检，冻结 evaluator 只运行一次，返回
+`STOP_PRIOR_V17_MECHANICAL_KEY_BINARY_SMOKE`；raw report SHA-256=`3235aec6…64c`。自然样本的
+所有门其实都通过：A/B repeats=`24/24,24/24`，residual agreement/κ=`.9602/.9194`，整行 exact=
+`.7813`，Complete unit IoU/coverage=`.9519/.9804`，且两侧都没有 low confidence。失败只来自 controls
+均为 `8/12 <11/12`。只读核对发现，四道题的预设答案把纯题面数量复述写成 `used`，却与 prompt 中
+“题面始终可见、纯复述不算 used”的规则冲突；AI 两边反而一致按书面规则标成 `not_used`。
+
+冻结规则仍要求 v17 终止，不能事后改 control、重跑 evaluator 或训练 96 条 smoke。按用户事先授权，
+后续另立 `v16-posthoc replay`，在隔离目录把修正后的删除规则用于 v16 旧 population；它不能覆盖原
+v16/v17，也不能被称为前瞻 pass。
 
 ### Dual Prior v12-posthoc：可学，但没有改善最终排序
 

@@ -1,0 +1,151 @@
+{
+  "schema_version": "clir-prior-v16-posthoc-ch-decomposition-v1",
+  "status": "AUTHORIZED_MATCHED_U0_C_H_CH_DECOMPOSITION",
+  "frozen_at_utc": "2026-09-02T22:30:00Z",
+  "authorization_source": {
+    "kind": "explicit_user_instruction_in_active_codex_thread",
+    "instruction": "还差一组c和h的测试吧，也跑一下",
+    "operational_interpretation": "complete the missing C-only and H0-only cells and add the necessary same-manifest U0 control; reuse the already-complete CH checkpoints"
+  },
+  "minimum_parent_commit": "1209b18396c5be02d1d3be84f2e8602af1e1b9ba",
+  "evidence_boundary": {
+    "tier": "posthoc_exploratory_dual_ai_silver_reused_ranking_not_fresh",
+    "human_verified": false,
+    "protected_test": false,
+    "fresh_ranking_confirmation": false,
+    "old_v16_v17_terminal_results_unchanged": true,
+    "no_retuning_after_results": true
+  },
+  "design": {
+    "question": "On the identical expanded training manifest, what are the standalone C and H0 effects and their C-by-H0 interaction?",
+    "cells": ["u0", "c", "h", "ch"],
+    "factors_are_consistency_h0": true,
+    "contrasts": {
+      "c_minus_u0": "standalone Consistency increment",
+      "h_minus_u0": "standalone H0 increment",
+      "ch_minus_u0": "joint C+H0 increment",
+      "interaction": "CH-C-H+U0"
+    },
+    "why_u0_is_required": "The existing R0 used a different 4352-row manifest and cannot be a causal baseline for C/H trained on 5552 rows."
+  },
+  "training_input": {
+    "path": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/data/train_ch_full.jsonl",
+    "file_sha256": "ef3bd3a2f5aada2809830181940f464b235c88bd933b83be08c7eb4bf68d6fcf",
+    "rows": 5552,
+    "queries": 1678,
+    "correctness_rows": 5552,
+    "consistency_rows": 800,
+    "consistency_relations": 400,
+    "h0_rows": 400,
+    "h0_positive_rows": 200,
+    "h0_clean_rows": 200,
+    "paired_prior_rows_present_but_disabled": 432
+  },
+  "cells": {
+    "u0": {
+      "factors": [0, 0],
+      "config": "configs/three_module_expansion_v1/u0_correctness_only.json",
+      "config_sha256": "8de1b4720f319a08447a17e5b11fd0081c25f31c6b635cbc877ba58f96e74f89",
+      "checkpoint_pattern": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/u0/seed-{seed}/checkpoint.pt"
+    },
+    "c": {
+      "factors": [1, 0],
+      "config": "configs/three_module_expansion_v1/c_consistency.json",
+      "config_sha256": "b3943379c4f97e44aa5b3dbdce0ea38b884b9f201601d5c64975e7973dc4142a",
+      "checkpoint_pattern": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/c/seed-{seed}/checkpoint.pt"
+    },
+    "h": {
+      "factors": [0, 1],
+      "config": "configs/three_module_expansion_v1/h_h0_onset_bce.json",
+      "config_sha256": "fde388cb515e8a2015d17bc9de9694fdf60553dcba61ec5e265ff933b62265cf",
+      "checkpoint_pattern": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/h/seed-{seed}/checkpoint.pt"
+    },
+    "ch": {
+      "factors": [1, 1],
+      "config": "configs/three_module_expansion_v1/ch_consistency_h0.json",
+      "config_sha256": "d5f67aca2696c08a6331b26beb0840b4e197c146a4dbec57841290a06c741545",
+      "reused_immutable_anchor": true,
+      "checkpoints": {
+        "42": {
+          "path": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/training/ch/seed-42/checkpoint.pt",
+          "file_sha256": "9e62be8bc770dd9f4fa23f784ea134e4b2a1b542ab89c5b37dc0ef645f6a5e29"
+        },
+        "43": {
+          "path": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/training/ch/seed-43/checkpoint.pt",
+          "file_sha256": "7c996172d8dad70a12aae6559de4e7a36952b7e277537d1ed57df3db2acf03cd"
+        },
+        "44": {
+          "path": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/training/ch/seed-44/checkpoint.pt",
+          "file_sha256": "c4fedb08f1730309afea79e1cd53ef28cd303213d239ed886d9251e5b44d2673"
+        }
+      }
+    }
+  },
+  "training": {
+    "new_cells": ["u0", "c", "h"],
+    "reused_cells": ["ch"],
+    "seeds": [42, 43, 44],
+    "epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.0,
+    "max_grad_norm": 1.0,
+    "amp_dtype": "bfloat16",
+    "fixed_epoch_no_checkpoint_selection": true,
+    "identical_manifest_all_cells": true,
+    "adaptive_epoch_weight_or_subset_change": false,
+    "disabled": [
+      "direct_prior",
+      "prior_gate",
+      "H1_negative_tail",
+      "path_MIL",
+      "pseudo_onset_tail",
+      "mutual_prior_distillation",
+      "progress",
+      "reconstruction"
+    ]
+  },
+  "mechanism_evaluation": {
+    "h_dev": {
+      "path": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/data/h_dev_query_disjoint.jsonl",
+      "file_sha256": "11efd7acbc6db2824bf9b0bb9bbcaf4782038c68ceac55dde1f2ba526823c7ec",
+      "rows": 197
+    },
+    "consistency_endpoints": {
+      "path": "run_artifacts/data_expansion_scale_v6/consistency_training_v6_1/data/heldout_endpoint_features.jsonl",
+      "file_sha256": "24750232069e7d612719852dfc126e27bb946eeabb50b3d1e962c0d5e66ecaba",
+      "rows": 557
+    },
+    "consistency_positive_relations": {
+      "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/heldout_positive_relations.jsonl",
+      "file_sha256": "fc88a094e9daced8528349d6d199da1e6277bd5180bd3ad62f0c8b09d47e96d1",
+      "rows": 150
+    },
+    "consistency_hard_negative_relations": {
+      "path": "run_artifacts/data_expansion_scale_v6/post_annotation_v6_1/heldout_hard_negative_relations.jsonl",
+      "file_sha256": "fad547c547fdf635b5f7b0973f624d2657365633cf2c48ffd42d136ccbd448f2",
+      "rows": 150
+    }
+  },
+  "ranking_evaluation": {
+    "path": "run_artifacts/ranking_expansion_v7/h0_experiment_v7_4/data/ranking_evaluation.jsonl",
+    "file_sha256": "bdc8e63f5141ceee4664a20bb9d42e894dc17633b9092615e5d0203a99d991c7",
+    "rows": 14272,
+    "queries": 892,
+    "candidates_per_query": 16,
+    "k": [1, 2, 4, 8, 16],
+    "bootstrap_replicates": 10000,
+    "bootstrap_seed": 42,
+    "population_is_already_inspected": true,
+    "allowed_claim": "same-population exploratory matched C-by-H0 decomposition",
+    "forbidden_claim": "fresh, protected, or confirmatory efficacy"
+  },
+  "runtime": {
+    "output_root": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1",
+    "training_gpus": [0, 1, 2, 3, 4, 5, 6, 7],
+    "ranking_shards": 8,
+    "ranking_batch_size": 2,
+    "num_workers": 0,
+    "pin_memory": false
+  }
+}

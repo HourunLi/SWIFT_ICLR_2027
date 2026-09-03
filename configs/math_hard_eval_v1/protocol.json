@@ -1,0 +1,159 @@
+{
+  "schema_version": "clir-protected-math-hard-eval-v1",
+  "status": "AUTHORIZED_ONE_SHOT_PROTECTED_EVALUATION",
+  "authorized_at_utc": "2026-09-03",
+  "purpose": "one-shot confirmation of the frozen CLIR checkpoints on genuinely hard, train-disjoint MATH test questions",
+  "evidence_boundary": {
+    "protected_test": true,
+    "external_generalization": true,
+    "training_or_validation_use": false,
+    "weights_epochs_thresholds_subsets_or_checkpoint_selection_may_change_after_results": false,
+    "single_frozen_population_scored_by_all_predeclared_cells": true,
+    "published_SWIFT_numbers_directly_comparable": false,
+    "why_not_directly_comparable": "CLIR uses Phi-3.5-mini candidates, 16 paths, a Level-4/5-only subset, 5552 training trajectories, and fixed three-epoch checkpoints; the SWIFT paper uses Llama/Ministral task models, a general 500-question MATH set, up to 64 paths, and 6000 questions x 8 paths with validation-based early stopping"
+  },
+  "source": {
+    "dataset_id": "EleutherAI/hendrycks_math",
+    "revision": "21a5633873b6a120296cce3e2df9d5550074f4a3",
+    "canonical_split": "test",
+    "subjects": [
+      "algebra",
+      "counting_and_probability",
+      "geometry",
+      "intermediate_algebra",
+      "number_theory",
+      "prealgebra",
+      "precalculus"
+    ],
+    "allowed_levels": [4, 5],
+    "target_queries_per_level": {"4": 250, "5": 250},
+    "total_queries": 500,
+    "exclude_asymptote_prompts": true,
+    "reference_answer": "last balanced boxed or fboxed expression in the official solution",
+    "selection_namespace": "clir-math-hard-eval-v1-selection",
+    "selection_rule": "after train-template exclusion, sort independently within Level 4 and Level 5 by SHA256(namespace, query_id), take exactly 250 from each, then interleave levels so every 50-query shard contains 25 of each",
+    "failure_policy": "FAIL_YIELD_without_adding_Level_3_or_relaxing_dedup_after_test_access"
+  },
+  "train_leakage_audit": {
+    "anchor_policy": "every available GSM8K/ASDiv-A/MATH train source row plus the complete raw seven-subject MATH train split; any test cluster touching an anchor is excluded",
+    "source_corpus": {
+      "path": "run_artifacts/data_expansion_smoke_v3/sources/all.jsonl",
+      "rows": 10543,
+      "file_sha256": "ea079ed1d096ebccd8b10a17da270989e7da27b0786c75dafa5c8131afa47841",
+      "sidecar_file_sha256": "cbc636250f3a67812a0821de49c7fa7e08cc8f84273b905eee17179b33157b69"
+    },
+    "cluster_implementation": "src.clir_scale.build_template_clusters / clir_template_clusters_v6",
+    "propagate_exact_entity_template_and_near_duplicate_edges": true,
+    "one_test_query_per_surviving_cluster": true,
+    "training_manifest_query_id_prompt_token_and_cluster_overlap_required": 0,
+    "evaluation_manifest_query_id_overlap_required": 0
+  },
+  "generation": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "tokenizer_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "backend": "vllm",
+    "backend_version": "0.5.3.post1",
+    "dtype": "bfloat16",
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "max_new_tokens": 1024,
+    "max_model_length": 4096,
+    "maximum_prompt_tokens": 3072,
+    "prompt_template": "Solve the following math problem step-by-step.\nSimplify your answer as much as possible. Present your final answer as \\boxed{Your Answer}.\n<QUESTION>",
+    "candidate_count": 16,
+    "queries_per_shard": 50,
+    "rollout_shards": 10,
+    "base_seed": 20260903,
+    "seed_namespace": "clir-math-hard-eval-v1-rollout",
+    "saved_prompt_and_output_token_ids_are_axis_truth": true,
+    "candidate_order_is_frozen_and_prefix_based": true
+  },
+  "checker": {
+    "version": "swift_math_equivalence_41f7c9f7_clir_v1",
+    "upstream_repository": "https://github.com/aster2024/SWIFT",
+    "upstream_commit": "41f7c9f7e13734267450870f977e5dd7d62ac23e",
+    "upstream_files": {
+      "generate/generate_utils/__init__.py": "aa19f4d8bd82904bdd397a0b5ed5dbbfbcd57d60b0d6084dbed87f01e960ec66",
+      "generate/generate_utils/grader.py": "20f98a2da402ce27648878eeaace0e06dc2e0b446d148dfee8a3742c5e7fb827",
+      "generate/generate_utils/math_normalize.py": "a9fce3359dd213148b1d870507c3f43dbe5e951d19b82a2faecea903827bb2bc",
+      "generate/generate_utils/math_equivalence.py": "35c286b1d38dc977a684073a5cb43ac0c746232b32883e195643126ff433344b"
+    },
+    "semantics": "official_SWIFT_evaluate_math_expression_equivalence",
+    "all_candidates_receive_binary_correctness": true,
+    "parse_failure_empty_output_or_no_match_is_incorrect": true,
+    "truncated_candidates_are_retained_and_checked_not_filtered": true,
+    "no_query_is_removed_using_candidate_correctness_or_parseability": true,
+    "report_finish_reason_and_match_route_health": true
+  },
+  "frozen_models": {
+    "prior_ablation_protocol": {
+      "path": "configs/prior_ablation_v2/protocol.json",
+      "file_sha256": "5583e7d179aa6c8ef193ba3d87674ec9c4bf85f9368b76fe2b18af8db1ead731"
+    },
+    "training_completion": {
+      "path": "run_artifacts/prior_ablation_v2/training/completion.json",
+      "file_sha256": "c4ba726ef787adbea9bd6ef3beee66957d41d15127fbc026fd798c90e06e665e",
+      "checkpoint_count": 57,
+      "cells": 19,
+      "seeds": [42, 43, 44]
+    },
+    "score_all_cells": true,
+    "no_retraining": true
+  },
+  "feature_extraction": {
+    "model_id": "microsoft/Phi-3.5-mini-instruct",
+    "model_revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+    "input_axis_truth": "saved_prompt_token_ids_plus_saved_output_token_ids",
+    "decode_or_retokenize_allowed": false,
+    "dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "num_feature_layers": 33,
+    "per_layer_dim": 3072,
+    "feature_dim": 101376,
+    "bytes_per_feature_token": 202752,
+    "worker_count": 8,
+    "condition_saved_once_per_query": true,
+    "selected_only": true
+  },
+  "evaluation": {
+    "k_values": [1, 2, 4, 8, 16],
+    "primary_k": 16,
+    "primary_contrasts": [
+      "c_minus_u0",
+      "h_minus_u0",
+      "ch_minus_u0",
+      "kc_minus_u0",
+      "kcg_minus_kc",
+      "full_minus_ch"
+    ],
+    "report_all_19_cells": true,
+    "report_level_and_subject_strata": true,
+    "paired_query_bootstrap_replicates": 10000,
+    "hierarchical_seed_query_interval": true,
+    "primary_family_holm_adjustment": true,
+    "random_expected_and_oracle_required": true,
+    "interpretation": "a positive hard-test result supports transfer for this fixed Phi/MATH-hard setup only; it does not retroactively validate Silver-label accuracy or establish parity with published SWIFT numbers"
+  },
+  "swift_parity_followup": {
+    "current_run_is_same_benchmark_family_not_a_direct_paper_replication": true,
+    "fair_same_candidate_baseline_required": "pin and train upstream strict two-linear-output SWIFT on the identical CLIR training rows/features, then score the identical candidate manifest",
+    "published_protocol_extension_required": "separate frozen 500-question general MATH population with 64 candidates plus GSM8K and AQuA-RAT; do not reuse the present hard set for tuning",
+    "paper_benchmarks": ["MATH", "GSM8K", "AQuA-RAT", "Imbue Code Comprehension", "HellaSwag", "CoinFlip"]
+  },
+  "runtime": {
+    "output_root": "run_artifacts/math_hard_eval_v1",
+    "python_environment": "/prodcpfs/user/panzhixin/NeuralUCB-master/.venv",
+    "model_cache": "run_artifacts/model_cache",
+    "swift_checkout": "run_artifacts/vendor/swift-41f7c9f7",
+    "rollout_max_num_seqs": 32,
+    "rollout_gpu_memory_utilization": 0.9,
+    "ranking_score_shards": 8,
+    "ranking_score_batch_size": 2,
+    "ranking_score_num_workers": 0,
+    "ranking_score_amp_dtype": "bfloat16",
+    "require_clean_committed_code_before_first_test_access_and_every_GPU_stage": true,
+    "large_test_rows_rollouts_features_scores_and_reports_are_git_ignored": true,
+    "tracked_surface": "protocol_runner_tests_and_final_README_handoff_summary_only"
+  }
+}

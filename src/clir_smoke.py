@@ -221,12 +221,17 @@ def validate_source_row(row: Mapping[str, Any]) -> dict[str, Any]:
     reference = row.get("reference_answer")
     if not isinstance(query_id, str) or not query_id:
         raise ValueError("query_id must be a non-empty string")
-    expected_prefix = {
-        "gsm8k": "gsm8k:train:",
-        "asdiv-a": "asdiv-a:",
-        "math": "math:train:",
+    expected_prefixes = {
+        "gsm8k": ("gsm8k:train:",),
+        "asdiv-a": ("asdiv-a:",),
+        # MATH test rows are permitted here so the same deterministic
+        # exact/template/near-duplicate machinery can audit a protected
+        # evaluation population against train-side anchors.  The caller still
+        # controls which split is authorized; this validator only enforces an
+        # explicit namespace rather than silently treating test rows as train.
+        "math": ("math:train:", "math:test:"),
     }[str(source)]
-    if not query_id.startswith(expected_prefix):
+    if not query_id.startswith(expected_prefixes):
         raise ValueError(f"{query_id}: query_id does not match source namespace")
     if not isinstance(question, str) or not question.strip():
         raise ValueError(f"{query_id}: question must be non-empty")

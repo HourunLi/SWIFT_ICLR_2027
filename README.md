@@ -12,10 +12,10 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 
 | 数据层 | 现有规模 | 现在能否训练 | 准确含义 |
 |---|---:|---|---|
-| Outcome/correctness | 3,968 条候选轨迹 | 是 | 3,590 条数值答案匹配、378 条不匹配，训练基础 reward score |
-| Consistency | 历史 27 个 compact/expanded 正 pair +702 个负 pair；v6.1 新增 400 个训练正关系、150 正+150 难负 held-out 关系 | v6.1 可作探索性训练和独立关系评测 | 同一道题、同一路径的一简一详应得到接近表示；新关系集已完成 query/template-cluster 隔离，但仍是双 AI Silver |
-| Hallucination H | 历史 17 positive +31 clean；v7.4 另有 400 train +200 dev，均为正负各半且每条来自不同 query | v7.4 可作探索性 H0 训练，不能作确认性证据 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。v7 原门失败；v7.4 只从现存标注中保留严格多路共识子集，属于无人工复核的 post-hoc Silver |
-| Dual Prior | 历史 48 条；v12-posthoc 202 train +51 dev；v15 smoke 48 条；v16 扩量门失败；v16-posthoc 384 train +104 dev | v12-posthoc 与 v16-posthoc 只允许探索性训练 | v12-posthoc 能学会 Key/Complete，但未改善最终排序；v16-posthoc 已完成 selected-only feature、R0/P0 与 CH/Full 各三 seed 训练，证明新 Key/Complete Silver 可学且未挤掉 C/H0 机制，但尚无新鲜排名验证 |
+| Outcome/correctness | 当前统一切片 5,552 条候选、1,678 题 | 是 | 每条都有冻结 numeric checker 的数值匹配标签，用来训练基础 reward score |
+| Consistency | 当前 400 个 compact/expanded 正关系，配 159,600 个跨语义负 pair；另有 150 正+150 难负 held-out 关系 | 可作探索性训练和独立关系评测 | 同一道题、同一路径的一简一详应得到接近表示；关系集已做 query/template-cluster 隔离，但仍是双 AI Silver |
+| Hallucination H | 当前 400 条 H0 训练行；另有 200 条正负各半 dev | 可作探索性 H0 训练 | 双 AI 标出“从哪个推理单元开始出现无依据/错误主张”。当前只训练 onset BCE；H1 尾部负奖励关闭，且精确首错定位仍未建立 |
+| Dual Prior | 当前统一切片 432 条成对 Prior、Key/Complete 各 137,055 个监督 token；另有 104 条 dev | 可作已冻结的全面探索性消融 | Direct Key/Complete 已在 2,400 题新打分集上相对 U0 建立收益；Mutual 与 Gate 的额外排名收益未建立。标签是 v16-posthoc 双 AI Silver，无人工复核 |
 
 失败批次不能直接混入可训练数据：v2 因 checker 与 H/P yield 失败，v3 因 Consistency 原始一致率和 Prior 裁决率失败，v4 提示词回放失败；v5 的 12 对新鲜 Consistency 只通过机械筛选流程审计，协议明确 `eligible_for_training=false`。H 的原始 v7 也仍是 `FAIL_H0_V7_RESERVE`；只有另行登记的 v7.4 严格共识子集获准做探索性训练，不能反过来宣称 v7 通过。Prior v8--v14 分别保留各自冻结失败状态；v12 是 `STOP_PRIOR_V12_STRICT_CONSENSUS_DATA_GATE_FAILURE`，v13 是 `FAIL_PRIOR_V13_SCHEMA`，v14 是 `STOP_PRIOR_V14_MECHANICAL_RECALL_SMOKE`。后续用户另行授权并明确命名的 `v12-posthoc` 只是一条带 easy-sample bias 的探索路线，不修改原门、不重标、不降阈值，也不能写成 v12/v13 通过。v15 的 role-only 小烟测通过，但 48 条 smoke 行无训练资格；同一定义扩大到 600 条的 v16 已完成双标并终止于 `STOP_PRIOR_V16_ROLE_ONLY_SCALE`，没有发布任何 v16 可训练行。
 
@@ -1361,6 +1361,68 @@ Full−CH=`-0.542` point，逐 seed 为 `+0.375/-1.125/-0.875`，fixed-seed quer
 当前训练数据下的排名推荐因此是 **CH**。`.25` Gate 继续作为 main-style 工程默认路径保留，但这不
 等于 Full 有效性结论；不能再用这 1,600 题改权重。下一步若继续 Prior，应扩充或改善 Prior Silver
 监督并单独诊断 H0×Prior 交互，再使用新的预注册训练/排名 population，而不是继续扫 `.25/.5/1`。
+
+### Prior 全面消融 v2：2,400 题新打分完成，Direct 有效，Gate/Mutual 无额外收益
+
+冻结协议和精简终态分别见
+[`protocol.json`](configs/prior_ablation_v2/protocol.json) 与
+[`completion.json`](configs/prior_ablation_v2/completion.json)。本轮统一使用 5,552 行、
+1,678 题的训练切片：全部行有 correctness，含 400 个 Consistency 正关系、400 条 H0、
+432 条成对 Key/Complete Prior；Key 与 Complete 各覆盖 137,055 个监督 token。19 个格子均固定
+3 epochs、seeds 42/43/44，共 57 个 checkpoint；H 只表示 H0 onset BCE，H1 negative tail、
+Path MIL、pseudo-tail、progress 与 reconstruction 全部关闭。
+
+最终排名集在查看任何本轮 CLIR score 前冻结，共 2,400 题×16 候选：GSM8K 950、ASDiv-A 950、
+未被旧 CLIR 打过分的 MATH reserve 500。38,400 条候选使用同一份 exact-token
+`33×3072` BF16 feature；8 路提取和 8 路独立复验均通过，总 feature 为 8,954,472 token、
+约 1.816 TB。它是 **score-unseen 的训练题源评测**，不是官方 test、protected test 或外部泛化证据。
+
+K=16 的主要结果如下，均为三 seed 平均；“相对 U0”只是百分点差，不代表每一项都做了确认性检验：
+
+| 格子 | 含义 | BoN@16 | 相对 U0 | 题内对错排序 |
+|---|---|---:|---:|---:|
+| U0 | 只有 correctness | `95.83%` | `+0.00` | `65.38%` |
+| C | +Consistency | `96.46%` | `+0.62` | `69.96%` |
+| H0 | +onset BCE | `96.67%` | `+0.83` | `71.74%` |
+| CH | C+H0 | `96.68%` | `+0.85` | `71.58%` |
+| K | 只训 Key | `96.51%` | `+0.68` | `70.88%` |
+| Complete | 只训 Complete | `96.78%` | `+0.94` | `71.17%` |
+| KC | Key+Complete Direct | `96.62%` | `+0.79` | `70.88%` |
+| KCM | KC+Mutual | `96.58%` | `+0.75` | `71.12%` |
+| KCG | KC+Gate | `96.61%` | `+0.78` | `70.88%` |
+| Full | C+H0+KC+Gate | `96.71%` | `+0.88` | `71.98%` |
+
+四个预注册主对比给出更严格的结论：
+
+- `KC−U0=+0.79` point，逐 seed `+1.50/+0.75/+0.125`，fixed query 95% interval
+  `[+0.38,+1.21]`，hierarchical seed+query interval `[+0.03,+1.67]`，Holm `p=.0008`；
+  因而 **Direct Key+Complete 的 standalone 收益通过**。
+- `KCG−KC=-0.01` point，逐 seed `-0.29/0/+0.25`，两个 interval 都跨 0，Holm `p=1`；
+  因而 **Gate 的额外排名收益未建立**。
+- `KCG−U0=+0.78` point，3/3 seed 为正，两个 interval 都高于 0，Holm `p=.0012`；这说明
+  保留 Gate 的整条 Prior 路线仍优于 U0，但不能把整体收益归因给 Gate。
+- `Full−CH=+0.03` point，逐 seed `+0.17/-0.08/0`，fixed interval
+  `[-0.28,+0.32]`，hierarchical interval `[-0.36,+0.39]`，Holm `p=1`；因此三模块组合
+  **没有证明 Prior 在 CH 上还有净增益**，也没有在这批更大数据上复现此前的稳定伤害。
+
+机制结果解释了“学到了但不一定多选对题”。在已经看过、只作描述的 104-row Silver dev 上，
+Key-only 的 Key AP 从 U0 `6.84%` 到 `80.42%`，Complete-only 的 Complete AP 从 `35.04%`
+到 `93.84%`，说明两个 Direct target 确实可学；Complete 单独的排序点估计也高于 Key。
+Mutual 把 Key/Complete map cosine 从 KC 的 `.575` 推到 `.983`，几乎把两张本应有区别的图揉在一起，
+但 `KCM−KC=-0.04` point，没有排名收益。Gate 把 Gate↔Prior L2 从 `.0424` 降到 `.0265`，
+标注支撑区上的 Gate mass 从 `54.68%` 升到 `71.68%`，说明接口确实工作；但 `KCG−KC≈0`，
+所以“会对齐”不能替代“能多选对”。
+
+Direct 的边际作用在加入 C/H0 后明显缩小：`C+KC−C=+0.29`、`H0+KC−H0=+0.07`、
+`CH+KC−CH=+0.03` point；对应的 Consistency×Direct 与 H0×Direct 交互点估计分别为
+`-0.50/-0.72` point，hierarchical interval 仍跨 0。当前最稳妥的解释是三种辅助监督共享同一个
+encoder，学到的“识别好推理”信息有重叠，因而 standalone 能增益，合并后却边际递减；还不能说
+三模块天然不兼容。
+
+`.25` Gate 继续按用户的方法身份决定作为工程默认开启；本轮结果只说明它不是已证实的额外提分项。
+不得在这 2,400 题上继续挑 H0+KCG 等最高点格子、改权重、epoch、subset 或阈值。下一步应冻结当前
+实现，预注册真正 protected/external 的确认评测；Prior 标签仍只能称
+`dual-AI Silver v16-posthoc binary, no human verification`，numeric checker 也只代表数值匹配。
 
 ## Toy smoke test
 

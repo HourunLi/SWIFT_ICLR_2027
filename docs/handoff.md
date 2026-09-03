@@ -1537,6 +1537,150 @@ Full efficacy 结论。确认后禁止在 tuning/confirmation 1,600 题上再改
 或阈值。若继续 Prior，先扩充/改善 Prior Silver 监督并诊断 H0×Prior 交互，再预注册全新训练与排名
 population；不要继续在当前网格上加小数点权重。
 
+### Prior 全面消融 v2：19 格、57 checkpoint、2,400 题新打分已完整结束
+
+本轮由 [`configs/prior_ablation_v2/protocol.json`](../configs/prior_ablation_v2/protocol.json)
+在任何 v2 CLIR score 产生前冻结，精简终态在
+[`configs/prior_ablation_v2/completion.json`](../configs/prior_ablation_v2/completion.json)。
+最终状态为 `COMPLETE_PRIOR_ABLATION_V2`。它不是在旧 892 题或 Prior/Gate v1 的 1,600 题上
+继续调小数点权重，而是固定 direct=`1`、mutual=`.25`、main-style Gate=`.25`，在统一训练
+切片上把 Prior 的 Key、Complete、Mutual、Gate、fusion alpha 逐项拆开，并把 C/H0 放回做交互。
+
+#### acquisition、checker 与冻结 population
+
+- 新 rollout 为 GSM8K train 1,200 题 + ASDiv-A 1,100 题，每题 16 条，共 36,800 行、46 shards；
+  raw ordered SHA-256=`0dd6074d…267e`。
+- numeric checker 得到 35,197 match、1,422 mismatch、124 ambiguous、23 parse failed、34 truncated；
+  2,175/2,300 题的 16 条候选全部是明确二值。选样不读取任何 CLIR score。
+- 最终按冻结 source/hash 顺序选择 GSM8K 950、ASDiv-A 950，再加入 500 个此前 checker-eligible、
+  但从未被 CLIR 打过分的 MATH reserve，共 2,400 题、38,400 行。selected manifest
+  SHA-256=`704c211b…73a2`，query-ID SHA-256=`a69f8c48…6b45`。
+- pooled K=16 random expected=`.951536`，oracle=`.992083`；分题源 random/oracle 为
+  GSM8K `.954539/.990526`、ASDiv-A `.984803/.996842`、MATH `.882625/.986000`。
+  ASDiv-A 已接近天花板，必须和另外两源分开解释。
+
+这 2,400 题对本轮 checkpoint 是 score-unseen，但全部来自训练题源；它们不是官方 test、
+protected test 或独立外部泛化集。correctness 是 `clir_numeric_multisource_v3` 的 numeric-value
+match，不保证单位/语义完全正确。
+
+#### 统一训练与工程审计
+
+所有 19 格共享同一 5,552-row、1,678-query manifest；每 epoch 有 5,552 correctness 行、
+400 个 Consistency 正关系及 159,600 个负 pair、400 条 H0、432 条 paired Prior，Key/Complete
+各 137,055 个监督 token。H 只开 onset BCE；H1 negative-tail、Path MIL、pseudo-tail、progress、
+reconstruction 全关。每格 3 epochs、seeds 42/43/44，共 57 run，其中 42 个新训、15 个 immutable
+anchor 复用。
+
+第一批 8 个 checkpoint 训练后，审计器发现 raw config 未显式写 dataclass 默认 `eps=1e-8`，而
+checkpoint 会物化该字段，导致配置比较假报 drift。任何 v2 CLIR score 产生前，runtime amendment
+只把审计比较改为先通过 `RewardConfig` 规范化默认值；没有改模型、loss、数据、权重、epoch 或
+checkpoint。回归测试加入后，全 57 checkpoint 均可加载、tensor finite、配置一致。训练/评分实际
+代码 commit=`7330341c096a6e93aa40872d2d9af6f2e9d0f720`；最终 runtime amendment SHA-256=
+`c56fc719…09f3c`。
+
+selected-only feature 为 38,400 trajectory +2,400 condition，共 40,800 payload、8,746,265
+output token +208,207 prompt token；exact `33×3072=101,376` BF16 raw tensor bytes=
+`1,815,537,106,944`。8 个 extraction worker 和 8 个独立只读 verifier 全部通过
+shape/dtype/finiteness/token-axis/checksum 检查。feature manifest SHA-256=`428893eb…c1dd`。
+8 路评分各覆盖 4,800 行，merge 恰好包含 57×38,400 个 finite score；merge SHA-256=
+`d805f48e…495f`，最终 summary SHA-256=`87dc3c74…6f7`。
+
+#### Prior 机制：Direct 学到了，Mutual/Gate 也执行了，但三者含义不同
+
+104-row Prior dev 已在设计期看过，只能作描述性机制诊断；它来自 v16-posthoc 双 AI Silver、
+无人类复核。三 seed 均值：
+
+| 格子 | Key AP | Complete AP | Key↔Complete map L2 / cosine | Gate↔Prior L2 | Gate 支撑区质量 |
+|---|---:|---:|---:|---:|---:|
+| U0 | `.0684` | `.3504` | `.00002 / .996` | `.0027` | `.3317` |
+| K | `.8042` | `.3325` | `.1262 / .113` | `.0291` | `.5478` |
+| Complete | `.0468` | `.9384` | `.0155 / .344` | `.0072` | `.3337` |
+| KC | `.7875` | `.9372` | `.0718 / .575` | `.0424` | `.5468` |
+| KCM | `.7963` | `.9356` | `.00375 / .983` | `.0915` | `.3618` |
+| KCG | `.7851` | `.9370` | `.0692 / .522` | `.0265` | `.7168` |
+| Full | `.7880` | `.9338` | `.0879 / .517` | `.0335` | `.6774` |
+
+Direct 的含义是 Key/Complete 头逐 token 学 0/1；Gate 关闭时，它仍通过 shared encoder 的梯度
+间接影响最终 score。K 与 Complete 的 AP 分别从基率附近升到 `.804/.938`，所以两个 target
+确实学到了。Mutual 的确完成了它的数学目标：把 KC 的 map cosine `.575` 推到 `.983`、L2
+`.0718` 压到 `.00375`；但这几乎把“少量决定性步骤”和“完整支撑链”揉成一张图，不能自动视为好事。
+Gate 也完成了接口目标：KCG 相对 KC 把 Gate↔Prior L2 从 `.0424` 降到 `.0265`，支撑区 mass
+从 `.5468` 升到 `.7168`。这些数字只说明 Mutual/Gate 路径真实生效，不说明它们提高排名。
+
+#### 统一排名结果
+
+下表是 K=16 的三 seed 均值；pairwise 是同一题里随机取一条正确和一条错误回答时，模型把正确项
+排高的概率：
+
+| Cell | 因子 | BoN@16 | 相对 U0 | pairwise |
+|---|---|---:|---:|---:|
+| U0 | correctness | `.95833` | `.00000` | `.65385` |
+| K | Key Direct | `.96514` | `+.00681` | `.70875` |
+| Complete | Complete Direct | `.96778` | `+.00944` | `.71170` |
+| KC | Key+Complete Direct | `.96625` | `+.00792` | `.70883` |
+| KCM | KC+Mutual | `.96583` | `+.00750` | `.71115` |
+| KCG | KC+Gate | `.96611` | `+.00778` | `.70883` |
+| C | Consistency | `.96458` | `+.00625` | `.69961` |
+| C+KC | C+Direct | `.96750` | `+.00917` | `.72015` |
+| C+KCG | C+Direct+Gate | `.96639` | `+.00806` | `.71762` |
+| H | H0 | `.96667` | `+.00833` | `.71737` |
+| H+KC | H0+Direct | `.96736` | `+.00903` | `.72280` |
+| H+KCG | H0+Direct+Gate | `.96819` | `+.00986` | `.72220` |
+| CH | C+H0 | `.96681` | `+.00847` | `.71576` |
+| CH+KC | C+H0+Direct | `.96708` | `+.00875` | `.72230` |
+| CH+KCM | C+H0+Direct+Mutual | `.96681` | `+.00847` | `.72081` |
+| Full | C+H0+Direct+Gate | `.96708` | `+.00875` | `.71985` |
+| CH+KCMG | Full+Mutual | `.96750` | `+.00917` | `.72584` |
+| Full Key-only | Full，fusion alpha=1 | `.96806` | `+.00972` | `.71772` |
+| Full Complete-only | Full，fusion alpha=0 | `.96792` | `+.00958` | `.71980` |
+
+不要按这张表事后挑 `H+KCG` 或 alpha probe 当 winner；协议明确 19 格全部报告且不按点估计选格子。
+U0 从 K=2/4/8/16 为 `.96194/.96264/.96167/.95833`，KC 为
+`.96417/.96597/.96778/.96625`；`KC−U0` 随 K 为 `+.22/+.33/+.61/+.79` point，信号主要在
+候选更多、选择更难时出现。
+
+四个预注册 primary K=16 对比：
+
+| 对比 | mean | 三 seed | fixed query 95% CI | hierarchical 95% CI | Holm p | 裁决 |
+|---|---:|---|---|---|---:|---|
+| KC−U0 | `+.00792` | `+.0150/+.0075/+.00125` | `[+.00375,+.01208]` | `[+.00028,+.01667]` | `.00080` | benefit |
+| KCG−KC | `-.00014` | `-.00292/.0000/+.00250` | `[-.00236,+.00195]` | `[-.00403,+.00361]` | `1.0` | inconclusive |
+| KCG−U0 | `+.00778` | `+.01208/+.00750/+.00375` | `[+.00375,+.01194]` | `[+.00167,+.01458]` | `.00120` | benefit |
+| Full−CH | `+.00028` | `+.00167/-.00083/.0000` | `[-.00278,+.00319]` | `[-.00361,+.00389]` | `1.0` | inconclusive |
+
+KC 相对 U0 三 seed 合计有 124 次错→对、67 次对→错，净多 57/7,200 次，和 `+.79` point
+完全一致。Gate 增量只有 30 次错→对、31 次对→错，解释了 KCG−KC 近零。Full 相对 CH 为
+47 次错→对、45 次对→错，净差仅 2/7,200。
+
+KC−U0 的题源分层为：GSM8K `+1.23` points，3/3 seed 为正且 hierarchical interval
+`[+.32,+2.32]`；ASDiv-A `+.18` point，2 正 1 负且区间跨 0；MATH `+1.13` points，2 正 1 负、
+区间很宽。故 pooled benefit 有最清楚的 GSM8K 支撑；ASDiv 已近天花板，MATH 只有方向性信号，
+不能把 pooled 结论外推到所有题型。
+
+secondary 诊断显示收益主要来自 Complete：Complete−U0=`+.94` point、3/3 seed 为正；
+K−U0=`+.68`，但 1/3 seed 为负。KC 相对“两个单项线性相加”的 interaction=`-.83` point，
+说明 Key 与 Complete 信息不加和。KCM−KC=`-.04`，Mutual 没有排名收益；Key-only 与
+Complete-only fusion 相对 Full 仅 `+.10/+.08` point，区间都跨 0，不能据此改 alpha。
+
+Direct Prior 在 C/H0 上的边际明显缩小：C+KC−C=`+.29`、H+KC−H=`+.07`、CH+KC−CH=
+`+.03` point；Consistency×Direct 与 H0×Direct interaction 点估计为 `-.50/-.72` point，
+fixed interval 低于 0，但 hierarchical interval 跨 0。当前解释是共享 encoder 上的信息重叠和
+边际递减，而非已经证明结构上不兼容。此前 800-query confirmation 的 Full−CH harm 没在本轮复现；
+本轮也没有建立 Full benefit，因此两轮合起来只说明组合效应对训练清单/题池敏感，不能删除任一轮。
+
+#### 当前裁决
+
+1. Direct Key+Complete standalone 相对 U0 的排名收益已在本轮预注册主对比中建立；Complete 是
+   更稳定的单项贡献者。
+2. Gate 确实直接改变 score 路径并学到 Prior 对齐，但 `KCG−KC≈0`，没有额外排名收益证据。
+3. Mutual 会强行拉近两张 Prior map，但没有排名收益，且存在抹掉 Key/Complete 差异的风险。
+4. C、H0、Prior 的绝对格子均高于 U0；合并后没有崩坏，但边际强烈递减。Full−CH 未定，不能说
+   三模块联合优于 CH，也不能说本轮确认伤害。
+5. `.25` Gate 按用户的方法身份决定继续作为工程默认开启；它是实现默认，不是 efficacy 声明。
+   不得在本轮 104-row dev 或 2,400 题上继续改 weight、epoch、alpha、subset、threshold 或挑格子。
+6. 下一步冻结当前实现和 population，做预注册的 protected/external 确认；在此前不能把双 AI Silver
+   称为 Gold/准确/人工验证，也不能把 numeric match 称为完整语义正确。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因
@@ -1608,15 +1752,24 @@ population；不要继续在当前网格上加小数点权重。
    checkpoint、shard、merge、summary 和 completion hash，不覆盖、不重跑、不在同一数据上调参。
    Prior/Gate 新题协议 v1 也已完整结束；保留 1,600-query tuning/confirmation、1.408 TB feature、
    九个调权 checkpoint、锁文件、score merge 和 terminal completion，不得再次打开确认或二次选权。
-   下一轮默认以 CH 为当前 ranking 推荐；若仍研究 Prior，先扩充/改善 Silver supervision，并把
-   H0×Prior 交互诊断和新的 query/cluster-disjoint ranking population 一起预注册。
+   该轮冻结的 CH 推荐只描述当时训练清单与确认集；不得覆盖或重解释其 harm 终态。
+7. Prior 全面消融 v2 已使用 432 条 paired Prior、19 格×3 seed 和 2,400 题新打分集完整结束。
+   保存 1.816 TB feature、57 checkpoint、8 路 score shard、merge、mechanism/final summary 与全部 hash；
+   不得在这 104-row dev 或 2,400 题上继续调 direct、Gate、mutual、alpha、epoch、subset 或阈值。
+   下一步冻结 `.25` 工程默认，预注册 protected/external 确认；不能按本轮最高点估计挑 H+KCG 或
+   alpha probe 当新默认。
 
-当前裁决是：C、H0、direct Prior/Gate 都建立了各自 Silver 机制可学习性；H0 更像 tail/path
-风险头而不是精确首错定位器。此前新题 confirmation 上 CH=`94.458%`、Full=`93.917%`，Full−CH
-按冻结规则为 harm，因此当前 ranking 推荐仍是 CH。新 v16-posthoc 扩充监督下，Full 同时保住了
-Key/Complete、H0 token 与 Consistency relation 机制，没有出现表示层面的组合崩坏；但它没有新鲜
-Best-of-N 数据；复用 892 题上 Full 与 CH 的 K=16 均为 `85.72%`，只说明此前明显负差距没有复现，
-不能翻转旧排名结论。`.25` Gate 仍是 main-style 工程默认，不是 Full efficacy 结论。
-H1 与 mutual 没有因本轮获得新证据，原 v7/v12/v13/v16/v17 也仍不能写成通过。
+当前裁决是：C、H0、Direct Prior 都建立了各自 Silver 机制可学习性；H0 更像 tail/path 风险头而
+不是精确首错定位器。最新的 2,400 题 matched ablation 进一步建立了 Direct Key+Complete 相对 U0
+的 K=16 benefit（`+.79` point，3/3 seed 正，hierarchical interval 高于 0，Holm `p=.0008`），
+其中 Complete 的单项点估计更稳。Gate 确实把原 reward Gate 拉向 fused Prior，却没有 KC 之上的
+额外排名收益（`-.01` point）；Mutual 几乎把 Key/Complete 两图合一，也没有排名收益。
+
+三模块组合在本轮没有表示层崩坏，但存在明显边际递减：Full−CH 只有 `+.03` point，方向
+`+/-/0` 且区间跨 0。它没有复现旧 800-query confirmation 的 harm，也没有建立 Full benefit；
+两轮必须并存，正确结论是组合效果依赖训练清单/题池、目前未定，而不是选择性删除旧负结果。
+`.25` Gate 按用户的方法身份决定继续默认开启，但只能称工程默认，不能称 Gate 或 Full efficacy。
+H1 仍因负尾塑形的全局 value shift 风险保持关闭；Path MIL、pseudo-tail、progress、reconstruction
+也未因本轮获得新授权。原 v7/v12/v13/v16/v17 的冻结失败同样不能写成通过。
 
 任何后续结果都应把三件事分开报告：工程闭环是否运行、auxiliary target 是否可学、是否真正改善 held-out Best-of-N。三者不能互相替代。

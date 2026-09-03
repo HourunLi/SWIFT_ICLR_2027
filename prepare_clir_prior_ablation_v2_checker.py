@@ -33,12 +33,16 @@ def _select(
     checked: Sequence[Mapping[str, Any]],
     reserve: Sequence[Mapping[str, Any]],
     protocol: Mapping[str, Any],
+    *,
+    new_query_priorities: Mapping[str, str],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     candidate_count = int(protocol["generation"]["candidate_count"])
     binary = {"numeric_match", "numeric_mismatch"}
     by_query: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for raw in checked:
         by_query[str(raw["query_id"])].append(dict(raw))
+    if set(by_query) != set(new_query_priorities):
+        raise ValueError("new rollout queries do not match the frozen priority map")
     eligible: dict[str, list[dict[str, Any]]] = {}
     failures: Counter[str] = Counter()
     for query_id, rows in by_query.items():
@@ -63,7 +67,7 @@ def _select(
             if rows[0]["source"] == source
         ]
         candidates.sort(
-            key=lambda item: str(item[1][0]["prior_ablation_final_priority"])
+            key=lambda item: str(new_query_priorities[item[0]])
         )
         target = int(quotas[source])
         if len(candidates) < target:
@@ -114,6 +118,8 @@ def _select(
                     "prior_ablation_query_order": query_order,
                 }
             )
+            if query_id in new_query_priorities:
+                row["prior_ablation_final_priority"] = new_query_priorities[query_id]
             output.append(row)
     population = validate_rollout_population(output, candidate_count=candidate_count)
     if (
@@ -147,14 +153,41 @@ def _load_inputs(root: Path, protocol: Mapping[str, Any]):
     freeze = json.loads((root / "pre_rollout/freeze_report.json").read_text(encoding="utf-8"))
     if file_sha256(reserve_path) != freeze["records"]["math_reserve"]["file_sha256"]:
         raise ValueError("MATH reserve hash drift")
-    return raw_path, raw, reserve_path, reserve
+    fresh_queries_path = root / "pre_rollout/fresh_queries.jsonl"
+    if (
+        file_sha256(fresh_queries_path)
+        != freeze["records"]["fresh_queries"]["file_sha256"]
+    ):
+        raise ValueError("frozen fresh-query manifest hash drift")
+    fresh_queries = read_jsonl(fresh_queries_path)
+    new_query_priorities = {
+        str(row["query_id"]): str(row["prior_ablation_final_priority"])
+        for row in fresh_queries
+    }
+    if len(new_query_priorities) != len(fresh_queries):
+        raise ValueError("duplicate query IDs in frozen fresh-query manifest")
+    return (
+        raw_path,
+        raw,
+        reserve_path,
+        reserve,
+        fresh_queries_path,
+        new_query_priorities,
+    )
 
 
 def command_materialize(args: argparse.Namespace) -> None:
     protocol_path = Path(args.protocol).resolve()
     root = Path(args.output_root).resolve()
     protocol = load_protocol(protocol_path)
-    raw_path, raw, reserve_path, reserve = _load_inputs(root, protocol)
+    (
+        raw_path,
+        raw,
+        reserve_path,
+        reserve,
+        fresh_queries_path,
+        new_query_priorities,
+    ) = _load_inputs(root, protocol)
     checker_root = root / "checker"
     checked_path = checker_root / "new_checked.jsonl"
     selected_path = checker_root / "ranking_selected.jsonl"
@@ -171,7 +204,12 @@ def command_materialize(args: argparse.Namespace) -> None:
         candidate_count=int(protocol["generation"]["candidate_count"]),
         checker_version=checker_version,
     )
-    selected, selection = _select(checked, reserve, protocol)
+    selected, selection = _select(
+        checked,
+        reserve,
+        protocol,
+        new_query_priorities=new_query_priorities,
+    )
     checked_manifest = publish_manifest(
         checked_path,
         checked,
@@ -193,10 +231,18 @@ def command_materialize(args: argparse.Namespace) -> None:
         "schema_version": "clir-prior-ablation-v2-checker-completion",
         "status": "PASS_PRIOR_ABLATION_V2_CHECKER_AND_SELECTION",
         "protocol_file_sha256": file_sha256(protocol_path),
+        "checker_implementation": {
+            "path": str(Path(__file__).resolve()),
+            "file_sha256": file_sha256(Path(__file__).resolve()),
+        },
         "raw_rollout": {"path": str(raw_path), "file_sha256": file_sha256(raw_path)},
         "math_reserve": {
             "path": str(reserve_path),
             "file_sha256": file_sha256(reserve_path),
+        },
+        "frozen_fresh_queries": {
+            "path": str(fresh_queries_path),
+            "file_sha256": file_sha256(fresh_queries_path),
         },
         "checker_version": checker_version,
         "new_checked": {
@@ -231,11 +277,22 @@ def command_verify(args: argparse.Namespace) -> None:
     protocol_path = Path(args.protocol).resolve()
     root = Path(args.output_root).resolve()
     protocol = load_protocol(protocol_path)
-    raw_path, raw, reserve_path, reserve = _load_inputs(root, protocol)
+    (
+        raw_path,
+        raw,
+        reserve_path,
+        reserve,
+        fresh_queries_path,
+        new_query_priorities,
+    ) = _load_inputs(root, protocol)
     completion_path = root / "checker/completion.json"
     completion = json.loads(completion_path.read_text(encoding="utf-8"))
     if completion.get("status") != "PASS_PRIOR_ABLATION_V2_CHECKER_AND_SELECTION":
         raise ValueError("checker completion is not a pass")
+    if completion.get("checker_implementation", {}).get("file_sha256") != file_sha256(
+        Path(__file__).resolve()
+    ):
+        raise ValueError("checker implementation hash drift")
     checked_path = Path(completion["new_checked"]["path"])
     selected_path = Path(completion["ranking_selected"]["path"])
     checked = read_jsonl(checked_path)
@@ -252,7 +309,17 @@ def command_verify(args: argparse.Namespace) -> None:
         candidate_count=int(protocol["generation"]["candidate_count"]),
         checker_version=checker_version,
     )
-    recomputed, selection = _select(checked, reserve, protocol)
+    if (
+        completion.get("frozen_fresh_queries", {}).get("file_sha256")
+        != file_sha256(fresh_queries_path)
+    ):
+        raise ValueError("checker completion fresh-query provenance drift")
+    recomputed, selection = _select(
+        checked,
+        reserve,
+        protocol,
+        new_query_priorities=new_query_priorities,
+    )
     if selected != recomputed or selection != completion["selection"]:
         raise ValueError("checker selection recomputation drift")
     report = {
@@ -260,8 +327,10 @@ def command_verify(args: argparse.Namespace) -> None:
         "status": "PASS_PRIOR_ABLATION_V2_CHECKER_INDEPENDENT_RECOMPUTE",
         "protocol_file_sha256": file_sha256(protocol_path),
         "checker_completion_file_sha256": file_sha256(completion_path),
+        "checker_implementation_file_sha256": file_sha256(Path(__file__).resolve()),
         "raw_rollout_file_sha256": file_sha256(raw_path),
         "math_reserve_file_sha256": file_sha256(reserve_path),
+        "frozen_fresh_queries_file_sha256": file_sha256(fresh_queries_path),
         "ranking_selected_file_sha256": file_sha256(selected_path),
         "rows": len(selected),
         "queries": len({str(row["query_id"]) for row in selected}),

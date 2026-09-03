@@ -128,7 +128,15 @@ def test_checker_selection_is_priority_only_and_source_exact() -> None:
     ):
         checked.extend(_candidate(query, source, index, priority) for index in range(16))
     reserve = [_candidate("m1", "math", index, "a") for index in range(16)]
-    selected, report = _select(checked, reserve, protocol)
+    priorities = {"g2": "b", "g1": "a", "a1": "a"}
+    for row in checked:
+        row.pop("prior_ablation_final_priority")
+    selected, report = _select(
+        checked,
+        reserve,
+        protocol,
+        new_query_priorities=priorities,
+    )
     assert [selected[index]["query_id"] for index in range(0, 48, 16)] == [
         "g1",
         "a1",

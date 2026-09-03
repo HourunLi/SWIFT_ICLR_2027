@@ -232,19 +232,28 @@ def command_preflight(args: argparse.Namespace) -> None:
         }
         prior_losses = cell_reports["prior"]["losses"]
         if cell == "k" and not (
-            "prior_key" in prior_losses and "prior_complete" not in prior_losses
+            prior_losses["prior_key"] > 0.0
+            and prior_losses["prior_complete"] == 0.0
+            and cell_reports["prior"]["gradient_norms"]["key_prior_head"] > 0.0
+            and cell_reports["prior"]["gradient_norms"]["complete_prior_head"] == 0.0
         ):
             raise ValueError("Key-only preflight routed the wrong head")
         if cell == "complete" and not (
-            "prior_complete" in prior_losses and "prior_key" not in prior_losses
+            prior_losses["prior_complete"] > 0.0
+            and prior_losses["prior_key"] == 0.0
+            and cell_reports["prior"]["gradient_norms"]["complete_prior_head"] > 0.0
+            and cell_reports["prior"]["gradient_norms"]["key_prior_head"] == 0.0
         ):
             raise ValueError("Complete-only preflight routed the wrong head")
-        if cell == "ch_kcmg" and not {
-            "prior_key",
-            "prior_complete",
-            "prior_distill",
-            "prior_gate",
-        } <= set(prior_losses):
+        if cell == "ch_kcmg" and not all(
+            prior_losses[name] > 0.0
+            for name in (
+                "prior_key",
+                "prior_complete",
+                "prior_distill",
+                "prior_gate",
+            )
+        ):
             raise ValueError("full mutual+Gate preflight missed a Prior loss")
         reports[cell] = {"batches": cell_reports, "passed": True}
         del model

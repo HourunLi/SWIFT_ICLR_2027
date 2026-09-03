@@ -1,19 +1,20 @@
 {
   "schema_version": "clir-prior-ablation-v2-runtime-amendment-v1",
-  "status": "AUTHORIZED_POST_ROLLOUT_IMPLEMENTATION_REPAIR_BEFORE_CLIR_TRAINING",
+  "status": "AUTHORIZED_RUNTIME_IMPLEMENTATION_REPAIRS_BEFORE_ANY_CLIR_SCORE",
   "created_at_utc": "2026-09-03",
   "base_code_commit": "512cb769b01c809d45bbb6707648e05da9c53613",
   "protocol_file_sha256": "5583e7d179aa6c8ef193ba3d87674ec9c4bf85f9368b76fe2b18af8db1ead731",
-  "trigger": "The completed 36800-row rollout exposed two fail-closed adapter defects before any CLIR score or new checkpoint was produced.",
+  "trigger": "The completed rollout and first checkpoint batch exposed three fail-closed adapter/audit defects before any new CLIR score was produced.",
   "repairs": [
     "Recover the already-frozen new-query selection priority from the hash-bound fresh-query manifest because the generic rollout engine intentionally did not copy query-only metadata into candidate rows.",
-    "Validate Key-only and Complete-only preflight routing using weighted loss values and head gradients because training_step reports zero-valued disabled Prior loss keys for auditability."
+    "Validate Key-only and Complete-only preflight routing using weighted loss values and head gradients because training_step reports zero-valued disabled Prior loss keys for auditability.",
+    "Normalize generated model JSON through RewardConfig before checkpoint comparison because train_clir materializes omitted dataclass defaults such as eps=1e-8 into checkpoint model_config."
   ],
   "scientific_invariants": [
     "The original protocol, frozen query manifests, source quotas, priority hashes, candidate order, checker semantics, 19-cell factor table, configs, training manifest, seeds, epochs, and metrics are unchanged.",
     "The repairs use no CLIR score, auxiliary prediction, correctness rate, training metric, or ranking result to select data or alter a method cell.",
-    "No model architecture, loss formula, optimizer, sampler, feature contract, checkpoint, scoring rule, or statistical contrast is changed.",
-    "The original rollout remains bound to base_code_commit; downstream checkpoints record the clean runtime descendant commit."
+    "No model architecture, loss formula, optimizer, sampler, feature contract, checkpoint payload, scoring rule, or statistical contrast is changed.",
+    "The original rollout remains bound to base_code_commit; the first eight audited checkpoints record runtime commit 0f4b8075cb2617985fda722a034461b58cd0f4dc and later checkpoints record its clean repair descendant."
   ],
   "state_when_frozen": {
     "new_rollout_rows_verified": 36800,
@@ -21,7 +22,9 @@
     "checker_selected_rows": 38400,
     "checker_selected_queries": 2400,
     "new_clir_scores_opened": false,
-    "new_training_started": false
+    "completed_checkpoints_before_audit_repair": 8,
+    "completed_epochs_per_checkpoint": 3,
+    "checkpoint_contents_modified_by_repair": false
   },
   "allowed_changed_paths": [
     "configs/prior_ablation_v2/runtime_amendment_v1.json",
@@ -31,7 +34,7 @@
   ],
   "runtime_file_sha256": {
     "prepare_clir_prior_ablation_v2_checker.py": "b6f05dd4ed7c702daf8a73c03ce512b2a43074518e3c7f6312520d45b47e1fef",
-    "run_clir_prior_ablation_v2_training.py": "8961b2ed871b6fe537b9ae2f1fa3a8bece01c6404ec79266f5417180f7ceb16b",
-    "tests/test_clir_prior_ablation_v2.py": "97564e8dd3fb3355f219c0e4bfc01d3828d500e547f76441b233ed00ba1dd57d"
+    "run_clir_prior_ablation_v2_training.py": "cfe7312e8fa8b00e2f08e202920a4e5c9d7098ba1a8f13a92da5fc82e3c7e453",
+    "tests/test_clir_prior_ablation_v2.py": "0b74bf7d70ee023725150547c43ab4afa70defb6979524f7a2fb8f82a1d31733"
   }
 }

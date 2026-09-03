@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 
 from prepare_clir_prior_ablation_v2_checker import _select
+from run_clir_prior_ablation_v2_training import _normalized_model_config
 from src.clir_prior_ablation import (
     CONTRAST_TERMS,
     EXPECTED_CELLS,
@@ -79,6 +80,20 @@ def test_generated_prior_cells_route_only_declared_losses() -> None:
             "reconstruction_weight",
         ):
             assert model[key] == 0.0
+
+
+def test_checkpoint_audit_normalizes_reward_config_defaults() -> None:
+    protocol = _protocol()
+    base = json.loads(
+        (ROOT / "configs/three_module_expansion_v1/u0_correctness_only.json").read_text()
+    )
+    raw = derive_config(protocol, base, "k")["model"]
+    normalized = _normalized_model_config(raw)
+    assert "eps" not in raw
+    assert normalized["eps"] == 1e-8
+    assert normalized["hidden_dim"] == raw["hidden_dim"]
+    assert normalized["key_prior_weight"] == 1.0
+    assert normalized["complete_prior_weight"] == 0.0
 
 
 def test_query_selection_keeps_one_per_cluster_before_hash() -> None:

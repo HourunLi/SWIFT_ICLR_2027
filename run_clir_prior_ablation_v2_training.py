@@ -18,7 +18,7 @@ from prepare_clir_prior_ablation_v2 import load_protocol
 from prepare_clir_prior_v16_training import _representative_batches, _run_batch
 from src.clir_data import CLIRTrajectoryDataset
 from src.clir_smoke import atomic_write_json, file_sha256, read_jsonl
-from src.consistency_localized_reward import ConsistencyLocalizedReward
+from src.consistency_localized_reward import ConsistencyLocalizedReward, RewardConfig
 from train_clir import (
     apply_training_overrides,
     load_config,
@@ -72,7 +72,7 @@ def _validate_runtime_amendment(
         amendment.get("schema_version")
         != "clir-prior-ablation-v2-runtime-amendment-v1"
         or amendment.get("status")
-        != "AUTHORIZED_POST_ROLLOUT_IMPLEMENTATION_REPAIR_BEFORE_CLIR_TRAINING"
+        != "AUTHORIZED_RUNTIME_IMPLEMENTATION_REPAIRS_BEFORE_ANY_CLIR_SCORE"
         or amendment.get("base_code_commit") != plan["code_commit"]
         or amendment.get("protocol_file_sha256") != file_sha256(protocol_path)
     ):
@@ -150,6 +150,12 @@ def _all_finite(value: Any) -> bool:
     return True
 
 
+def _normalized_model_config(values: Mapping[str, Any]) -> dict[str, Any]:
+    """Materialize the exact dataclass state that ``train_clir`` checkpoints."""
+
+    return dict(RewardConfig(**dict(values)).__dict__)
+
+
 def _checkpoint_path(
     protocol: Mapping[str, Any], plan: Mapping[str, Any], root: Path, cell: str, seed: int
 ) -> tuple[Path, str | None]:
@@ -208,7 +214,7 @@ def _audit_checkpoint(
         raise ValueError(f"checkpoint training data drift: {cell}/{seed}")
     config_record = plan["configs"][cell]
     config = json.loads(Path(config_record["path"]).read_text(encoding="utf-8"))
-    if checkpoint.get("model_config") != config["model"]:
+    if checkpoint.get("model_config") != _normalized_model_config(config["model"]):
         raise ValueError(f"checkpoint model config drift: {cell}/{seed}")
     provenance = checkpoint.get("run_provenance", {})
     if (

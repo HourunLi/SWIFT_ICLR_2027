@@ -1424,6 +1424,54 @@ encoder，学到的“识别好推理”信息有重叠，因而 standalone 能�
 实现，预注册真正 protected/external 的确认评测；Prior 标签仍只能称
 `dual-AI Silver v16-posthoc binary, no human verification`，numeric checker 也只代表数值匹配。
 
+### 原版 SWIFT 同预算基线 v1：CLIR 结构在同预算下低于朴素 SWIFT `0.81` 点
+
+冻结协议见 [`protocol.json`](configs/swift_official_baseline_v1/protocol.json)。这一格补的是
+19-cell 消融缺的对照：上面最朴素的 U0 仍带着 CLIR 全部骨架（层轴编码器、题面条件融合、
+最终残差头，共 `5,347,593` 个可训练参数），因此此前无法回答“相对已发表 SWIFT 的差距有多少来自结构”。
+本轮按 [`math_hard_eval_v1`](configs/math_hard_eval_v1/protocol.json) 的 `swift_parity_followup`
+预先声明执行，只补这一格：不重训任何 CLIR 格子、不重抽 rollout、不重抽特征。
+
+模型是 `src/swift_official_baseline.py`，对上游
+`utils.LinearRewardModel`（commit `41f7c9f7e13734267450870f977e5dd7d62ac23e`）的 clean-room 适配，
+只保留 SWIFT 最关键的三件事：33 层隐状态直接拼接成 `101,376` 维、无层轴编码器；每个 token 只输出
+一个 gate 和一个 reward；训练信号只有最终答对/答错的 BCE。CLIR 的条件融合、残差头、Consistency、
+H0 与 Prior 全部缺席，condition states 根本不加载。共 `202,754` 个可训练参数。
+`tests/test_swift_official_baseline.py` 断言它与 vendored 上游在 gated 与 `disable_gate`
+两条路径上最大绝对差为 `0`，并断言一次特征遍历同时打完 3 个 checkpoint 与逐个循环逐元素相等。
+
+训练旋钮对齐 U0 而非上游默认，因为要隔离的是结构而不是复现上游：固定 3 epoch、batch 4、lr 1e-4、
+weight_decay 0、grad clip 1.0、无验证划分、不做 checkpoint 选择，seeds 42/43/44，同一份 5,552 行
+manifest（`ef3bd3a2…`）。由此产生的六处上游偏离（epochs、batch_size、weight_decay、
+max_grad_norm、验证划分与早停、特征 dtype 与 autocast）全部写进协议的
+`declared_upstream_deviations` 并附理由。打分复用同一份 38,400 行 exact-token 特征
+（`428893ea…`），U0 的既有 score 只读、未重算。
+
+| 口径 | BoN@16 | 题内对错排序 | 可训练参数 |
+|---|---:|---:|---:|
+| 随机选 | `95.15%` | — | — |
+| 原版 SWIFT | `96.64%` | `71.18%` | `202,754` |
+| U0（CLIR 骨架） | `95.83%` | `65.38%` | `5,347,593` |
+| Oracle 上限 | `99.21%` | — | — |
+
+主对比 `U0 − SWIFT = -0.81` point，逐 seed `-1.42/-0.63/-0.375`，3/3 seed 为负，
+fixed query 95% interval `[-1.25,-0.36]`，hierarchical seed+query interval `[-1.58,-0.14]`，
+Holm `p=.0005`（单假设族，Holm 退化为恒等但仍记录）；三个题源同方向：GSM8K `-1.26`、
+ASDiv-A `-0.46`、MATH `-0.60` point。K=1 时两者都精确等于 `95.50%`（任何打分器都退化为第 0 号候选），
+K=2/4/8 的差额分别是 `-0.64/-0.64/-0.63` point。选择迁移上，SWIFT 选对而 U0 选错 122 例，
+反向只有 64 例。
+
+这意味着**在同一 5,552 行、同样 3 epoch 的预算下，CLIR 的额外结构没有换来更好的排名，反而落后
+朴素 SWIFT `0.81` 点**，而它的参数量是后者的 26 倍。同时注意本轮最好的 CLIR 格子
+（Complete `96.78%`、Full `96.71%`）与 SWIFT 的 `96.64%` 接近，也就是说前面记录的
+`Direct +0.79` 等增益基本上只是把 U0 拉回朴素 SWIFT 的水平，而不是超过它。
+
+边界必须写清楚：这 2,400 题已被 19-cell 消融看过，因此这是**同预算结构对比，不是新鲜的
+protected-test 结果**，也不是对上游论文自身数字的复现（旋钮对齐 U0、不是上游默认）。
+结果出来后不做任何权重/epoch/subset/阈值选择。下一步若要给 SWIFT 一个上游原生旋钮
+（40 epoch、batch 16、weight_decay 1e-5、0.2 验证划分 + patience 3）的变体，
+协议已把它标为 `possible_future_extension_not_authorized_here`，需要另行预注册。
+
 ## Toy smoke test
 
 Toy 数据只验证代码路径，不能证明方法有效：

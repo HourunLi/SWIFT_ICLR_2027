@@ -32,6 +32,9 @@ from train_clir import (
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_PROTOCOL = PROJECT_ROOT / "configs/prior_ablation_v2/protocol.json"
 DEFAULT_ROOT = PROJECT_ROOT / "run_artifacts/prior_ablation_v2"
+RUNTIME_AMENDMENT = (
+    PROJECT_ROOT / "configs/prior_ablation_v2/runtime_amendment_v1.json"
+)
 
 
 def _utc_now() -> str:
@@ -56,6 +59,50 @@ def _git_state() -> dict[str, Any]:
     }
 
 
+def _validate_runtime_amendment(
+    *,
+    plan: Mapping[str, Any],
+    protocol_path: Path,
+    state: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    if state["commit"] == plan["code_commit"]:
+        return None
+    amendment = json.loads(RUNTIME_AMENDMENT.read_text(encoding="utf-8"))
+    if (
+        amendment.get("schema_version")
+        != "clir-prior-ablation-v2-runtime-amendment-v1"
+        or amendment.get("status")
+        != "AUTHORIZED_POST_ROLLOUT_IMPLEMENTATION_REPAIR_BEFORE_CLIR_TRAINING"
+        or amendment.get("base_code_commit") != plan["code_commit"]
+        or amendment.get("protocol_file_sha256") != file_sha256(protocol_path)
+    ):
+        raise ValueError("Prior-ablation runtime amendment is missing or stale")
+    changed = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(PROJECT_ROOT),
+            "diff",
+            "--name-only",
+            f"{plan['code_commit']}..{state['commit']}",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    if set(changed) != set(amendment["allowed_changed_paths"]):
+        raise ValueError("runtime amendment changed-path allowlist mismatch")
+    for relative, expected_hash in amendment["runtime_file_sha256"].items():
+        if file_sha256(PROJECT_ROOT / relative) != expected_hash:
+            raise ValueError(f"runtime amendment file hash drift: {relative}")
+    return {
+        "path": str(RUNTIME_AMENDMENT),
+        "file_sha256": file_sha256(RUNTIME_AMENDMENT),
+        "base_code_commit": plan["code_commit"],
+        "runtime_code_commit": state["commit"],
+    }
+
+
 def _training_plan(protocol_path: Path, root: Path):
     protocol = load_protocol(protocol_path)
     plan_path = root / "training_plan.json"
@@ -72,8 +119,11 @@ def _training_plan(protocol_path: Path, root: Path):
     state = _git_state()
     if state["dirty"] or state["branch"] != "clir-clean-integration":
         raise RuntimeError("v2 training requires a clean clir-clean-integration commit")
-    if state["commit"] != plan["code_commit"]:
-        raise ValueError("training code commit differs from the frozen plan")
+    runtime_amendment = _validate_runtime_amendment(
+        plan=plan,
+        protocol_path=protocol_path,
+        state=state,
+    )
     for cell, record in plan["configs"].items():
         path = Path(record["path"])
         if file_sha256(path) != record["file_sha256"]:
@@ -87,7 +137,7 @@ def _training_plan(protocol_path: Path, root: Path):
         or len({str(row["query_id"]) for row in rows}) != int(train_spec["queries"])
     ):
         raise ValueError("training manifest drift")
-    return protocol, plan, train_path
+    return protocol, plan, train_path, runtime_amendment
 
 
 def _all_finite(value: Any) -> bool:
@@ -189,7 +239,9 @@ def _audit_checkpoint(
 def command_preflight(args: argparse.Namespace) -> None:
     protocol_path = Path(args.protocol).resolve()
     root = Path(args.output_root).resolve()
-    protocol, plan, train_path = _training_plan(protocol_path, root)
+    protocol, plan, train_path, runtime_amendment = _training_plan(
+        protocol_path, root
+    )
     target = root / "training/preflight.json"
     if target.exists():
         raise FileExistsError("training preflight already exists")
@@ -265,6 +317,7 @@ def command_preflight(args: argparse.Namespace) -> None:
         "protocol_file_sha256": file_sha256(protocol_path),
         "training_plan_file_sha256": file_sha256(root / "training_plan.json"),
         "training_manifest_file_sha256": file_sha256(train_path),
+        "runtime_amendment": runtime_amendment,
         "supervision_per_epoch": summary,
         "cells": reports,
     }
@@ -275,7 +328,7 @@ def command_preflight(args: argparse.Namespace) -> None:
 def command_worker(args: argparse.Namespace) -> None:
     protocol_path = Path(args.protocol).resolve()
     root = Path(args.output_root).resolve()
-    protocol, plan, train_path = _training_plan(protocol_path, root)
+    protocol, plan, train_path, _ = _training_plan(protocol_path, root)
     preflight = json.loads((root / "training/preflight.json").read_text(encoding="utf-8"))
     if preflight.get("status") != "PASS_PRIOR_ABLATION_V2_FULL_WIDTH_TRAINING_PREFLIGHT":
         raise ValueError("training preflight did not pass")
@@ -333,7 +386,7 @@ def command_worker(args: argparse.Namespace) -> None:
 def command_finalize(args: argparse.Namespace) -> None:
     protocol_path = Path(args.protocol).resolve()
     root = Path(args.output_root).resolve()
-    protocol, plan, _ = _training_plan(protocol_path, root)
+    protocol, plan, _, runtime_amendment = _training_plan(protocol_path, root)
     target = root / "training/completion.json"
     if target.exists():
         raise FileExistsError("training completion already exists")
@@ -354,6 +407,7 @@ def command_finalize(args: argparse.Namespace) -> None:
         "completed_at_utc": _utc_now(),
         "protocol_file_sha256": file_sha256(protocol_path),
         "training_plan_file_sha256": file_sha256(root / "training_plan.json"),
+        "runtime_amendment": runtime_amendment,
         "cells": list(protocol["cells"]),
         "seeds": list(protocol["training"]["seeds"]),
         "run_count": len(runs),

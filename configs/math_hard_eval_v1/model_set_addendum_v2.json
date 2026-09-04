@@ -1,0 +1,219 @@
+{
+  "schema_version": "clir-math-hard-model-set-addendum-v2",
+  "status": "AUTHORIZED_MATH_HARD_MODEL_SET_V2_BEFORE_FIRST_ROLLOUT",
+  "frozen_at_utc": "2026-09-04T05:58:29Z",
+  "purpose": "extend the already selected 500-query MATH-hard protocol with the complete architecture-by-sampler controls before any rollout, correctness label, or reward score is generated",
+  "code": {
+    "commit": "64ca4c515a7e96691f7bfa8ae5a851fe803372d4",
+    "branch": "clir-clean-integration",
+    "dirty": false
+  },
+  "evidence_boundary": {
+    "test_questions_already_accessed_for_deterministic_selection": true,
+    "first_test_question_access_at_utc": "2026-09-03T12:26:40Z",
+    "no_rollout_correctness_or_reward_scores_opened_before_this_addendum": true,
+    "model_set_locked_before_first_rollout": true,
+    "no_post_result_checkpoint_epoch_weight_subset_or_seed_selection": true,
+    "question_list_candidate_order_checker_generator_and_feature_contract_unchanged": true,
+    "all_2400_query_sampler_factorial_results_may_have_been_seen": true,
+    "those_diagnostic_results_cannot_change_the_hard_test_model_set": true,
+    "published_swift_numbers_directly_comparable": false
+  },
+  "frozen_parent": {
+    "math_hard_protocol": {
+      "path": "configs/math_hard_eval_v1/protocol.json",
+      "file_sha256": "60a9521fe4940438f0f5b698e0fc76ab31478478e751035779817b50f3600857"
+    },
+    "pre_rollout_registry": {
+      "path": "run_artifacts/math_hard_eval_v1/pre_rollout/manifest_registry.json",
+      "file_sha256": "4b2728367bac99ac74fc0e005ba0dbf26dafa9e3452d936de896672304b13e49"
+    },
+    "pre_rollout_freeze_report": {
+      "path": "run_artifacts/math_hard_eval_v1/pre_rollout/freeze_report.json",
+      "file_sha256": "f3660199f3b2c7e269f697bc5741f7cf3d614fcb9372875da0fdda212e079442"
+    },
+    "training_completions": [
+      {
+        "path": "run_artifacts/prior_ablation_v2/training/completion.json",
+        "file_sha256": "c4ba726ef787adbea9bd6ef3beee66957d41d15127fbc026fd798c90e06e665e",
+        "status": "PASS_PRIOR_ABLATION_V2_MATCHED_TRAINING_GRID"
+      },
+      {
+        "path": "run_artifacts/swift_official_baseline_v1/training/completion.json",
+        "file_sha256": "f692700ab464e464ce9a8ae878c45dcdb94be4e51489a70a933247be9290d3ad",
+        "status": "PASS_SWIFT_OFFICIAL_BASELINE_MATCHED_TRAINING_GRID"
+      },
+      {
+        "path": "run_artifacts/swift_u0_sampler_factorial_v1/training/completion.json",
+        "file_sha256": "2daab15cf16fe234873282e8a76f386b7143ab61f527f5de96b01f4cf600ef91",
+        "status": "PASS_SWIFT_U0_SAMPLER_FACTORIAL_TRAINING"
+      }
+    ]
+  },
+  "model_set": {
+    "base_clir_cells": 19,
+    "base_clir_checkpoint_count": 57,
+    "additional_cells": [
+      "u0_random",
+      "swift_random",
+      "swift_grouped"
+    ],
+    "additional_checkpoint_count": 9,
+    "total_checkpoint_count": 66,
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "primary_epoch": 3,
+    "runs": [
+      {
+        "cell": "swift_grouped",
+        "source_cell": "swift_grouped",
+        "seed": 42,
+        "epoch": 3,
+        "model_kind": "plain_swift",
+        "checkpoint_path": "run_artifacts/swift_u0_sampler_factorial_v1/training/swift_grouped/seed-42/epoch-3.pt",
+        "checkpoint_file_sha256": "4f7f26e3b66a97fd01bc3cddc1c31b44a03340a345238151eee21c91aa2d6b81"
+      },
+      {
+        "cell": "swift_grouped",
+        "source_cell": "swift_grouped",
+        "seed": 43,
+        "epoch": 3,
+        "model_kind": "plain_swift",
+        "checkpoint_path": "run_artifacts/swift_u0_sampler_factorial_v1/training/swift_grouped/seed-43/epoch-3.pt",
+        "checkpoint_file_sha256": "f1c8cdd378917e2ea0a3d3f2b9da91e9d39771b156f155e808cfcf0ebd59cb0a"
+      },
+      {
+        "cell": "swift_grouped",
+        "source_cell": "swift_grouped",
+        "seed": 44,
+        "epoch": 3,
+        "model_kind": "plain_swift",
+        "checkpoint_path": "run_artifacts/swift_u0_sampler_factorial_v1/training/swift_grouped/seed-44/epoch-3.pt",
+        "checkpoint_file_sha256": "bf689683e6c63d349e16dc2a6845f49bafe62db7912330a65838bac2a45e84d3"
+      },
+      {
+        "cell": "swift_random",
+        "source_cell": "swift_official",
+        "seed": 42,
+        "epoch": 3,
+        "model_kind": "plain_swift",
+        "checkpoint_path": "run_artifacts/swift_official_baseline_v1/training/swift_official/seed-42/checkpoint.pt",
+        "checkpoint_file_sha256": "10e3aee67086990af4704765a0186e61cbfed0dc1d3dc3a243defeb4f8b2afae"
+      },
+      {
+        "cell": "swift_random",
+        "source_cell": "swift_official",
+        "seed": 43,
+        "epoch": 3,
+        "model_kind": "plain_swift",
+        "checkpoint_path": "run_artifacts/swift_official_baseline_v1/training/swift_official/seed-43/checkpoint.pt",
+        "checkpoint_file_sha256": "cda6c82f9e34d2b419d171e900564325566d34c844b4be0c9ee620bbd59b08e8"
+      },
+      {
+        "cell": "swift_random",
+        "source_cell": "swift_official",
+        "seed": 44,
+        "epoch": 3,
+        "model_kind": "plain_swift",
+        "checkpoint_path": "run_artifacts/swift_official_baseline_v1/training/swift_official/seed-44/checkpoint.pt",
+        "checkpoint_file_sha256": "5ebffd30274c0fc2512b7e2199772ea91d2468c9576d8b5e16ed6f33e9b9158b"
+      },
+      {
+        "cell": "u0_random",
+        "source_cell": "u0_random",
+        "seed": 42,
+        "epoch": 3,
+        "model_kind": "u0_clir",
+        "checkpoint_path": "run_artifacts/swift_u0_sampler_factorial_v1/training/u0_random/seed-42/epoch-3.pt",
+        "checkpoint_file_sha256": "7ae2334fd80d5cdaed057462288c0a7d6b81d303a3fb3db2de56a68beb751a63"
+      },
+      {
+        "cell": "u0_random",
+        "source_cell": "u0_random",
+        "seed": 43,
+        "epoch": 3,
+        "model_kind": "u0_clir",
+        "checkpoint_path": "run_artifacts/swift_u0_sampler_factorial_v1/training/u0_random/seed-43/epoch-3.pt",
+        "checkpoint_file_sha256": "53a1d8c434cb837456467d66b47220bd9d1526a18081f2940a209327913ddf1b"
+      },
+      {
+        "cell": "u0_random",
+        "source_cell": "u0_random",
+        "seed": 44,
+        "epoch": 3,
+        "model_kind": "u0_clir",
+        "checkpoint_path": "run_artifacts/swift_u0_sampler_factorial_v1/training/u0_random/seed-44/epoch-3.pt",
+        "checkpoint_file_sha256": "3b6c93f0a25d7401dec1bcfd8f51831cc8c4f7646ce372cdf535df03826da7e6"
+      }
+    ]
+  },
+  "evaluation": {
+    "k_values": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "primary_k": 16,
+    "sampler_factorial_contrasts": {
+      "architecture_random": {
+        "u0_random": 1,
+        "swift_random": -1
+      },
+      "architecture_grouped": {
+        "u0_grouped": 1,
+        "swift_grouped": -1
+      },
+      "sampler_u0": {
+        "u0_grouped": 1,
+        "u0_random": -1
+      },
+      "sampler_swift": {
+        "swift_grouped": 1,
+        "swift_random": -1
+      },
+      "architecture_by_sampler_interaction": {
+        "u0_grouped": 1,
+        "u0_random": -1,
+        "swift_grouped": -1,
+        "swift_random": 1
+      }
+    },
+    "all_19_clir_cells_compared_to_sampler_matched_swift_grouped": true,
+    "holm_families": [
+      "original_clir_primary_6",
+      "architecture_by_sampler_5",
+      "all_grouped_clir_vs_grouped_swift_19"
+    ],
+    "paired_query_bootstrap_replicates": 10000,
+    "paired_sign_flip_replicates": 10000,
+    "level_and_subject_strata": true,
+    "random_expected_and_oracle_required": true
+  },
+  "implementation": {
+    "baseline_scorer": {
+      "path": "score_clir_math_hard_baselines.py",
+      "file_sha256": "b7969cd8860cf7e9a47310cce9ec18d47b95fbc7733a13724b997d9744d1b7d1"
+    },
+    "joint_summarizer": {
+      "path": "summarize_clir_math_hard_v2.py",
+      "file_sha256": "1fdd5828b5e1e450ddc9010370c85ca031f39ec78b81468e6a324d8b7a001bac"
+    }
+  },
+  "runtime": {
+    "required_branch": "clir-clean-integration",
+    "require_clean_committed_code": true,
+    "math_hard_output_root": "run_artifacts/math_hard_eval_v1",
+    "shard_output_root": "run_artifacts/math_hard_eval_v1/ranking/baseline_controls/scoring_shards",
+    "merged_output_root": "run_artifacts/math_hard_eval_v1/ranking/baseline_controls/scored",
+    "baseline_merge_report": "run_artifacts/math_hard_eval_v1/ranking/baseline_controls/scored/merge_report.json",
+    "scoring_shards": 8,
+    "scoring_batch_size": 2,
+    "scoring_num_workers": 0,
+    "scoring_amp_dtype": "bfloat16"
+  }
+}

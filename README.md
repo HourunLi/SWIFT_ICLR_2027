@@ -6,6 +6,14 @@ CLIR 是一个自包含的 hidden-state reward model 研究实现。它参考 SW
 
 需要先明确证据边界：[`configs/best_current.json`](configs/best_current.json) 是当前唯一的**整合配置**，不是已经证明优于 correctness-only baseline 的“最优效果配置”。三模块联合训练的历史结果没有通过扩展门，详见 [`docs/handoff.md`](docs/handoff.md)。
 
+截至 2026-09-04，公平基线和外部检查已经补齐：同一训练预算、同一随机 sampler 下，当前
+U0/CLIR 骨架相对朴素 SWIFT 的 BoN@16 差值仅 `-0.15` point，置信区间跨 0；早先报告的
+`-0.81` point 同时混入了 sampler，不能再叫“CLIR 结构伤害”。在一次性冻结的 500 道官方
+MATH Level 4/5 难题上，最好的 CLIR 点估计是 KC `32.40%`，匹配 sampler 的朴素 SWIFT 是
+`31.40%`，但所有预注册对比均无定论。另用上游发布的 Ministral-8B checkpoint 按公开协议
+复现得到 MATH/GSM8K/AQuA 的 `62.2%/94.0%/73.2%`，对应公开值为
+`62.8%/93.6%/75.8%`；这验证了官方 SWIFT 路径，但不与 Phi-3.5 上的 CLIR 数字直接比较。
+
 ## 当前标注账本
 
 必须把“已经用于小规模训练的数据”和“后来只做流程审计的数据”分开：
@@ -1424,81 +1432,80 @@ encoder，学到的“识别好推理”信息有重叠，因而 standalone 能�
 实现，预注册真正 protected/external 的确认评测；Prior 标签仍只能称
 `dual-AI Silver v16-posthoc binary, no human verification`，numeric checker 也只代表数值匹配。
 
-### 原版 SWIFT 同预算基线 v1：旧对照存在 sampler 混杂，联合差异为 `-0.81` 点
+### 原版 SWIFT 公平对照：2×2 已完成，旧 `-0.81` 不是纯结构伤害
 
-冻结协议见 [`protocol.json`](configs/swift_official_baseline_v1/protocol.json)。这一格补的是
-19-cell 消融缺的朴素 SWIFT 参照：上面最朴素的 U0 仍带着 CLIR 全部骨架（层轴编码器、题面条件融合、
-最终残差头，共 `5,347,593` 个可训练参数）。这次结果公开后重新审计发现，旧协议除结构外还同时改变了
-batch sampler，因此它没有真正把“结构”单独隔离出来。
-本轮按 [`math_hard_eval_v1`](configs/math_hard_eval_v1/protocol.json) 的 `swift_parity_followup`
-预先声明执行，只补这一格：不重训任何 CLIR 格子、不重抽 rollout、不重抽特征。
+朴素基线实现见 [`src/swift_official_baseline.py`](src/swift_official_baseline.py)：它与上游
+`LinearRewardModel`（commit `41f7c9f7e13734267450870f977e5dd7d62ac23e`）在 gated 和
+`disable_gate` 两路逐位相等，只保留“33 层隐状态直接拼接、每 token 一个 reward+gate、最终正确性
+BCE”，共 `202,754` 个参数。U0 保留 CLIR 的层轴 encoder、题面条件融合和残差头，共
+`5,347,593` 个参数，但同样只训练 correctness。
 
-模型是 `src/swift_official_baseline.py`，对上游
-`utils.LinearRewardModel`（commit `41f7c9f7e13734267450870f977e5dd7d62ac23e`）的 clean-room 适配，
-只保留 SWIFT 最关键的三件事：33 层隐状态直接拼接成 `101,376` 维、无层轴编码器；每个 token 只输出
-一个 gate 和一个 reward；训练信号只有最终答对/答错的 BCE。CLIR 的条件融合、残差头、Consistency、
-H0 与 Prior 全部缺席，condition states 根本不加载。共 `202,754` 个可训练参数。
-`tests/test_swift_official_baseline.py` 断言它与 vendored 上游在 gated 与 `disable_gate`
-两条路径上最大绝对差为 `0`，并断言一次特征遍历同时打完 3 个 checkpoint 与逐个循环逐元素相等。
-
-训练旋钮对齐 U0 而非上游默认，因为要隔离的是结构而不是复现上游：固定 3 epoch、batch 4、lr 1e-4、
-weight_decay 0、grad clip 1.0、无验证划分、不做 checkpoint 选择，seeds 42/43/44，同一份 5,552 行
-manifest（`ef3bd3a2…`）。但 SWIFT 使用逐 epoch 随机 sampler，既有 U0 使用 semantic-group sampler。
-由此产生的六处上游偏离（epochs、batch_size、weight_decay、
-max_grad_norm、验证划分与早停、特征 dtype 与 autocast）全部写进协议的
-`declared_upstream_deviations` 并附理由。打分复用同一份 38,400 行 exact-token 特征
-（`428893ea…`），U0 的既有 score 只读、未重算。
-
-| 口径 | BoN@16 | 题内对错排序 | 可训练参数 |
-|---|---:|---:|---:|
-| 随机选 | `95.15%` | — | — |
-| 原版 SWIFT（random sampler） | `96.64%` | `71.18%` | `202,754` |
-| U0（CLIR 骨架，grouped sampler） | `95.83%` | `65.38%` | `5,347,593` |
-| Oracle 上限 | `99.21%` | — | — |
-
-主对比 `U0 − SWIFT = -0.81` point，逐 seed `-1.42/-0.63/-0.375`，3/3 seed 为负，
-fixed query 95% interval `[-1.25,-0.36]`，hierarchical seed+query interval `[-1.58,-0.14]`，
-Holm `p=.0005`（单假设族，Holm 退化为恒等但仍记录）；三个题源同方向：GSM8K `-1.26`、
-ASDiv-A `-0.46`、MATH `-0.60` point。K=1 时两者都精确等于 `95.50%`（任何打分器都退化为第 0 号候选），
-K=2/4/8 的差额分别是 `-0.64/-0.64/-0.63` point。选择迁移上，SWIFT 选对而 U0 选错 122 例，
-反向只有 64 例。
-
-这个 `-0.81` point 仍是可复现的实测差异，但正确含义是：**CLIR 骨架 + semantic-group sampler**
-相对**朴素 SWIFT + random sampler**的联合差异。它暂时不能单独归因于结构，更不能据此裁决
-`clir_structure_harm`。尤其 U0 的 Consistency 权重为 0，semantic grouping 并不是其已启用 loss 的
-必要条件；400 组 compact/expanded 被强制同批，仍会改变每个 batch 的正负组成、样本顺序和优化轨迹。
-因此“Direct 把 U0 拉回 SWIFT 水平”也只能作为旧联合口径下的描述，待 sampler 补格后重述。
-
-边界必须写清楚：这 2,400 题已被 19-cell 消融看过，因此这是**已读 population 上的同预算诊断，
-不是新鲜的 protected-test 结果**，也不是对上游论文自身数字的复现（旋钮对齐 U0、不是上游默认）。
-结果出来后不做任何权重/epoch/subset/阈值选择。下一步若要给 SWIFT 一个上游原生旋钮
-（40 epoch、batch 16、weight_decay 1e-5、0.2 验证划分 + patience 3）的变体，
-协议已把它标为 `possible_future_extension_not_authorized_here`，需要另行预注册。
-
-#### sampler 2×2 补格：已冻结，待 GPU 执行
-
+最初的同预算对照把 `SWIFT+random sampler` 与 `U0+semantic-group sampler` 相比，得到
+`-0.81` point。发现 sampler 混杂后，协议
 [`swift_u0_sampler_factorial_v1`](configs/swift_u0_sampler_factorial_v1/protocol.json)
-（protocol sha256=`56fbcfb3…c122e`，冻结代码 commit `2b98b96`）固定了完整的
-“模型结构 × sampler”四格：已有 `SWIFT+random`、`U0+grouped` 两格，只补
-`SWIFT+grouped` 和 `U0+random`。仍使用同一 5,552 行、3 epoch、seeds 42/43/44；epoch 3
-预先固定为唯一排名 checkpoint，epoch 1/2 只保存训练轨迹，不得按结果挑 epoch。
+在补格前冻结，随后补齐完整的“结构 × sampler”四格。四格都使用同一 5,552 行、batch 4、
+3 epochs、seeds 42/43/44，固定 epoch 3，不挑 checkpoint；排名仍只读复用已经看过的
+2,400 题×16 候选。
 
-机械审计显示清单有 400 个双成员 semantic group（800 行）和 4,752 个 singleton；两种 sampler
-每轮都恰好遍历全部 5,552 行并产生 1,388 个 batch。grouped sampler 每轮同批放置全部 400 对，
-而 random sampler 在 seed 42 同批放置 0 对。这证明差异不是训练数据量或 step 数，而是 batch
-组成和顺序。完成四格后将同时报告：random 下的结构差、grouped 下的结构差、U0 内 sampler 差、
-SWIFT 内 sampler 差及结构×sampler 交互；不论方向都报告，不做格子选择。
+| 模型与 sampler | BoN@16 | 题内对错排序 |
+|---|---:|---:|
+| 朴素 SWIFT + random | `96.64%` | `71.18%` |
+| 朴素 SWIFT + grouped | `96.75%` | `71.16%` |
+| U0 + random | `96.49%` | `68.60%` |
+| U0 + grouped | `95.83%` | `65.38%` |
 
-该诊断仍复用已看过的 2,400×16 排名集，只负责拆开旧混杂，不升级为新鲜泛化证据。
-冻结的 MATH Level 4/5 难题评测继续保持 sealed，补格结果出来前，旧 `-0.81` 只能称为联合差异。
+真正匹配 random sampler 的纯结构差是 `U0−SWIFT=-0.15` point，fixed 95% interval
+`[-0.53,+0.21]`、hierarchical interval `[-0.64,+0.33]`，**没有定论**。匹配 grouped sampler
+时差为 `-0.92` point，3/3 seed 为负；U0 内 grouped−random 为 `-0.65` point，而 SWIFT 内
+grouped−random 只有 `+0.11` point。结构×sampler 交互为 `-0.76` point，fixed interval
+低于 0、hierarchical interval 略跨 0，3/3 seed 为负。最稳妥的解释是：当前 U0 对这种“把
+compact/expanded 强制放在同一 batch”的 sampler 更敏感；不能把旧 `-0.81` 全算到结构头上。
 
-这不否定早期 Stage-1 的记录。那一轮 correctness-only `clir`（可类比当时的 U0）在 128 道
-GSM8K validation 上的 BoN@16 是 `89.32%`，strict SWIFT 是 `88.28%`，均值差 `+1.04` point；
-但逐 seed 差为 `+4.69/-2.34/+0.78`，方向不稳定。它使用 4,096 行/512-query GSM8K train、
-5 epoch、batch 2、random sampler 和约 `9.55M` 参数的旧 CLIR；当前 U0 使用 5,552 行/1,678-query
-多题源 train、3 epoch、batch 4、grouped sampler 和约 `5.35M` 参数，并在 2,400 道三题源题上
-评测。因此两轮并不矛盾，也不能互相覆盖；新的 2×2 只负责回答当前实现、当前训练预算下的 sampler
-混杂，不能把早期小样本正点估计改写成已建立的优势。
+这也不否定早期 Stage-1 的 `+1.04` point：那是 128 道 GSM8K、旧 9.55M 参数 CLIR、4,096 行、
+5 epochs、batch 2、random sampler，且逐 seed 为 `+4.69/-2.34/+0.78`，本来就不稳定。它与当前
+多题源、不同结构和预算不是同一实验，不能互相覆盖。上面 2,400 题已被消融读出，只是诊断集，
+不是 protected/generalization 结论。
+
+### 冻结的 MATH Level 4/5 难题：500 题一次性评测
+
+[`math_hard_eval_v1`](configs/math_hard_eval_v1/protocol.json) 从官方 MATH test 冻结了
+250 道 Level 4 +250 道 Level 5，每题新生成 16 个 Phi-3.5 候选，共 8,000 条；这些题没有进入
+训练。候选正确率/随机期望为 `26.35%`，Oracle 为 `61.00%`。在任何 reward score 打开前，
+57 个 CLIR checkpoint 与 9 个公平 SWIFT/U0 checkpoint 已全部锁定；之后一次性打完 66 个模型。
+
+| 代表格子 | BoN@16 |
+|---|---:|
+| 朴素 SWIFT + grouped | `31.40%` |
+| 朴素 SWIFT + random | `31.27%` |
+| U0 + random / grouped | `31.13% / 31.00%` |
+| C / H0 / CH | `30.67% / 32.27% / 31.00%` |
+| Complete / KC / KCG | `31.53% / 32.40% / 31.33%` |
+| Full | `30.60%` |
+
+KC 是最高点估计，比匹配 grouped sampler 的 SWIFT 高 `+1.00` point；H0 和 K 都是
+`32.27%`。但原 CLIR 六个主对比、五个结构×sampler 对比、以及 19 个 CLIR 格子各自对
+`SWIFT+grouped` 的比较，配对区间与 Holm 校正后全部是 **inconclusive**。因此可以说模型在更难题上
+有排名信号，不能说 KC/CLIR 已优于 SWIFT，也不能说 Full 被证明有害。该 500 题已经完成唯一一次
+打开，今后只能作为已读测试结果，不能继续据此调权重或挑格子。
+
+### 官方 SWIFT 公开基准复现：MATH/GSM8K/AQuA
+
+为了确认本地基线代码没有把 SWIFT 跑坏，又按
+[`swift_official_generalization_v1`](configs/swift_official_generalization_v1/protocol.json)
+执行了上游发布 checkpoint 的独立复现。严格固定官方 Ministral-8B revision、37 层状态、
+reward checkpoint、temperature 1、top-p `.9` 和每题 64 个候选；三套数据各固定抽 500 题，
+共生成 96,000 条回复。没有下游微调，也没有根据结果补跑或挑子集。
+
+| 公开基准 | 本地 SWIFT@64 | query bootstrap 95% 区间 | 论文公布值 | 差值 |
+|---|---:|---:|---:|---:|
+| MATH | `62.2%` | `[58.0%,66.4%]` | `62.8%` | `-0.6` point |
+| GSM8K | `94.0%` | `[91.8%,96.0%]` | `93.6%` | `+0.4` point |
+| AQuA | `73.2%` | `[69.2%,77.0%]` | `75.8%` | `-2.6` point |
+
+三个公布值都落在本次 500 题区间内，支持“发布 checkpoint 与本地官方路径基本复现”。AQuA 的点差
+更大，应保留为有限样本和候选随机性下的偏差，不能说逐点完全复刻。这一轮使用 Ministral-8B、官方
+checkpoint、公开题目与 64 个新候选；CLIR 难题评测使用 Phi-3.5、我们的训练数据与 16 个候选，
+所以两张表不能直接横向比较，也不能用 `62.2%` 去减 `32.4%`。
 
 ## Toy smoke test
 
@@ -1547,8 +1554,9 @@ pytest -q
 - 默认仍使用预抽取全层 feature，真实数据的磁盘开销很大；没有集成 batch-local online extraction。
 - 当前 objective 是 pointwise correctness BCE 加可用 auxiliary supervision，尚无 pairwise/listwise reward objective。
 - clean integration 已完成历史小数据矩阵、扩充后的三模块完整 `2×2×2` 三-seed 矩阵，
-  以及 C/H/P/Gate 的机制复测；仍没有新的 protected ranking test。扩量 Full 在复用
-  892-query ranking 上只比 U0 高 `0.52` point 且区间跨 0，不能称为有效提升。
+  以及 C/H/P/Gate 的机制复测。一次性 protected MATH-hard 已完成，但没有任何 CLIR 主对比或
+  相对匹配 SWIFT 的对比通过区间与多重校正；它今后是已读测试，不能再用于调参。扩量 Full 在复用
+  892-query ranking 上只比 U0 高 `0.52` point 且区间跨 0，也不能称为有效提升。
 - Consistency 已有400个训练正对和150+150 held-out 正负关系的三 seed C0/C1
   复测；均值分离与 score-gap 结构改善，但正对 cosine 下降、cosine AUROC seed 方向
   混合。Hallucination/Prior 使用的是无人工复核的事后 Silver 子集；H0 的 tail/path
@@ -1564,10 +1572,10 @@ pytest -q
   `.8490/.8565/.8591/.8572`。C 与 H0 各有正向点估计，且三个辅助格的题内 pairwise 都在
   3/3 seeds 超过 U0；但所有 BoN 区间跨 0，`C×H0` 交互点估计 `−.93` point 也跨 0。
   因而可以说“机制学到、整体排序改善、top-of-16 未加和”，不能说模块显著有效或天然冲突。
-- clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代缺失的数据 provenance 上游与 protected-test protocol。
+- clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代 Silver 标签缺失的人工准确率审计。
 - clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired
-  summarizer；v6.1 新增了单独的 held-out consistency relation evaluator。朴素官方 SWIFT
-  同预算参照已经实现并完成，但旧 U0/SWIFT 比较混入 sampler 差异；完整 2×2 补格已冻结、待 GPU。
-  strict/encoded SWIFT 变体仍未重建。
+  summarizer；v6.1 新增了单独的 held-out consistency relation evaluator。朴素 SWIFT 同预算
+  2×2、MATH-hard 66-model 一次性评测与发布 checkpoint 的三基准复现均已完成。官方复现只验证
+  上游路径基本可重现，不能替代同一生成器/同一候选上的 CLIR 对比；strict/encoded SWIFT 变体仍未重建。
 
 研究假设、已有证据与未验证部分见 [`docs/proposal.md`](docs/proposal.md)；迁移依据和历史负结果见 [`docs/handoff.md`](docs/handoff.md)。

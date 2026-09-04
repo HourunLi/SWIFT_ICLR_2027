@@ -247,7 +247,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--protocol", default=str(DEFAULT_PROTOCOL))
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT))
-    parser.add_argument("--workers", type=int, default=32)
+    # The pinned upstream grader implements symbolic timeouts with process-local
+    # SIGALRM timers.  Reusing those workers in ProcessPoolExecutor can leave a
+    # timer firing between tasks and terminate the whole pool.  Sequential
+    # grading is deterministic, fast enough for the 8,000-row frozen set, and
+    # keeps each timeout inside ``_grade``'s fail-closed exception boundary.
+    parser.add_argument("--workers", type=int, default=1)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("fetch").set_defaults(func=command_fetch)
     sub.add_parser("materialize").set_defaults(func=command_materialize)

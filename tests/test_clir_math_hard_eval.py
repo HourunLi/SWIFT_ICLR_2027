@@ -2,6 +2,7 @@ import copy
 import json
 from pathlib import Path
 
+from check_clir_math_hard_eval import build_parser as build_checker_parser
 from prepare_clir_math_hard_eval import (
     _candidate_test_rows,
     build_rollout_shards,
@@ -26,6 +27,11 @@ def test_protocol_is_hash_bound_and_balanced() -> None:
     assert protocol["source"]["target_queries_per_level"] == {"4": 250, "5": 250}
     assert protocol["generation"]["candidate_count"] == 16
     assert protocol["evaluation"]["primary_k"] == 16
+
+
+def test_checker_defaults_to_signal_safe_sequential_execution() -> None:
+    args = build_checker_parser().parse_args(["materialize"])
+    assert args.workers == 1
 
 
 def test_math_test_namespace_is_explicitly_valid() -> None:

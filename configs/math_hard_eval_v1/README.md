@@ -22,7 +22,11 @@ The execution order is:
 1. `prepare_clir_math_hard_eval.py materialize`, then `verify`.
 2. `run_clir_math_hard_eval_rollout.py rollout` for `hard-000` first, then the
    other nine shards; verify and merge.
-3. `check_clir_math_hard_eval.py fetch`, `materialize`, then `verify`.
+3. `check_clir_math_hard_eval.py fetch`, `materialize`, then `verify`. The
+   local runner defaults to one checker worker because the pinned upstream
+   symbolic grader uses process-local `SIGALRM` timers; multi-process reuse can
+   terminate the pool between tasks. This changes execution only, not grading
+   semantics.
 4. `extract_clir_math_hard_eval_features.py prepare`, `verify-plan`,
    `preflight`, eight extraction workers, eight verification workers, then
    `finalize`.

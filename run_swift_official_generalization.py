@@ -675,6 +675,7 @@ def command_show_commands(args: argparse.Namespace) -> None:
     rollout = _rollout_path(protocol, args.dataset)
     rollout.parent.mkdir(parents=True, exist_ok=True)
     generation = (
+        "PYTHONDONTWRITEBYTECODE=1 VLLM_WORKER_MULTIPROC_METHOD=spawn "
         f"CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 {python} {generator} "
         f"--model_name {model} --input_file {input_path} --output_file {rollout} "
         "--split test --n_rollouts 64 --temperature 1.0 --top_p 0.9 "

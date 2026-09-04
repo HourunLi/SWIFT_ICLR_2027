@@ -33,6 +33,7 @@ def test_frozen_protocol_has_official_three_dataset_targets() -> None:
         "required_runtime_files"
     ]
     assert protocol["runtime"]["package_versions"]["vllm"] == "0.5.3.post1"
+    assert protocol["generation"]["worker_multiprocessing_method"] == "spawn"
 
 
 def test_query_ranges_are_contiguous_balanced_and_exhaustive() -> None:

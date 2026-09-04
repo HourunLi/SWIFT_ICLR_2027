@@ -94,6 +94,8 @@
     "dtype": "bfloat16",
     "backend": "vllm",
     "backend_version": "0.5.3.post1",
+    "worker_multiprocessing_method": "spawn",
+    "worker_multiprocessing_reason": "the pinned torch/CUDA runtime has already initialized CUDA in the driver before vLLM creates tensor-parallel workers; vLLM's default fork method therefore fails before model loading, while its supported spawn method changes only process startup and not generation semantics",
     "tensor_parallel_size": 8,
     "seed": 42,
     "temperature": 1.0,

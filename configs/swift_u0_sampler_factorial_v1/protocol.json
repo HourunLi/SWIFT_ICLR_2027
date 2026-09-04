@@ -1,0 +1,212 @@
+{
+  "schema_version": "swift-u0-sampler-factorial-v1",
+  "status": "AUTHORIZED_FROZEN_TWO_MISSING_CELLS",
+  "purpose": "complete the missing cells in the architecture by sampler 2x2 so the matched-budget U0 versus plain-SWIFT comparison is not confounded by semantic-group versus random batch construction",
+  "user_authorization": "可以先补充",
+
+  "evidence_boundary": {
+    "tier": "diagnostic_factorial_on_already_inspected_2400_query_population",
+    "ranking_population_already_inspected": true,
+    "not_fresh_not_protected_not_external_generalization": true,
+    "no_post_result_epoch_weight_subset_threshold_or_seed_selection": true,
+    "primary_epoch": 3,
+    "epoch_1_and_2_checkpoints": "saved for training-trajectory audit only; they are not ranking-scored and cannot replace epoch 3",
+    "math_hard_eval_v1_remains_sealed": true,
+    "interpretation": "this diagnostic can repair the sampler confound in the same 2400-query family; it cannot establish a fresh benchmark claim"
+  },
+
+  "factorial": {
+    "axes": {
+      "architecture": ["plain_swift", "u0_clir_structure"],
+      "sampler": ["epoch_random", "semantic_group"]
+    },
+    "cells": {
+      "swift_random": {
+        "architecture": "plain_swift",
+        "sampler": "epoch_random",
+        "source": "immutable_anchor"
+      },
+      "swift_grouped": {
+        "architecture": "plain_swift",
+        "sampler": "semantic_group",
+        "source": "new_run"
+      },
+      "u0_random": {
+        "architecture": "u0_clir_structure",
+        "sampler": "epoch_random",
+        "source": "new_run"
+      },
+      "u0_grouped": {
+        "architecture": "u0_clir_structure",
+        "sampler": "semantic_group",
+        "source": "immutable_anchor"
+      }
+    },
+    "new_cells": ["u0_random", "swift_grouped"],
+    "anchor_cells": ["u0_grouped", "swift_random"]
+  },
+
+  "frozen_parents": {
+    "training_manifest": {
+      "path": "run_artifacts/data_expansion_prior_v16_posthoc_training_v1/data/train_ch_full.jsonl",
+      "file_sha256": "ef3bd3a2f5aada2809830181940f464b235c88bd933b83be08c7eb4bf68d6fcf",
+      "rows": 5552,
+      "queries": 1678,
+      "correct_rows": 4922,
+      "incorrect_rows": 630,
+      "source_rows": {"gsm8k": 4856, "math": 696}
+    },
+    "ranking_feature_manifest": {
+      "path": "run_artifacts/prior_ablation_v2/features_v2/final/tuning_features.jsonl",
+      "file_sha256": "428893ebad8345e9ddfe18f2d486d069d361e142ba81837008d9e2483525c1dd",
+      "rows": 38400,
+      "queries": 2400,
+      "candidates_per_query": 16,
+      "source_queries": {"gsm8k": 950, "asdiv-a": 950, "math": 500}
+    },
+    "u0_grouped_config": {
+      "path": "configs/three_module_expansion_v1/u0_correctness_only.json",
+      "file_sha256": "8de1b4720f319a08447a17e5b11fd0081c25f31c6b635cbc877ba58f96e74f89"
+    },
+    "u0_random_config": {
+      "path": "configs/swift_u0_sampler_factorial_v1/u0_random.json",
+      "file_sha256": "52f370d285bb5638fc31d3c8914186058e687c242fe3b7e8be814f32e13cf797",
+      "only_declared_difference_from_u0_grouped": {"training.group_by_semantic_id": [true, false]}
+    },
+    "prior_ablation_training_completion": {
+      "path": "run_artifacts/prior_ablation_v2/training/completion.json",
+      "file_sha256": "c4ba726ef787adbea9bd6ef3beee66957d41d15127fbc026fd798c90e06e665e"
+    },
+    "prior_ablation_score_merge": {
+      "path": "run_artifacts/prior_ablation_v2/ranking/scored/merge_report.json",
+      "file_sha256": "d805f48e44834ada2ec9a99f15e300a696712d6d533eefa2318c5ce1761a495f"
+    },
+    "swift_training_completion": {
+      "path": "run_artifacts/swift_official_baseline_v1/training/completion.json",
+      "file_sha256": "f692700ab464e464ce9a8ae878c45dcdb94be4e51489a70a933247be9290d3ad"
+    },
+    "swift_score_merge": {
+      "path": "run_artifacts/swift_official_baseline_v1/ranking/scored/merge_report.json",
+      "file_sha256": "1e4df6df28b314501a8ef07763638980a0918bfb1fb1da8d6ca8428acc98cbff"
+    },
+    "hard_math_protocol": {
+      "path": "configs/math_hard_eval_v1/protocol.json",
+      "file_sha256": "60a9521fe4940438f0f5b698e0fc76ab31478478e751035779817b50f3600857",
+      "must_remain_pre_rollout": true
+    }
+  },
+
+  "immutable_anchors": {
+    "u0_grouped": {
+      "trainable_parameters": 5347593,
+      "checkpoints": {
+        "42": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/u0/seed-42/checkpoint.pt", "6d59c97b48e03a18412393f716f648c0ef6f5a15d3cb8b6a5641cf71db2e18d7"],
+        "43": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/u0/seed-43/checkpoint.pt", "2a2eced5cb8d68490f6d36a4e54a4a13ad405b7e1a9b068e6bfcfd9507405e97"],
+        "44": ["run_artifacts/data_expansion_prior_v16_posthoc_training_v1/ch_decomposition_v1/training/u0/seed-44/checkpoint.pt", "1d2a28ebe24c64fdaad30ff0049e4834ae0ab9cae429d1414baee1a99274ef33"]
+      },
+      "scores": {
+        "42": ["run_artifacts/prior_ablation_v2/ranking/scored/u0/seed-42/scored.jsonl", "68378fd8112104406a9bd44e573f5f258b7b6efb8510989ff29da1ea6d34b58d"],
+        "43": ["run_artifacts/prior_ablation_v2/ranking/scored/u0/seed-43/scored.jsonl", "b41ae261d98a32880223f89a0165b5a1b93e4611c951f71fc269dc2285b507ff"],
+        "44": ["run_artifacts/prior_ablation_v2/ranking/scored/u0/seed-44/scored.jsonl", "a7bfcbb08961084cf9c78545cb6ad9ae7943463a6636b2e1b4b2929849f2999c"]
+      }
+    },
+    "swift_random": {
+      "trainable_parameters": 202754,
+      "checkpoints": {
+        "42": ["run_artifacts/swift_official_baseline_v1/training/swift_official/seed-42/checkpoint.pt", "10e3aee67086990af4704765a0186e61cbfed0dc1d3dc3a243defeb4f8b2afae"],
+        "43": ["run_artifacts/swift_official_baseline_v1/training/swift_official/seed-43/checkpoint.pt", "cda6c82f9e34d2b419d171e900564325566d34c844b4be0c9ee620bbd59b08e8"],
+        "44": ["run_artifacts/swift_official_baseline_v1/training/swift_official/seed-44/checkpoint.pt", "5ebffd30274c0fc2512b7e2199772ea91d2468c9576d8b5e16ed6f33e9b9158b"]
+      },
+      "scores": {
+        "42": ["run_artifacts/swift_official_baseline_v1/ranking/scored/swift_official/seed-42/scored.jsonl", "d7cd0d5923777cfb6aa7ca1fc9d0c10d47266409bb3479389ebbc924e2898875"],
+        "43": ["run_artifacts/swift_official_baseline_v1/ranking/scored/swift_official/seed-43/scored.jsonl", "2a86ee0d58dd1755802f50f252df876e6f3daa22177df07433d8be22f1170c72"],
+        "44": ["run_artifacts/swift_official_baseline_v1/ranking/scored/swift_official/seed-44/scored.jsonl", "ba49a6d026c4cda704e0d061d5f36c17a2dfb2e59f678e186b86d05006262eef"]
+      }
+    }
+  },
+
+  "sampler_contract": {
+    "random": "EpochRandomSampler with seed plus zero-based epoch",
+    "grouped": "SemanticGroupBatchSampler with seed plus zero-based epoch, batch size 4, maximum semantic chunk size 2",
+    "manifest_semantic_inventory": {
+      "semantic_groups": 400,
+      "semantic_rows": 800,
+      "group_size_histogram": {"2": 400},
+      "singleton_rows_without_semantic_id": 4752,
+      "all_semantic_pairs_have_same_correctness": true,
+      "all_semantic_pairs_have_styles": ["relative_compact", "relative_expanded"]
+    },
+    "both_samplers_must_consume_each_of_5552_indices_once_per_epoch": true,
+    "expected_batches_per_epoch": 1388,
+    "grouped_sampler_must_colocate_all_400_pairs_per_epoch": true,
+    "sampler_changes_batch_composition_and_order_not_rows_or_step_count": true
+  },
+
+  "models": {
+    "u0_clir_structure": {
+      "trainable_parameters": 5347593,
+      "enabled_loss": "final correctness BCE only",
+      "architecture": "layer-axis encoder plus question-condition fusion plus token gate/reward plus final residual score head"
+    },
+    "plain_swift": {
+      "trainable_parameters": 202754,
+      "enabled_loss": "final correctness BCE only",
+      "architecture": "official single Linear(101376,2) token gate/reward head with gate-weighted mean",
+      "upstream_commit": "41f7c9f7e13734267450870f977e5dd7d62ac23e"
+    }
+  },
+
+  "training": {
+    "seeds": [42, 43, 44],
+    "new_run_count": 6,
+    "epochs": 3,
+    "saved_epochs": [1, 2, 3],
+    "primary_epoch": 3,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.0,
+    "max_grad_norm": 1.0,
+    "optimizer": "AdamW",
+    "loss": "BCEWithLogitsLoss",
+    "amp_dtype": "bfloat16",
+    "num_workers": 4,
+    "pin_memory": true,
+    "validation_split": null,
+    "early_stopping": null,
+    "checkpoint_selection": "none; epoch 3 is primary regardless of outcome",
+    "new_cell_sampler": {"u0_random": "epoch_random", "swift_grouped": "semantic_group"}
+  },
+
+  "evaluation": {
+    "ranking_scored_epochs": [3],
+    "k_values": [1, 2, 4, 8, 16],
+    "primary_k": 16,
+    "contrasts": {
+      "architecture_random": {"u0_random": 1, "swift_random": -1},
+      "architecture_grouped": {"u0_grouped": 1, "swift_grouped": -1},
+      "sampler_u0": {"u0_grouped": 1, "u0_random": -1},
+      "sampler_swift": {"swift_grouped": 1, "swift_random": -1},
+      "architecture_by_sampler_interaction": {"u0_grouped": 1, "u0_random": -1, "swift_grouped": -1, "swift_random": 1}
+    },
+    "primary_multiplicity_family": ["architecture_random", "architecture_grouped", "sampler_u0", "sampler_swift", "architecture_by_sampler_interaction"],
+    "paired_query_bootstrap_replicates": 10000,
+    "paired_sign_flip_replicates": 10000,
+    "source_strata": ["gsm8k", "asdiv-a", "math"],
+    "metrics": ["ordered_prefix_Best_of_N_accuracy", "within_query_correct_wrong_pairwise_accuracy"],
+    "selection_rule": "none; report every cell and every predeclared contrast regardless of direction"
+  },
+
+  "runtime": {
+    "output_root": "run_artifacts/swift_u0_sampler_factorial_v1",
+    "python": "/prodcpfs/user/panzhixin/NeuralUCB-master/.venv/bin/python",
+    "required_branch": "clir-clean-integration",
+    "require_clean_committed_code": true,
+    "training_workers": 6,
+    "scoring_shards": 8,
+    "scoring_batch_size": 2,
+    "scoring_num_workers": 0,
+    "scoring_amp_dtype": "bfloat16",
+    "launch_only_when_all_eight_gpus_have_at_least_mib_free": 70000,
+    "large_artifacts_are_git_ignored": true
+  }
+}

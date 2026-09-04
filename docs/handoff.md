@@ -1681,12 +1681,13 @@ fixed interval 低于 0，但 hierarchical interval 跨 0。当前解释是共�
 6. 下一步冻结当前实现和 population，做预注册的 protected/external 确认；在此前不能把双 AI Silver
    称为 Gold/准确/人工验证，也不能把 numeric match 称为完整语义正确。
 
-### 原版 SWIFT 同预算基线 v1：同预算下 CLIR 骨架比朴素 SWIFT 低 `.81` point
+### 原版 SWIFT 同预算基线 v1：旧对照存在 sampler 混杂，联合差异为 `-.81` point
 
 本轮由 [`configs/swift_official_baseline_v1/protocol.json`](../configs/swift_official_baseline_v1/protocol.json)
 （sha256=`a4706fe1…0ec4`）在任何 SWIFT score 产生前冻结，补的是 19 格消融缺的对照：
 上面最朴素的 U0 仍带 CLIR 全部骨架（层轴 encoder、题面条件融合、最终残差头，
-`5,347,593` 参数），因此此前无法回答“相对已发表 SWIFT 的差距有多少来自结构”。
+`5,347,593` 参数）。本轮原意是回答“差距有多少来自结构”，但结果公开后的 sampler 审计发现
+旧协议还同时改变了 batch 构造，因此目前只能回答结构与 sampler 的联合差异。
 执行依据是 [`math_hard_eval_v1`](../configs/math_hard_eval_v1/protocol.json) 里已冻结的
 `swift_parity_followup`，不是新开实验。范围只有这一格：不重训任何 CLIR cell、不重抽
 rollout、不重抽 feature；`git diff --stat run_artifacts/prior_ablation_v2/` 为空，
@@ -1719,9 +1720,9 @@ rollout、不重抽 feature；`git diff --stat run_artifacts/prior_ablation_v2/`
   同一份 5,552 行 manifest（`ef3bd3a2…`，1,678 query / 4,922 正 630 负）。
 - 由此产生六处上游偏离（epochs 3 vs 40、batch 4 vs 16、weight_decay 0 vs 1e-5、
   grad clip 1.0 vs 无、无验证划分 vs 0.2+patience 3、bf16 autocast vs fp32）写入
-  `declared_upstream_deviations`；一处参照格偏离（`group_by_semantic_id` false vs U0 true，
-  因为语义分组只为 consistency loss 组 batch，本基线没有该损失）写入
-  `declared_reference_cell_deviations`。
+  `declared_upstream_deviations`；一处参照格偏离是 `group_by_semantic_id` false vs U0 true，
+  已写入 `declared_reference_cell_deviations`。旧协议把它解释为“SWIFT 没有 Consistency loss”，
+  但 U0 的 Consistency 权重同样为 0；因此该理由不足以支持结构归因，必须补齐 sampler 两格。
 - `training/completion.json` 状态 `PASS_SWIFT_OFFICIAL_BASELINE_MATCHED_TRAINING_GRID`，
   3 run，末轮 BCE `.4583/.4311/.4535`，checkpoint sha256 `10e3aee6…`/`cda6c82f…`/`5ebffd30…`
   三者互不相同，均 `completed_epoch=3`、`trainable_parameters=202754`。
@@ -1743,8 +1744,8 @@ rollout、不重抽 feature；`git diff --stat run_artifacts/prior_ablation_v2/`
 | 口径 | BoN@16 | 题内对错 pairwise | 可训练参数 |
 |---|---:|---:|---:|
 | random expected | `.951536` | — | — |
-| swift_official | `.966389` | `.711749` | `202,754` |
-| u0（CLIR 骨架） | `.958333` | `.653848` | `5,347,593` |
+| swift_official（random sampler） | `.966389` | `.711749` | `202,754` |
+| u0（CLIR 骨架，grouped sampler） | `.958333` | `.653848` | `5,347,593` |
 | oracle | `.992083` | — | — |
 
 主对比 `u0_minus_swift_official` = `-.81` point，逐 seed `-1.42/-.63/-.375`，3/3 seed 为负，
@@ -1753,15 +1754,15 @@ sign-flip p=`.0005`，Holm 相同（单假设族，恒等但显式记录）。�
 （3/3 负，两区间均低于 0）、ASDiv-A `-.46`（fixed 低于 0、hierarchical 跨 0）、
 MATH `-.60`（两区间均跨 0）。K=2/4/8 差额 `-.64/-.64/-.63` point。选择迁移不对称：
 SWIFT 选对而 U0 选错 122 例，反向仅 64 例，7,014 例不变（分母 7,200 seed-query）。
-decision=`clir_structure_harm`。
+旧 summary 的 decision=`clir_structure_harm`；经 sampler 审计后该命名被降级为
+`joint_architecture_and_sampler_difference`，待 2×2 补格后再裁决纯结构效应。
 
 #### 当前裁决
 
-1. 在同一 5,552 行、同样 3 epoch 预算下，CLIR 的额外结构没有换来更好的排名，反而低于朴素
-   SWIFT `.81` point，而参数量是后者的 26 倍。这是本仓库第一个把“结构”与“训练量”分开的对照。
-2. 这同时重述了 v2 消融：本轮最好的 CLIR 格子（Complete `.9678`、Full `.9671`）只是与
-   SWIFT 的 `.9664` 打平，因此此前记录的 `Direct +.79` 等增益基本上只是把 U0 拉回朴素 SWIFT
-   水平，不构成超过已发表基线的证据。
+1. 在同一 5,552 行、同样 3 epoch 预算下，`U0+grouped` 比 `SWIFT+random` 低 `.81` point；
+   这是可靠的联合差异，不是纯结构效应。参数量相差 26 倍的事实不变，但效应来源尚未拆开。
+2. v2 最好的 CLIR 格子（Complete `.9678`、Full `.9671`）与 SWIFT 的 `.9664` 接近；在 sampler
+   补格完成前，只能说它们在旧联合口径下接近，不能断言 Direct 仅仅把结构伤害补回来。
 3. 证据层级为 `prospective_matched_plain_baseline_on_the_already_inspected_prior_ablation_v2_ranking_population`：
    这 2,400 题已被 19 格消融读出过，所以是同预算结构对比，**不是**新鲜 protected-test 结果，
    也**不是**对上游论文数字的复现（旋钮对齐 U0，不是上游默认）。
@@ -1769,6 +1770,29 @@ decision=`clir_structure_harm`。
 5. 若要补一组上游原生旋钮（40 epoch、batch 16、weight_decay 1e-5、0.2 验证划分 + patience 3）
    的 3-seed 变体，protocol 已标为 `possible_future_extension_not_authorized_here`，
    必须另行预注册；成本极低，`stacked_swift_scores` 一次特征遍历即可同时打完 6 个 checkpoint。
+
+#### sampler 2×2 纠偏（已冻结、待 GPU）
+
+用户授权后，commit `2b98b96` 在任何新 cell 训练/打分前冻结了
+[`configs/swift_u0_sampler_factorial_v1/protocol.json`](../configs/swift_u0_sampler_factorial_v1/protocol.json)
+（sha256=`56fbcfb35d714d901952cde6a2b99c45eaf1120a12f6f83103d9e4b3d01c122e`）。四格是：
+
+| | random sampler | semantic-group sampler |
+|---|---|---|
+| 朴素 SWIFT | 已有 anchor | 新补 `swift_grouped` |
+| U0/CLIR 骨架 | 新补 `u0_random` | 已有 anchor |
+
+两格新训练仍锁定相同 5,552 行、batch 4、3 epoch、lr `1e-4`、seeds 42/43/44；epoch 3 是
+预先声明的唯一 ranking checkpoint，epoch 1/2 仅作训练轨迹审计。旧两格 checkpoint/score 全部
+hash 锁定，只读复用。最终固定报告 random/grouped 下两项结构差、两种结构各自 sampler 差和
+architecture×sampler interaction，并对五项同时做校正，不按结果选择一种口径。
+
+manifest 机械审计有 400 组 compact/expanded（800 行）及 4,752 个 singleton；每种 sampler
+每轮都完整消费 5,552 行、产生 1,388 batch。grouped 每轮把 400 对全部同批；random 在 seed 42
+为 0 对同批。U0 的 Consistency loss 为 0，因此这确实是会影响优化轨迹、却与已启用目标无关的
+混杂项。该补格仍只使用已看过的 2,400×16 population，不能变成 protected/generalization 结论；
+MATH Level 4/5 冻结难题集继续 sealed。当前 GPU 被另一条 8 卡任务占用，所以状态是
+`FROZEN_PENDING_GPU`，尚无新训练指标。
 
 ## 已知限制
 
@@ -1803,9 +1827,9 @@ decision=`clir_structure_harm`。
 - checkpoint 已写 code commit/branch/dirty-worktree、完整命令和 Python/PyTorch/CUDA/device；上游标签/checker一致性、protected test 和 baseline completeness 仍不满足正式论文级协议。
 - trainer 的 feature reference 会绑定 path、size、mtime 与 manifest 内 checksum 声明，但不会在每次训练前重 hash 数百 GiB payload；必须先确认 durable exhaustive mirror-verification report。
 - clean evaluator 与新增 summarizer 已能完成跨 variants/seeds 的 parity 检查和 paired contrast；本地大 scored/checkpoint artifact 默认不进 Git，正式发布仍需独立 artifact manifest/存储。
-- 原版 SWIFT 同预算基线已在 2,400 题上把 CLIR 结构与训练量分开，结论是同预算下 CLIR 骨架低于
-  朴素 SWIFT `.81` point、最好的 CLIR 格子只与之打平；但该 population 已被 19 格消融读出过，
-  所以这是同预算结构对比而非新鲜 protected test，也不是对上游论文数字的复现（旋钮对齐 U0）。
+- 原版 SWIFT 同预算基线在 2,400 题上测得 `U0+grouped` 比 `SWIFT+random` 低 `.81` point；
+  它把训练行数与 epoch 预算对齐了，但没有把结构与 sampler 分开，因此只能称联合差异，不能继续
+  写作 `clir_structure_harm`。完整 sampler 2×2 已冻结、待 GPU，且仍不是新鲜 protected test。
   上游原生旋钮（40 epoch + 0.2 验证早停）那一档尚未预注册、未执行，因此还不知道充分训练后的
   朴素 SWIFT 上限。适配器 parity 只在 CPU 同设备验证为逐位相等。
 
@@ -1852,6 +1876,10 @@ decision=`clir_structure_harm`。
    不得在这 104-row dev 或 2,400 题上继续调 direct、Gate、mutual、alpha、epoch、subset 或阈值。
    下一步冻结 `.25` 工程默认，预注册 protected/external 确认；不能按本轮最高点估计挑 H+KCG 或
    alpha probe 当新默认。
+8. 先完成已冻结的 SWIFT×sampler 两个缺失格：卡空后依次做 8-GPU idle/full-width preflight、
+   `U0+random` 与 `SWIFT+grouped` 各三 seed 固定三 epoch、一次只读 2,400×16 打分及五项预注册
+   对比汇总。不得用 epoch 1/2 替换 epoch 3，不得只报告有利口径；补格结束前不要把旧 `.81`
+   point 写成纯结构效应。该诊断完成后仍须在 sealed MATH-hard 或外部 benchmark 上做确认。
 
 当前裁决是：C、H0、Direct Prior 都建立了各自 Silver 机制可学习性；H0 更像 tail/path 风险头而
 不是精确首错定位器。最新的 2,400 题 matched ablation 进一步建立了 Direct Key+Complete 相对 U0

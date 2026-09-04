@@ -1424,11 +1424,12 @@ encoder，学到的“识别好推理”信息有重叠，因而 standalone 能�
 实现，预注册真正 protected/external 的确认评测；Prior 标签仍只能称
 `dual-AI Silver v16-posthoc binary, no human verification`，numeric checker 也只代表数值匹配。
 
-### 原版 SWIFT 同预算基线 v1：CLIR 结构在同预算下低于朴素 SWIFT `0.81` 点
+### 原版 SWIFT 同预算基线 v1：旧对照存在 sampler 混杂，联合差异为 `-0.81` 点
 
 冻结协议见 [`protocol.json`](configs/swift_official_baseline_v1/protocol.json)。这一格补的是
-19-cell 消融缺的对照：上面最朴素的 U0 仍带着 CLIR 全部骨架（层轴编码器、题面条件融合、
-最终残差头，共 `5,347,593` 个可训练参数），因此此前无法回答“相对已发表 SWIFT 的差距有多少来自结构”。
+19-cell 消融缺的朴素 SWIFT 参照：上面最朴素的 U0 仍带着 CLIR 全部骨架（层轴编码器、题面条件融合、
+最终残差头，共 `5,347,593` 个可训练参数）。这次结果公开后重新审计发现，旧协议除结构外还同时改变了
+batch sampler，因此它没有真正把“结构”单独隔离出来。
 本轮按 [`math_hard_eval_v1`](configs/math_hard_eval_v1/protocol.json) 的 `swift_parity_followup`
 预先声明执行，只补这一格：不重训任何 CLIR 格子、不重抽 rollout、不重抽特征。
 
@@ -1442,7 +1443,8 @@ H0 与 Prior 全部缺席，condition states 根本不加载。共 `202,754` 个
 
 训练旋钮对齐 U0 而非上游默认，因为要隔离的是结构而不是复现上游：固定 3 epoch、batch 4、lr 1e-4、
 weight_decay 0、grad clip 1.0、无验证划分、不做 checkpoint 选择，seeds 42/43/44，同一份 5,552 行
-manifest（`ef3bd3a2…`）。由此产生的六处上游偏离（epochs、batch_size、weight_decay、
+manifest（`ef3bd3a2…`）。但 SWIFT 使用逐 epoch 随机 sampler，既有 U0 使用 semantic-group sampler。
+由此产生的六处上游偏离（epochs、batch_size、weight_decay、
 max_grad_norm、验证划分与早停、特征 dtype 与 autocast）全部写进协议的
 `declared_upstream_deviations` 并附理由。打分复用同一份 38,400 行 exact-token 特征
 （`428893ea…`），U0 的既有 score 只读、未重算。
@@ -1450,8 +1452,8 @@ max_grad_norm、验证划分与早停、特征 dtype 与 autocast）全部写进
 | 口径 | BoN@16 | 题内对错排序 | 可训练参数 |
 |---|---:|---:|---:|
 | 随机选 | `95.15%` | — | — |
-| 原版 SWIFT | `96.64%` | `71.18%` | `202,754` |
-| U0（CLIR 骨架） | `95.83%` | `65.38%` | `5,347,593` |
+| 原版 SWIFT（random sampler） | `96.64%` | `71.18%` | `202,754` |
+| U0（CLIR 骨架，grouped sampler） | `95.83%` | `65.38%` | `5,347,593` |
 | Oracle 上限 | `99.21%` | — | — |
 
 主对比 `U0 − SWIFT = -0.81` point，逐 seed `-1.42/-0.63/-0.375`，3/3 seed 为负，
@@ -1461,16 +1463,34 @@ ASDiv-A `-0.46`、MATH `-0.60` point。K=1 时两者都精确等于 `95.50%`（�
 K=2/4/8 的差额分别是 `-0.64/-0.64/-0.63` point。选择迁移上，SWIFT 选对而 U0 选错 122 例，
 反向只有 64 例。
 
-这意味着**在同一 5,552 行、同样 3 epoch 的预算下，CLIR 的额外结构没有换来更好的排名，反而落后
-朴素 SWIFT `0.81` 点**，而它的参数量是后者的 26 倍。同时注意本轮最好的 CLIR 格子
-（Complete `96.78%`、Full `96.71%`）与 SWIFT 的 `96.64%` 接近，也就是说前面记录的
-`Direct +0.79` 等增益基本上只是把 U0 拉回朴素 SWIFT 的水平，而不是超过它。
+这个 `-0.81` point 仍是可复现的实测差异，但正确含义是：**CLIR 骨架 + semantic-group sampler**
+相对**朴素 SWIFT + random sampler**的联合差异。它暂时不能单独归因于结构，更不能据此裁决
+`clir_structure_harm`。尤其 U0 的 Consistency 权重为 0，semantic grouping 并不是其已启用 loss 的
+必要条件；400 组 compact/expanded 被强制同批，仍会改变每个 batch 的正负组成、样本顺序和优化轨迹。
+因此“Direct 把 U0 拉回 SWIFT 水平”也只能作为旧联合口径下的描述，待 sampler 补格后重述。
 
-边界必须写清楚：这 2,400 题已被 19-cell 消融看过，因此这是**同预算结构对比，不是新鲜的
-protected-test 结果**，也不是对上游论文自身数字的复现（旋钮对齐 U0、不是上游默认）。
+边界必须写清楚：这 2,400 题已被 19-cell 消融看过，因此这是**已读 population 上的同预算诊断，
+不是新鲜的 protected-test 结果**，也不是对上游论文自身数字的复现（旋钮对齐 U0、不是上游默认）。
 结果出来后不做任何权重/epoch/subset/阈值选择。下一步若要给 SWIFT 一个上游原生旋钮
 （40 epoch、batch 16、weight_decay 1e-5、0.2 验证划分 + patience 3）的变体，
 协议已把它标为 `possible_future_extension_not_authorized_here`，需要另行预注册。
+
+#### sampler 2×2 补格：已冻结，待 GPU 执行
+
+[`swift_u0_sampler_factorial_v1`](configs/swift_u0_sampler_factorial_v1/protocol.json)
+（protocol sha256=`56fbcfb3…c122e`，冻结代码 commit `2b98b96`）固定了完整的
+“模型结构 × sampler”四格：已有 `SWIFT+random`、`U0+grouped` 两格，只补
+`SWIFT+grouped` 和 `U0+random`。仍使用同一 5,552 行、3 epoch、seeds 42/43/44；epoch 3
+预先固定为唯一排名 checkpoint，epoch 1/2 只保存训练轨迹，不得按结果挑 epoch。
+
+机械审计显示清单有 400 个双成员 semantic group（800 行）和 4,752 个 singleton；两种 sampler
+每轮都恰好遍历全部 5,552 行并产生 1,388 个 batch。grouped sampler 每轮同批放置全部 400 对，
+而 random sampler 在 seed 42 同批放置 0 对。这证明差异不是训练数据量或 step 数，而是 batch
+组成和顺序。完成四格后将同时报告：random 下的结构差、grouped 下的结构差、U0 内 sampler 差、
+SWIFT 内 sampler 差及结构×sampler 交互；不论方向都报告，不做格子选择。
+
+该诊断仍复用已看过的 2,400×16 排名集，只负责拆开旧混杂，不升级为新鲜泛化证据。
+冻结的 MATH Level 4/5 难题评测继续保持 sealed，补格结果出来前，旧 `-0.81` 只能称为联合差异。
 
 ## Toy smoke test
 
@@ -1538,7 +1558,8 @@ pytest -q
   因而可以说“机制学到、整体排序改善、top-of-16 未加和”，不能说模块显著有效或天然冲突。
 - clean checkpoint 已记录配置、数据/split hash、feature reference、optimizer/RNG、metrics、code commit/branch/dirty state、完整命令与运行环境；这不替代缺失的数据 provenance 上游与 protected-test protocol。
 - clean 已有 frozen-prefix evaluator、机制诊断和 parity-checked multi-seed paired
-  summarizer；v6.1 新增了单独的 held-out consistency relation evaluator，但尚未重建
-  strict/encoded SWIFT 等预算 baseline。
+  summarizer；v6.1 新增了单独的 held-out consistency relation evaluator。朴素官方 SWIFT
+  同预算参照已经实现并完成，但旧 U0/SWIFT 比较混入 sampler 差异；完整 2×2 补格已冻结、待 GPU。
+  strict/encoded SWIFT 变体仍未重建。
 
 研究假设、已有证据与未验证部分见 [`docs/proposal.md`](docs/proposal.md)；迁移依据和历史负结果见 [`docs/handoff.md`](docs/handoff.md)。

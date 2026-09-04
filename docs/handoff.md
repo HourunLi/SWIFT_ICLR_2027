@@ -1794,6 +1794,18 @@ manifest 机械审计有 400 组 compact/expanded（800 行）及 4,752 个 sing
 MATH Level 4/5 冻结难题集继续 sealed。当前 GPU 被另一条 8 卡任务占用，所以状态是
 `FROZEN_PENDING_GPU`，尚无新训练指标。
 
+#### 与早期 Stage-1 结果的关系
+
+用户记得的“U0/CLIR 高于 SWIFT”有真实 artifact 支持，但不是本轮同一实验的相反结果。
+`run_artifacts/stage1_small_scale_v1/stage1_summary.json` 在 128-query GSM8K validation 上记录：
+correctness-only `clir` BoN@16=`.89323`，strict SWIFT=`.88281`，均值差 `+1.04` point；逐 seed
+差为 `+4.69/-2.34/+0.78` point，只有 2/3 为正。早期协议是 4,096 行/512-query GSM8K train、
+5 epoch、batch 2、random sampler；模型参数为 CLIR `9,547,273`、SWIFT `202,754`。当前协议则是
+5,552 行/1,678-query 多题源 train、3 epoch、batch 4，当前 U0 只有 `5,347,593` 参数，并在
+2,400-query 三题源 population 上读出。故早期结果应保留为小样本、旧架构、旧预算下的正点估计，
+不能与当前 `.81` 联合差异直接相减，也不能证明当前实现发生代码回归。当前 2×2 完成后只能裁决
+当前结构/sampler，不会追溯性改写 Stage-1。
+
 ## 已知限制
 
 - smoke-v2 因 checker 假阴性、H positive yield 与 Prior stability 失败；v3 readiness 虽通过，但双标后因

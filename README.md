@@ -1492,6 +1492,14 @@ SWIFT 内 sampler 差及结构×sampler 交互；不论方向都报告，不做�
 该诊断仍复用已看过的 2,400×16 排名集，只负责拆开旧混杂，不升级为新鲜泛化证据。
 冻结的 MATH Level 4/5 难题评测继续保持 sealed，补格结果出来前，旧 `-0.81` 只能称为联合差异。
 
+这不否定早期 Stage-1 的记录。那一轮 correctness-only `clir`（可类比当时的 U0）在 128 道
+GSM8K validation 上的 BoN@16 是 `89.32%`，strict SWIFT 是 `88.28%`，均值差 `+1.04` point；
+但逐 seed 差为 `+4.69/-2.34/+0.78`，方向不稳定。它使用 4,096 行/512-query GSM8K train、
+5 epoch、batch 2、random sampler 和约 `9.55M` 参数的旧 CLIR；当前 U0 使用 5,552 行/1,678-query
+多题源 train、3 epoch、batch 4、grouped sampler 和约 `5.35M` 参数，并在 2,400 道三题源题上
+评测。因此两轮并不矛盾，也不能互相覆盖；新的 2×2 只负责回答当前实现、当前训练预算下的 sampler
+混杂，不能把早期小样本正点估计改写成已建立的优势。
+
 ## Toy smoke test
 
 Toy 数据只验证代码路径，不能证明方法有效：

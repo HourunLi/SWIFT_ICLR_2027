@@ -1,0 +1,186 @@
+{
+  "schema_version": "swift-official-generalization-reproduction-v1",
+  "status": "AUTHORIZED_BEFORE_REPRODUCTION_ROLLOUTS",
+  "purpose": "reproduce the released SWIFT DeepScaleR-to-MATH/GSM8K/AQuA-RAT generalization checkpoint on the public authors' 500-query, 64-candidate protocol",
+  "evidence_boundary": {
+    "official_paper_repository_checkpoint_and_public_question_files_already_inspected": true,
+    "reproduction_rollouts_correctness_rewards_and_BoN_results_unopened_at_protocol_commit": true,
+    "not_a_protected_or_blinded_test": true,
+    "not_a_CLIR_vs_SWIFT_comparison": true,
+    "not_a_retraining_of_the_released_checkpoint": true,
+    "no_post_result_prompt_checkpoint_dataset_subset_K_or_scoring_change": true,
+    "stochastic_generation_need_not_bit_reproduce_the_authors_unreleased_rollouts": true,
+    "comparison_target_is_the_published_one_decimal_accuracy_not_candidate_identity": true
+  },
+  "official_sources": {
+    "paper": {
+      "title": "Mining Intrinsic Rewards from LLM Hidden States for Efficient Best-of-N Sampling",
+      "arxiv": "2505.12225v3",
+      "url": "https://arxiv.org/abs/2505.12225",
+      "generalization_claim": "10k DeepScaleR; Ministral-8B; no downstream fine-tuning; BoN@64"
+    },
+    "repository": {
+      "url": "https://github.com/aster2024/SWIFT",
+      "commit": "41f7c9f7e13734267450870f977e5dd7d62ac23e",
+      "local_checkout": "run_artifacts/vendor/swift-41f7c9f7"
+    },
+    "released_reward_checkpoint": {
+      "repo_id": "Aster2024/swift-ministral-8b-deepscaler",
+      "revision": "e5e9b129d163d91351caf3a2832ab4781ab9c835",
+      "local_path": "run_artifacts/official_swift_generalization_v1/upstream_checkpoint/swift_reward_model.pt",
+      "file_sha256": "90947ca9ccc169b8d213dfd415f7d56ac4120d18c8486c7f123d523d83f83fbf",
+      "state_dict_keys": ["fused_layer.bias", "fused_layer.weight"],
+      "weight_shape": [2, 151552],
+      "bias_shape": [2],
+      "feature_dim": 151552,
+      "gate_enabled": true,
+      "training_source": "DeepScaleR",
+      "training_questions": 10000
+    },
+    "base_model": {
+      "repo_id": "mistralai/Ministral-8B-Instruct-2410",
+      "revision": "2f494a194c5b980dfb9772cb92d26cbb671fce5a",
+      "local_path": "run_artifacts/official_swift_generalization_v1/base_model",
+      "hidden_size": 4096,
+      "hidden_state_count": 37,
+      "feature_dim": 151552,
+      "required_runtime_files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors.index.json",
+        "params.json",
+        "special_tokens_map.json",
+        "tekken.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ]
+    }
+  },
+  "datasets": {
+    "math": {
+      "selection": "the exact 500-row data/test_math.jsonl shipped at the pinned SWIFT commit",
+      "input_path": "run_artifacts/vendor/swift-41f7c9f7/data/test_math.jsonl",
+      "input_file_sha256": "35dc41080a3680858b27fa7e0533d2d547825316fc5dafe5d316f4ccc5a06132",
+      "queries": 500,
+      "upstream_generator": "generate/generate_math.py",
+      "upstream_generator_sha256": "456a77b48cc19500682b72174f2e454bf9a94138062d258977bf76e7f4fc2e72"
+    },
+    "gsm8k": {
+      "dataset_id": "openai/gsm8k",
+      "revision": "740312add88f781978c0658806c59bc2815b9866",
+      "config": "main",
+      "selection": "first 500 rows of the canonical test split, matching preprocess/process_gsm8k.py",
+      "input_path": "run_artifacts/official_swift_generalization_v1/inputs/test_gsm8k.jsonl",
+      "queries": 500,
+      "upstream_preprocessor_sha256": "9ce76c25efc9c3b264b4a7163668b3c994a6e7734b417b8e4e60a36fade8c523",
+      "upstream_generator": "generate/generate_gsm8k.py",
+      "upstream_generator_sha256": "fae9612de4a701f031a417a875e729af7bbe236534ee72f95adad0c29cd9a949"
+    },
+    "aqua_rat": {
+      "dataset_id": "deepmind/aqua_rat",
+      "revision": "33301c6a050c96af81f63cad5562cb5363e88971",
+      "config": "raw",
+      "selection": "validation rows followed by test rows, then the first 500, matching preprocess/process_aqua_rat.py",
+      "input_path": "run_artifacts/official_swift_generalization_v1/inputs/test_aqua_rat.jsonl",
+      "queries": 500,
+      "upstream_preprocessor_sha256": "d279d4e8f489ee64f4b62d31a85f4bff20aa4ae65465f7effc61265a0ebbd421",
+      "upstream_generator": "generate/generate_aqua_rat.py",
+      "upstream_generator_sha256": "9263d5e2f06fb606dd84dc7ea126c5d1bf2cd2cf425d8dedc95c5267a57650ca"
+    }
+  },
+  "generation": {
+    "implementation": "the pinned upstream per-dataset generator without semantic changes",
+    "model": "released checkpoint's exact Ministral base model",
+    "dtype": "bfloat16",
+    "backend": "vllm",
+    "backend_version": "0.5.3.post1",
+    "tensor_parallel_size": 8,
+    "seed": 42,
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "max_new_tokens": 1024,
+    "max_model_len": 4096,
+    "max_num_seqs": 16,
+    "candidates_per_query": 64,
+    "rounds_per_query": 4,
+    "candidates_per_round": 16,
+    "stop": ["\n###\nProblem: "],
+    "candidate_order": "upstream output order; every BoN@K uses the first K",
+    "rollout_seed_note": "vLLM sampling is stochastic and hardware/version scheduling can change exact candidates even with the same seed"
+  },
+  "correctness": {
+    "implementation": "generate/generate_utils at the pinned upstream commit",
+    "upstream_files": {
+      "generate/generate_utils/__init__.py": "aa19f4d8bd82904bdd397a0b5ed5dbbfbcd57d60b0d6084dbed87f01e960ec66",
+      "generate/generate_utils/grader.py": "20f98a2da402ce27648878eeaace0e06dc2e0b446d148dfee8a3742c5e7fb827",
+      "generate/generate_utils/math_normalize.py": "a9fce3359dd213148b1d870507c3f43dbe5e951d19b82a2faecea903827bb2bc",
+      "generate/generate_utils/math_equivalence.py": "35c286b1d38dc977a684073a5cb43ac0c746232b32883e195643126ff433344b"
+    },
+    "semantics": "upstream evaluate_math for all three datasets, including letter answers",
+    "no_posthoc_label_override": true,
+    "malformed_or_unmatched_output": "handled exactly by upstream generator",
+    "candidate_filtering": "none"
+  },
+  "reward_scoring": {
+    "implementation": "eval/get_rewards.py and utils.py at the pinned upstream commit",
+    "get_rewards_sha256": "a00357777b8ebab26ed5539cfa44da3b87872e2cadc403b68117a6b65eea5493",
+    "utils_sha256": "bdd3358968b9252ae950d72a1c5a4d5a3d913e1a4b58dd5ca4140eabd4ad9271",
+    "all_37_hidden_states": true,
+    "apply_norm": false,
+    "logits_mode": false,
+    "separator": "\n\n",
+    "gate_enabled": true,
+    "response_axis": "upstream split_steps text reconstruction and tokenizer chat-template path",
+    "exact_saved_generation_token_axis": false,
+    "why_not_exact_saved_token_axis": "this run reproduces the released upstream evaluator; CLIR's stricter exact-token contract is a separate protocol",
+    "parallelization": "eight contiguous query shards, one identical L20Z GPU and one base-model replica per shard",
+    "numerical_equivalence_requirement": "sharding may change neither per-row text reconstruction nor model/reward calculation"
+  },
+  "evaluation": {
+    "implementation": "equivalent to pinned eval/bon_eval.py our_only",
+    "bon_eval_sha256": "b77fd98e6f23ea5dffb07294d94202cef3adb036e4514c68e6350b7988f79748",
+    "K": [1, 2, 4, 8, 16, 32, 64],
+    "primary_K": 64,
+    "published_targets_percent": {
+      "math": 62.8,
+      "gsm8k": 93.6,
+      "aqua_rat": 75.8
+    },
+    "report": [
+      "SWIFT_BoN_accuracy",
+      "first_candidate_accuracy",
+      "random_expected_accuracy",
+      "oracle_accuracy",
+      "absolute_difference_from_published_target",
+      "paired_query_bootstrap_interval"
+    ],
+    "rounding_for_direct_paper_check": "one decimal percentage point",
+    "no_reward_weight_threshold_epoch_or_subset_selection": true
+  },
+  "health_gates": {
+    "queries_per_dataset": 500,
+    "rows_per_dataset": 32000,
+    "all_query_candidate_counts_equal_64": true,
+    "reward_rows_exactly_match_rollout_rows": true,
+    "all_rewards_finite": true,
+    "BoN_at_1_equals_first_candidate_accuracy": true,
+    "SWIFT_BoN_within_random_oracle_bounds_not_required": "a learned selector can be worse than random; report rather than filter",
+    "failure_policy": "stop and report protocol or pipeline failure; do not change the frozen population or scoring semantics"
+  },
+  "runtime": {
+    "python_environment": "/prodcpfs/user/panzhixin/NeuralUCB-master/.venv",
+    "package_versions": {
+      "torch": "2.3.1",
+      "transformers": "4.51.2",
+      "vllm": "0.5.3.post1",
+      "datasets": "3.6.0"
+    },
+    "output_root": "run_artifacts/official_swift_generalization_v1",
+    "required_branch": "clir-clean-integration",
+    "require_clean_committed_code": true,
+    "launch_GPU_stages_only_when_all_eight_GPUs_have_at_least_MiB_free": 70000,
+    "GPU_type": "NVIDIA L20Z",
+    "large_inputs_rollouts_rewards_and_reports_are_git_ignored": true,
+    "tracked_surface": "this protocol, the runner/validator, tests, and final README/handoff summary"
+  }
+}
